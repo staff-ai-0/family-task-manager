@@ -64,8 +64,7 @@ const L = {
 
 <PageLayout
     title={`🛍️ ${L.title}`}
-    headerClass="bg-gradient-to-br from-brand-sun to-brand-coral"
-    dark
+    tone="coral"
     role={user.role}
     active="pet"
     lang={lang}
@@ -77,7 +76,7 @@ const L = {
         <div class="bg-brand-cream rounded-[var(--radius-card)] p-6 border-2 border-brand-ink shadow-[var(--shadow-card)] text-center space-y-2">
             <p class="text-5xl">🥚</p>
             <p class="text-brand-ink font-semibold">{L.no_pet}</p>
-            <a href="/pet" class="inline-block mt-1 font-bold text-brand-sky-deep">{L.adopt}</a>
+            <a href="/pet" class="inline-block mt-1 font-bold text-brand-sky-text">{L.adopt}</a>
         </div>
     ) : (
         <>
@@ -100,7 +99,7 @@ const L = {
                     <p class="text-[11px] font-bold uppercase tracking-wider text-brand-ink-soft">
                         {L.stage_word} {evoStage + 1} · {stageLabel(evoStage, lang)}
                     </p>
-                    <p class="mt-2 inline-flex items-center gap-1 text-sm font-bold text-brand-sun-deep bg-brand-sun/15 px-3 py-1 rounded-full border border-brand-sun-deep/20">
+                    <p class="mt-2 inline-flex items-center gap-1 text-sm font-bold text-brand-sun-text bg-brand-sun/15 px-3 py-1 rounded-full border border-brand-sun-deep/20">
                         💰 <span data-shop-points>{points}</span> {L.pts}
                     </p>
                 </div>
@@ -130,7 +129,7 @@ const L = {
                                 >
                                     <span class={`text-4xl ${c.unlocked ? "" : "grayscale opacity-40"}`}>{c.icon}</span>
                                     <p class="text-sm font-bold text-brand-ink leading-tight">{lang === "es" ? c.name.es : c.name.en}</p>
-                                    <p class="text-xs font-bold text-brand-sun-deep">{c.price} {L.pts}</p>
+                                    <p class="text-xs font-bold text-brand-sun-text">{c.price} {L.pts}</p>
                                     <div data-cos-actions class="w-full mt-1"></div>
                                     {!c.unlocked && (
                                         <span class="absolute top-2 right-2 text-xs" title={L.unlock_at(stageLabel(c.min_stage, lang))}>🔒</span>
@@ -151,6 +150,7 @@ const L = {
 <script>
     import { petHeart } from "../../lib/pet-fx";
     import { COLOR_AURA } from "../../lib/pet-art";
+    import { buttonClass } from "../../lib/buttonClasses";
 
     function initShop() {
         const es = document.documentElement.lang === "es";
@@ -222,8 +222,9 @@ const L = {
                 btn.type = "button";
                 btn.dataset.act = "buy";
                 btn.disabled = !affordable;
-                btn.className = "w-full py-1.5 rounded-lg font-bold text-xs border-2 border-brand-ink shadow-[2px_2px_0_var(--color-brand-ink)] active:scale-95 transition-all " +
-                    (affordable ? "bg-brand-sun-deep text-white" : "bg-brand-cream-deep text-brand-ink-soft opacity-60 shadow-none cursor-not-allowed");
+                btn.className = affordable
+                    ? `w-full active:scale-95 transition-all ${buttonClass("sun", "sm")}`
+                    : "w-full py-1.5 rounded-lg font-bold text-xs border-2 border-brand-ink bg-brand-cream-deep text-brand-ink-soft opacity-60 shadow-none cursor-not-allowed active:scale-95 transition-all";
                 btn.textContent = affordable ? T.buy : T.need(price - points);
                 actions.appendChild(btn);
                 return;
@@ -232,7 +233,7 @@ const L = {
                 const wrap = document.createElement("div");
                 wrap.className = "w-full space-y-1";
                 const pill = document.createElement("span");
-                pill.className = "block text-[11px] font-bold text-brand-mint-deep";
+                pill.className = "block text-[11px] font-bold text-brand-mint-text";
                 pill.textContent = "✓ " + T.equipped;
                 const btn = document.createElement("button");
                 btn.type = "button";
@@ -246,7 +247,7 @@ const L = {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.dataset.act = "equip";
-            btn.className = "w-full py-1.5 rounded-lg font-bold text-xs border-2 border-brand-ink bg-brand-mint-deep text-white shadow-[2px_2px_0_var(--color-brand-ink)] active:scale-95 transition-all";
+            btn.className = `w-full active:scale-95 transition-all ${buttonClass("mint", "sm")}`;
             btn.textContent = T.equip;
             actions.appendChild(btn);
         }

@@ -62,7 +62,7 @@ const tabs = [
                     aria-current={active === tab.id ? "page" : undefined}
                     class={`flex flex-col items-center gap-1 px-4 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors ${
                         active === tab.id
-                            ? "border-brand-ink text-brand-sky-deep"
+                            ? "border-brand-ink text-brand-sky-text"
                             : "border-transparent text-brand-ink-soft hover:text-brand-ink-soft"
                     }`}
                 >
@@ -80,7 +80,7 @@ const tabs = [
             aria-label={es ? "Revisar recibos pendientes" : "Review pending receipts"}
             class={`relative p-3 transition-colors ${
                 active === "receipt-drafts"
-                    ? "text-brand-coral-deep"
+                    ? "text-brand-coral-text"
                     : "text-brand-ink-soft hover:text-brand-ink-soft"
             }`}
         >

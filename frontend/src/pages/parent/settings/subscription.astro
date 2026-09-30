@@ -2,6 +2,7 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../lib/api";
 import { fmtDate } from "../../../lib/datetime";
+import { buttonClass } from "../../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -413,7 +414,7 @@ function renderCell(value: any): string {
 }
 
 function cellClass(value: any): string {
-    if (value === true) return "text-brand-mint-deep font-bold";
+    if (value === true) return "text-brand-mint-text font-bold";
     if (value === null || value === false) return "text-brand-ink-soft";
     return "text-brand-ink font-medium";
 }
@@ -421,9 +422,7 @@ function cellClass(value: any): string {
 
 <PageLayout
     title={l.title}
-    headerClass="bg-gradient-to-br from-amber-600 to-orange-600"
-    dark
-    backClass="text-amber-200 hover:text-white"
+    tone="cream"
     backHref="/parent/settings"
     backLabel={l.back}
     role={user.role}
@@ -450,12 +449,12 @@ function cellClass(value: any): string {
                         <h2 class="text-xl font-bold text-brand-ink capitalize">{effectivePlanName}</h2>
                     </div>
                     {isActive && !cancelAtPeriodEnd && (
-                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-brand-mint/20 text-brand-mint-deep border border-brand-mint">
+                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-brand-mint/20 text-brand-mint-text border border-brand-mint">
                             {l.active}
                         </span>
                     )}
                     {isActive && cancelAtPeriodEnd && (
-                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-brand-sun/20 text-brand-sun-deep border border-brand-sun">
+                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-brand-sun/20 text-brand-sun-text border border-brand-sun">
                             {l.cancel_scheduled}
                         </span>
                     )}
@@ -466,7 +465,7 @@ function cellClass(value: any): string {
                     )}
                 </div>
                 {cancelAtPeriodEnd && periodEndLabel && (
-                    <p class="mt-3 text-sm text-brand-sun-deep bg-brand-sun/20 border border-brand-sun rounded-lg p-3">
+                    <p class="mt-3 text-sm text-brand-sun-text bg-brand-sun/20 border border-brand-sun rounded-lg p-3">
                         {l.access_until} <strong>{periodEndLabel}</strong>.
                     </p>
                 )}
@@ -537,7 +536,7 @@ function cellClass(value: any): string {
                             {toggleCurrencies.map((cur) => (
                                 <a
                                     href={currencyHref(cur)}
-                                    class={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${selectedCurrency === cur ? "bg-brand-sky-deep text-white" : "text-brand-ink-soft hover:text-brand-ink"}`}
+                                    class={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${selectedCurrency === cur ? "bg-brand-sky-deep text-brand-ink" : "text-brand-ink-soft hover:text-brand-ink"}`}
                                     aria-current={selectedCurrency === cur ? "true" : undefined}
                                 >
                                     {cur === "MXN" ? "MX$" : "US$"}
@@ -555,7 +554,7 @@ function cellClass(value: any): string {
                                 <div class="font-bold text-brand-ink">{l.free}</div>
                                 <div class="text-xs text-brand-ink-soft">{l.free}</div>
                                 {effectivePlanName === "free" && (
-                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
+                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-text">
                                         {l.current_plan}
                                     </span>
                                 )}
@@ -564,7 +563,7 @@ function cellClass(value: any): string {
                                 <div class="font-bold text-brand-ink">{l.plus}</div>
                                 <div class="text-xs text-brand-ink-soft">{price(plusPlan, "monthly") ?? "—"}{l.month} ({price(plusPlan, "annual") ?? "—"}{l.year})</div>
                                 {effectivePlanName === "plus" && (
-                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
+                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-text">
                                         {l.current_plan}
                                     </span>
                                 )}
@@ -573,7 +572,7 @@ function cellClass(value: any): string {
                                 <div class="font-bold text-brand-ink">{l.pro}</div>
                                 <div class="text-xs text-brand-ink-soft">{price(proPlan, "monthly") ?? "—"}{l.month} ({price(proPlan, "annual") ?? "—"}{l.year})</div>
                                 {effectivePlanName === "pro" && (
-                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
+                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-text">
                                         {l.current_plan}
                                     </span>
                                 )}
@@ -603,7 +602,7 @@ function cellClass(value: any): string {
                     <div class="mt-6 flex items-center justify-center gap-2">
                         <div class="inline-flex rounded-full border border-brand-ink/15 bg-brand-cream-deep p-1" role="group">
                             <button
-                                class="cycle-pill rounded-full px-4 py-1.5 text-sm font-semibold bg-brand-sky-deep text-white"
+                                class="cycle-pill rounded-full px-4 py-1.5 text-sm font-semibold bg-brand-sky-deep text-brand-ink"
                                 data-cycle="monthly"
                                 aria-pressed="true"
                             >
@@ -626,7 +625,7 @@ function cellClass(value: any): string {
                 <div class="mt-4 flex flex-col sm:flex-row gap-3 justify-center">
                     {currentPlanName === "free" && (
                         <button
-                            class="upgrade-btn px-6 py-2.5 bg-brand-sky-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-sky-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            class={`${buttonClass("secondary", "sm")} upgrade-btn disabled:opacity-50 disabled:cursor-not-allowed`}
                             data-plan="plus"
                             data-cycle="monthly"
                             data-currency={selectedCurrency}
@@ -641,7 +640,7 @@ function cellClass(value: any): string {
                     )}
                     {currentPlanName !== "pro" && (
                         <button
-                            class="upgrade-btn px-6 py-2.5 bg-brand-coral-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-coral-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            class={`${buttonClass("primary", "sm")} upgrade-btn disabled:opacity-50 disabled:cursor-not-allowed`}
                             data-plan="pro"
                             data-cycle="monthly"
                             data-currency={selectedCurrency}
@@ -687,7 +686,7 @@ function cellClass(value: any): string {
                     />
                     <button
                         type="submit"
-                        class="px-4 py-2 bg-brand-sky-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-sky-deep transition-colors"
+                        class={buttonClass("secondary", "sm")}
                     >
                         {l.coupon_apply}
                     </button>
@@ -698,7 +697,7 @@ function cellClass(value: any): string {
             <!-- Support contact -->
             <p class="mt-6 text-center text-sm text-brand-ink-soft font-sans">
                 {l.support_prompt}
-                <a href="mailto:soporte@agent-ia.mx" class="font-semibold underline hover:text-brand-coral-deep">soporte@agent-ia.mx</a>
+                <a href="mailto:soporte@agent-ia.mx" class="font-semibold underline hover:text-brand-coral-text">soporte@agent-ia.mx</a>
             </p>
 </PageLayout>
 
@@ -785,7 +784,7 @@ function cellClass(value: any): string {
         // state comes entirely from data attributes so no price is ever
         // composed client-side.
         const pills = document.querySelectorAll('.cycle-pill');
-        const activePillCls = ['bg-brand-sky-deep', 'text-white'];
+        const activePillCls = ['bg-brand-sky-deep', 'text-brand-ink'];
         const idlePillCls = ['text-brand-ink-soft'];
         pills.forEach((pill) => {
             pill.addEventListener('click', () => {

@@ -82,16 +82,14 @@ const labels = {
 
 <PageLayout
     title={labels.title}
-    headerClass="bg-gradient-to-br from-slate-800 to-slate-700"
-    dark
-    backClass="text-brand-ink-soft hover:text-white"
+    tone="cream"
     backHref="/parent"
     backLabel={labels.back}
     role={user.role}
     active="parent"
     lang={lang}
 >
-    <div class={`mb-4 p-3 rounded-xl text-sm border ${pushOk ? "bg-brand-mint/15 border-brand-mint-deep text-brand-mint-deep" : "bg-red-50 border-red-200 text-red-700"}`}>
+    <div class={`mb-4 p-3 rounded-xl text-sm border ${pushOk ? "bg-brand-mint/15 border-brand-mint-deep text-brand-mint-text" : "bg-red-50 border-red-200 text-red-700"}`}>
         <p class="font-semibold">
             {pushOk ? "🔔" : "⚠️"} {lang === "es" ? "Web Push" : "Web Push"}
         </p>
@@ -112,7 +110,7 @@ const labels = {
             class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-brand-sun transition-all flex items-center gap-4"
         >
             <div class="w-12 h-12 rounded-xl bg-brand-sun/20 flex items-center justify-center flex-shrink-0">
-                <svg class="h-6 w-6 text-brand-sun-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg class="h-6 w-6 text-brand-sun-text" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M5 3l3.057-3 3.943 4 3.943-4L19 3l-4 4 4 4-3.057 3-3.943-4-3.943 4L5 11l4-4-4-4z"
                     />
@@ -148,7 +146,7 @@ const labels = {
             class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-brand-sky transition-all flex items-center gap-4"
         >
             <div class="w-12 h-12 rounded-xl bg-brand-sky/20 flex items-center justify-center flex-shrink-0">
-                <svg class="h-6 w-6 text-brand-sky-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg class="h-6 w-6 text-brand-sky-text" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                     />

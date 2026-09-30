@@ -6,6 +6,7 @@ import { t } from "../../lib/i18n";
 import { buildDeck } from "../../lib/deck";
 import { buildReviewQueue } from "../../lib/reviewQueue";
 import { budgetGlanceView, firstName, greetingDate, kidRowView, monthLabel } from "../../lib/parentHub";
+import { buttonClass } from "../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -125,7 +126,7 @@ const hello = firstName(user.name);
 >
     <header
         slot="header"
-        class="bg-gradient-to-br from-slate-800 to-slate-700 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
+        class="bg-brand-ink text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
     >
         <p class="text-slate-300 text-sm mb-1">{greetingDate(now, lang, tz)}</p>
         <h1 class="text-2xl font-bold">{lang === "es" ? "Hola" : "Hi"}{hello ? `, ${hello}` : ""}</h1>
@@ -140,7 +141,7 @@ const hello = firstName(user.name);
             </div>
         )}
         {flash && (
-            <div class="mx-4 mt-3 rounded-xl border border-brand-mint-deep/30 bg-brand-mint/15 px-4 py-2.5 text-sm font-semibold text-brand-mint-deep" data-flash-success>
+            <div class="mx-4 mt-3 rounded-xl border border-brand-mint-deep/30 bg-brand-mint/15 px-4 py-2.5 text-sm font-semibold text-brand-mint-text" data-flash-success>
                 {flash}
             </div>
         )}
@@ -160,14 +161,14 @@ const hello = firstName(user.name);
                 {lang === "es"
                     ? "Permitir que la IA procese fotos de tareas y mensajes del chat familiar para validar pruebas automáticamente y ayudar al asistente. Si no lo permites, las pruebas siempre pasan a tu aprobación manual. Puedes cambiarlo cuando quieras en Ajustes de la familia. "
                     : "Allow AI to process task proof photos and family chat messages to auto-validate proofs and help the assistant. If you decline, proofs always go to your manual approval. You can change this anytime in Family settings. "}
-                <a href="/privacidad" class="text-brand-sky-deep font-semibold hover:underline">
+                <a href="/privacidad" class="text-brand-sky-text font-semibold hover:underline">
                     {lang === "es" ? "Aviso de privacidad" : "Privacy notice"}
                 </a>
             </p>
             <div class="flex flex-wrap gap-2">
                 <button
                     id="ai-consent-allow"
-                    class="px-4 py-2 rounded-lg bg-brand-sky-deep text-white text-xs font-semibold hover:bg-brand-ink transition-colors cursor-pointer"
+                    class={buttonClass("secondary", "sm")}
                 >
                     {lang === "es" ? "Permitir" : "Allow"}
                 </button>

@@ -73,7 +73,7 @@ const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString(es ?
         <section data-kid-gigs>
             <div class="flex items-baseline justify-between px-1 mb-2">
                 <h2 class="text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft">{es ? "Gana extra" : "Earn extra"}</h2>
-                <a href="/gigs" class="text-xs font-bold text-brand-sky-deep">{es ? "ver todos ›" : "see all ›"}</a>
+                <a href="/gigs" class="text-xs font-bold text-brand-sky-text">{es ? "ver todos ›" : "see all ›"}</a>
             </div>
             <div class="flex gap-2 overflow-x-auto pb-1 snap-x">
                 {gigs.map((g) => (
@@ -116,7 +116,7 @@ const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString(es ?
             </a>
         )}
         {goal.kind === "none" && (
-            <a href={goal.href} class="rounded-2xl bg-white border border-dashed border-brand-ink/20 p-3 text-sm font-bold text-brand-sky-deep flex items-center">
+            <a href={goal.href} class="rounded-2xl bg-white border border-dashed border-brand-ink/20 p-3 text-sm font-bold text-brand-sky-text flex items-center">
                 🎯 {es ? "Elige una meta →" : "Pick a goal →"}
             </a>
         )}

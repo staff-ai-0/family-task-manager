@@ -63,15 +63,15 @@ import { serializeForClient } from "@lib/safe-vars";
 
 <ChatShell
     title={`${labels.title} - Family Task Manager`}
-    headerClass="bg-gradient-to-br from-indigo-600 to-purple-600"
+    tone="cream"
     feedId="dm-feed"
     active="tasks"
     role={user.role}
     lang={lang}
 >
     <Fragment slot="header">
-        <a href="/dm" class="text-xs text-indigo-200 underline">{labels.back}</a>
-        <h1 class="text-xl font-bold mt-1">✉️ {labels.title}</h1>
+        <a href="/dm" class="text-xs text-brand-ink underline">{labels.back}</a>
+        <h1 class="text-xl font-bold mt-1">{labels.title}</h1>
     </Fragment>
             {errorMsg && (
                 <div class="p-2 bg-red-100 border border-red-200 text-red-700 text-xs rounded-lg">

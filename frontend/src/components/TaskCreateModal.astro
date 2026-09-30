@@ -7,6 +7,7 @@
  * The trigger button (id="tcm-trigger") is placed by the PARENT PAGE (tasks.astro).
  */
 import { TASK_PRESETS } from "@lib/task-presets";
+import { buttonClass } from "@lib/buttonClasses";
 
 interface Props {
     lang: "en" | "es";
@@ -87,9 +88,9 @@ const dowLabels = lang === "es"
                             <p class="text-xs font-semibold text-brand-ink leading-snug line-clamp-2">{lang === "es" && p.title_es ? p.title_es : p.title}</p>
                             <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                 <span class={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                                    p.effort_level === 3 ? "bg-brand-coral/15 text-brand-coral-deep" :
-                                    p.effort_level === 2 ? "bg-brand-sun/20 text-brand-sun-deep" :
-                                    "bg-brand-mint/15 text-brand-mint-deep"
+                                    p.effort_level === 3 ? "bg-brand-coral/15 text-brand-coral-text" :
+                                    p.effort_level === 2 ? "bg-brand-sun/20 text-brand-sun-text" :
+                                    "bg-brand-mint/15 text-brand-mint-text"
                                 }`}>
                                     {p.effort_level === 3 ? (lang === "es" ? "Difícil" : "Hard") :
                                      p.effort_level === 2 ? (lang === "es" ? "Medio" : "Medium") :
@@ -241,7 +242,7 @@ const dowLabels = lang === "es"
                             <label class="flex items-center gap-2 cursor-pointer hover:bg-brand-cream px-2 py-1.5 rounded-lg transition-colors">
                                 <input
                                     type="checkbox"
-                                    class="tcm-member-cb w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep"
+                                    class="tcm-member-cb w-4 h-4 text-brand-sky-text border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep"
                                     value={member.id}
                                     data-name={member.name}
                                 />
@@ -334,15 +335,15 @@ const dowLabels = lang === "es"
                             </p>
                             <div class="flex gap-4 flex-wrap">
                                 <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" class="tcm-role-cb w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep" value="parent" />
+                                    <input type="checkbox" class="tcm-role-cb w-4 h-4 text-brand-sky-text border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep" value="parent" />
                                     <span class="text-sm text-brand-ink">{lang === "es" ? "Padre/Madre" : "Parent"}</span>
                                 </label>
                                 <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" class="tcm-role-cb w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep" value="teen" />
+                                    <input type="checkbox" class="tcm-role-cb w-4 h-4 text-brand-sky-text border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep" value="teen" />
                                     <span class="text-sm text-brand-ink">{lang === "es" ? "Teen" : "Teen"}</span>
                                 </label>
                                 <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" class="tcm-role-cb w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep" value="child" />
+                                    <input type="checkbox" class="tcm-role-cb w-4 h-4 text-brand-sky-text border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep" value="child" />
                                     <span class="text-sm text-brand-ink">{lang === "es" ? "Niño/a" : "Child"}</span>
                                 </label>
                             </div>
@@ -397,7 +398,8 @@ const dowLabels = lang === "es"
                     id="tcm-submit"
                     type="button"
                     data-tour="task-submit"
-                    class="hidden flex-1 py-2.5 bg-brand-sky-deep hover:bg-brand-ink active:scale-[0.98] text-white font-semibold text-sm rounded-xl shadow-[var(--shadow-card)] transition-all duration-150"
+                    hidden
+                    class={`flex-1 active:scale-[0.98] transition-all duration-150 ${buttonClass("secondary", "sm")}`}
                 >
                     {lang === "es" ? "Crear tarea" : "Create Task"}
                 </button>
@@ -458,7 +460,7 @@ const dowLabels = lang === "es"
         modal.querySelectorAll(".tcm-dow").forEach((btn) => {
             const active = dowState.has(String(btn.dataset.dow));
             btn.classList.toggle("bg-brand-sky-deep", active);
-            btn.classList.toggle("text-white", active);
+            btn.classList.toggle("text-brand-ink", active);
             btn.classList.toggle("border-brand-sky-deep", active);
             btn.classList.toggle("bg-brand-cream-deep", !active);
             btn.classList.toggle("text-brand-ink-soft", !active);
@@ -517,7 +519,7 @@ const dowLabels = lang === "es"
         container.querySelectorAll(".tcm-chip").forEach((btn) => {
             const isActive = String(btn.dataset.value) === String(value);
             btn.classList.toggle("bg-brand-sky-deep", isActive);
-            btn.classList.toggle("text-white", isActive);
+            btn.classList.toggle("text-brand-ink", isActive);
             btn.classList.toggle("border-brand-sky-deep", isActive);
             btn.classList.toggle("bg-brand-cream-deep", !isActive);
             btn.classList.toggle("text-brand-ink-soft", !isActive);
@@ -632,14 +634,14 @@ const dowLabels = lang === "es"
             step2.classList.add("hidden");
             step2.classList.remove("flex");
             if (backBtn) backBtn.classList.add("hidden");
-            if (submitBtn) submitBtn.classList.add("hidden");
+            if (submitBtn) submitBtn.hidden = true;
         } else {
             step1.classList.add("hidden");
             step1.classList.remove("flex");
             step2.classList.remove("hidden");
             step2.classList.add("flex");
             if (backBtn) backBtn.classList.remove("hidden");
-            if (submitBtn) submitBtn.classList.remove("hidden");
+            if (submitBtn) submitBtn.hidden = false;
             setTimeout(() => nameInput?.focus(), 100);
         }
     }
@@ -877,7 +879,7 @@ const dowLabels = lang === "es"
             ? (isEs ? `c/${tmpl.recur_every_n_days || 1}d al terminar` : `every ${tmpl.recur_every_n_days || 1}d after done`)
             : (freqMap[tmpl.interval_days] || (isEs ? `Cada ${tmpl.interval_days}d` : `Every ${tmpl.interval_days}d`));
         const proofBadge = tmpl.requires_proof
-            ? `<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-sky/15 text-brand-sky-deep">📸 ${isEs ? "Foto" : "Photo"}</span>`
+            ? `<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-sky/15 text-brand-sky-text">📸 ${isEs ? "Foto" : "Photo"}</span>`
             : "";
 
         const esMissingBadge = !tmpl.title_es
@@ -885,14 +887,14 @@ const dowLabels = lang === "es"
             : "";
 
         const bonusBadgeClass = isBonus
-            ? "bg-brand-sun/20 text-brand-sun-deep"
-            : "bg-brand-sky/15 text-brand-sky-deep";
+            ? "bg-brand-sun/20 text-brand-sun-text"
+            : "bg-brand-sky/15 text-brand-sky-text";
         const bonusBadgeText = isBonus
             ? "Bonus"
             : (isEs ? "Obligatoria" : "Required");
 
         const assignmentBadge = (tmpl.assignment_type && tmpl.assignment_type !== "auto")
-            ? `<span class="text-xs font-medium px-2 py-0.5 rounded-full ${tmpl.assignment_type === "fixed" ? "bg-brand-coral/15 text-brand-coral-deep" : "bg-brand-mint/20 text-brand-mint-deep"}">${tmpl.assignment_type === "fixed" ? (isEs ? "📌 Fijo" : "📌 Fixed") : (isEs ? "🔄 Rotación" : "🔄 Rotate")}</span>`
+            ? `<span class="text-xs font-medium px-2 py-0.5 rounded-full ${tmpl.assignment_type === "fixed" ? "bg-brand-coral/15 text-brand-coral-text" : "bg-brand-mint/20 text-brand-mint-text"}">${tmpl.assignment_type === "fixed" ? (isEs ? "📌 Fijo" : "📌 Fixed") : (isEs ? "🔄 Rotación" : "🔄 Rotate")}</span>`
             : "";
 
         const inactiveBadge = !isActive
@@ -907,8 +909,8 @@ const dowLabels = lang === "es"
             ? `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />`
             : `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />`;
         const toggleClass = isActive
-            ? "bg-brand-mint/20 text-brand-mint-deep hover:bg-brand-mint"
-            : "bg-brand-cream-deep text-brand-ink-soft hover:bg-brand-mint/20 hover:text-brand-mint-deep";
+            ? "bg-brand-mint/20 text-brand-mint-text hover:bg-brand-mint hover:text-brand-ink"
+            : "bg-brand-cream-deep text-brand-ink-soft hover:bg-brand-mint/20 hover:text-brand-mint-text";
 
         return `
 <div class="bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border ${isActive ? "border-brand-ink/10" : "border-brand-ink/10 opacity-60"}">
@@ -925,7 +927,7 @@ const dowLabels = lang === "es"
                 ${inactiveBadge}
             </div>
             ${descriptionHtml}
-            <p class="text-xs text-brand-sun-deep font-semibold mt-1">
+            <p class="text-xs text-brand-sun-text font-semibold mt-1">
                 +${effectivePts} pts${multiplierNote}
             </p>
         </div>
@@ -939,7 +941,7 @@ const dowLabels = lang === "es"
                 </button>
             </form>
             <a href="/parent/tasks/${escapeHtml(tmpl.id)}/edit"
-                class="h-8 w-8 rounded-lg bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink-soft hover:text-brand-sky-deep flex items-center justify-center transition-colors">
+                class="h-8 w-8 rounded-lg bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink-soft hover:text-brand-sky-text flex items-center justify-center transition-colors">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
@@ -990,7 +992,7 @@ const dowLabels = lang === "es"
 
     // Back-compat: hide back/submit at init (step 1 is shown)
     if (backBtn) backBtn.classList.add("hidden");
-    if (submitBtn) submitBtn.classList.add("hidden");
+    if (submitBtn) submitBtn.hidden = true;
 
     // View Transitions re-init
     document.addEventListener("astro:after-swap", initTaskCreateModal);

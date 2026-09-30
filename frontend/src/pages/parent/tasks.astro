@@ -158,14 +158,14 @@ function freqLabel(tmpl: any): string {
         slot="actions"
         id="tcm-trigger"
         data-tour="task-fab"
-        class="press h-10 w-10 rounded-full bg-brand-sky-deep border-2 border-brand-ink shadow-[var(--shadow-card)] text-white flex items-center justify-center text-xl font-bold flex-shrink-0"
+        class="press h-10 w-10 rounded-full bg-brand-sky-deep border-2 border-brand-ink shadow-[var(--shadow-card)] text-brand-ink flex items-center justify-center text-xl font-bold flex-shrink-0"
         aria-label={lang === "es" ? "Nueva tarea" : "New task"}
     >+</button>
-    <p slot="header-extra" class="text-brand-ink-soft text-sm mt-1 font-sans">
+    <p slot="header-extra" class="text-brand-ink text-sm mt-1 font-sans">
         {t(lang, "pt_templates_in_family")(templateList.length)}
     </p>
             {successMsg && (
-                <div class="p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
+                <div class="p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-text text-sm rounded-xl">
                     {successMsg}
                 </div>
             )}
@@ -257,7 +257,7 @@ function freqLabel(tmpl: any): string {
                     </form>
                 </div>
                 {assignmentList.length > 0 && (
-                    <p class="text-xs text-brand-sun-deep mt-2 text-center">
+                    <p class="text-xs text-brand-sun-text mt-2 text-center">
                         {t(lang, "shuffle_week_of")}: {assignmentList[0]?.week_of} | {(t(lang, "shuffle_assignment_count") as Function)(assignmentList.length)}
                     </p>
                 )}
@@ -291,8 +291,8 @@ function freqLabel(tmpl: any): string {
                                             </h3>
                                             <span class={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                                                 tmpl.is_bonus
-                                                    ? "bg-brand-sun/20 text-brand-sun-deep"
-                                                    : "bg-brand-sky/15 text-brand-sky-deep"
+                                                    ? "bg-brand-sun/20 text-brand-sun-text"
+                                                    : "bg-brand-sky/15 text-brand-sky-text"
                                             }`}>
                                                 {tmpl.is_bonus ? t(lang, "pt_bonus") : t(lang, "pt_regular")}
                                             </span>
@@ -300,15 +300,15 @@ function freqLabel(tmpl: any): string {
                                                 {freqLabel(tmpl)}
                                             </span>
                                             {tmpl.requires_proof && (
-                                                <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-sky/15 text-brand-sky-deep" title={lang === "es" ? "Requiere foto de evidencia" : "Requires photo proof"}>
+                                                <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-sky/15 text-brand-sky-text" title={lang === "es" ? "Requiere foto de evidencia" : "Requires photo proof"}>
                                                     📸 {lang === "es" ? "Foto" : "Photo"}
                                                 </span>
                                             )}
                                             {tmpl.assignment_type && tmpl.assignment_type !== 'auto' && (
                                                 <span class={`text-xs font-medium px-2 py-0.5 rounded-full ${
                                                     tmpl.assignment_type === 'fixed' 
-                                                        ? 'bg-brand-coral/15 text-brand-coral-deep' 
-                                                        : 'bg-brand-mint/20 text-brand-mint-deep'
+                                                        ? 'bg-brand-coral/15 text-brand-coral-text' 
+                                                        : 'bg-brand-mint/20 text-brand-mint-text'
                                                 }`}>
                                                     {tmpl.assignment_type === 'fixed'
                                                         ? (lang === "es" ? '📌 Fijo' : '📌 Fixed')
@@ -338,8 +338,8 @@ function freqLabel(tmpl: any): string {
                                                 title={tmpl.is_active ? (t(lang, "pm_deactivate") as string) : (t(lang, "pm_activate") as string)}
                                                 class={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${
                                                     tmpl.is_active
-                                                        ? "bg-brand-mint/20 text-brand-mint-deep hover:bg-brand-mint"
-                                                        : "bg-brand-cream-deep text-brand-ink-soft hover:bg-brand-mint/20 hover:text-brand-mint-deep"
+                                                        ? "bg-brand-mint/20 text-brand-mint-text hover:bg-brand-mint hover:text-brand-ink"
+                                                        : "bg-brand-cream-deep text-brand-ink-soft hover:bg-brand-mint/20 hover:text-brand-mint-text"
                                                 }`}
                                             >
                                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -350,7 +350,7 @@ function freqLabel(tmpl: any): string {
                                         {/* Edit */}
                                         <a
                                             href={`/parent/tasks/${tmpl.id}/edit`}
-                                            class="h-8 w-8 rounded-lg bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink-soft hover:text-brand-sky-deep flex items-center justify-center transition-colors"
+                                            class="h-8 w-8 rounded-lg bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink-soft hover:text-brand-sky-text flex items-center justify-center transition-colors"
                                         >
                                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -545,7 +545,7 @@ function freqLabel(tmpl: any): string {
                                     ${list.map((a: any) => `
                                         <li class="flex justify-between text-xs">
                                             <span class="text-brand-ink truncate">${a.assigned_date} · ${escapeHtml((isEs && a.template_title_es) ? a.template_title_es : a.template_title)}${a.template_is_bonus ? " ⭐" : ""}</span>
-                                            <span class="text-brand-sun-deep font-semibold ml-2 flex-shrink-0">+${a.template_points}</span>
+                                            <span class="text-brand-sun-text font-semibold ml-2 flex-shrink-0">+${a.template_points}</span>
                                         </li>`).join("")}
                                 </ul>
                             </div>`).join("");

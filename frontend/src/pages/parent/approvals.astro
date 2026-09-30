@@ -4,6 +4,7 @@ import ImageLightbox from "@components/ui/ImageLightbox.astro";
 import { apiFetch } from "../../lib/api";
 import { fmtDateTime } from "../../lib/datetime";
 import { t } from "../../lib/i18n";
+import { buttonClass } from "../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -36,9 +37,7 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
 
 <PageLayout
     title={lang === "es" ? "Aprobaciones" : "Approvals"}
-    headerClass="bg-gradient-to-br from-amber-700 to-amber-600"
-    dark
-    backClass="text-amber-100 hover:text-white"
+    tone="sky"
     backHref="/parent"
     backLabel={t(lang, "back_parent") as string}
     role={user.role}
@@ -46,7 +45,7 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
     lang={lang as "en" | "es"}
     mainClass="flex-1 px-4 py-6 space-y-6"
 >
-    <p slot="header-extra" class="text-amber-100 text-sm mt-1">
+    <p slot="header-extra" class="text-brand-ink text-sm mt-1">
         {lang === "es"
             ? "Todo el trabajo enviado, en un solo lugar."
             : "All submitted work, in one place."}
@@ -58,12 +57,12 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                     </span>
                     {taskItems.some((r: any) => (r.ai_validation_score ?? 0) >= 0.7) && (
                         <button type="button" id="approve-ai" data-busy={lang === "es" ? "Aprobando…" : "Approving…"}
-                            class="px-3 py-2 rounded-lg bg-brand-mint/20 text-brand-mint-deep border border-brand-mint-deep/30 font-semibold text-sm hover:bg-brand-mint/30 transition-colors">
+                            class="px-3 py-2 rounded-lg bg-brand-mint/20 text-brand-mint-text border border-brand-mint-deep/30 font-semibold text-sm hover:bg-brand-mint/30 transition-colors">
                             {lang === "es" ? "Aprobar IA ≥70%" : "Approve AI ≥70%"}
                         </button>
                     )}
                     <button type="button" id="approve-all" data-busy={lang === "es" ? "Aprobando…" : "Approving…"}
-                        class="px-4 py-2 rounded-lg bg-brand-mint-deep text-white font-semibold text-sm shadow-[var(--shadow-card)] hover:opacity-90 transition-opacity">
+                        class={buttonClass("mint", "sm")}>
                         {lang === "es" ? "Aprobar todo" : "Approve all"}
                     </button>
                 </div>
@@ -72,7 +71,7 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
             {total === 0 && (
                 <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
                     <div class="w-16 h-16 bg-brand-mint/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg class="w-8 h-8 text-brand-mint-deep" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-8 h-8 text-brand-mint-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                         </svg>
                     </div>
@@ -101,7 +100,7 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                                         <h3 class="font-bold text-brand-ink truncate">
                                             {row.template_title}
                                             {row.template_is_bonus === false && (
-                                                <span class="ml-1 align-middle text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-sky/15 text-brand-sky-deep">
+                                                <span class="ml-1 align-middle text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-sky/15 text-brand-sky-text">
                                                     📸 {lang === "es" ? "Tarea" : "Chore"}
                                                 </span>
                                             )}
@@ -109,7 +108,7 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                                         <p class="text-sm text-brand-ink-soft mt-0.5">
                                             {row.assigned_to_name}
                                             <span class="mx-1">·</span>
-                                            <span class="text-brand-sun-deep font-semibold">+{row.points} pts</span>
+                                            <span class="text-brand-sun-text font-semibold">+{row.points} pts</span>
                                         </p>
                                     </div>
                                     {row.completed_at && (
@@ -129,9 +128,9 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                                 {row.ai_validation_score != null && (
                                     <div class={`mb-3 p-2 rounded-lg border text-xs ${
                                         row.ai_validation_score >= 0.7
-                                            ? "bg-brand-mint/15 border-brand-mint-deep/30 text-brand-mint-deep"
+                                            ? "bg-brand-mint/15 border-brand-mint-deep/30 text-brand-mint-text"
                                             : row.ai_validation_score >= 0.4
-                                                ? "bg-brand-sun/15 border-brand-sun-deep/30 text-brand-sun-deep"
+                                                ? "bg-brand-sun/15 border-brand-sun-deep/30 text-brand-sun-text"
                                                 : "bg-red-50 border-red-200 text-red-700"
                                     }`}>
                                         <p class="font-semibold">🤖 AI: {Math.round(row.ai_validation_score * 100)}%
@@ -173,7 +172,7 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                                         </button>
                                     )}
                                     <button type="button" data-action="approve"
-                                        class="px-4 py-2 rounded-lg bg-brand-mint-deep text-white font-semibold text-sm shadow-[var(--shadow-card)] hover:opacity-90 transition-opacity">
+                                        class={buttonClass("mint", "sm")}>
                                         {lang === "es" ? "Completa" : "Complete"}
                                     </button>
                                 </div>
@@ -235,7 +234,7 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                                         {lang === "es" ? "Rechazar" : "Reject"}
                                     </button>
                                     <button type="button" data-action="approve"
-                                        class="px-4 py-2 rounded-lg bg-brand-mint-deep text-white font-semibold text-sm shadow-[var(--shadow-card)] hover:opacity-90 transition-opacity">
+                                        class={buttonClass("mint", "sm")}>
                                         {lang === "es" ? "Aprobar" : "Approve"}
                                     </button>
                                 </div>
@@ -263,7 +262,7 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                                         <p class="text-sm text-brand-ink-soft mt-0.5">
                                             {r.user_name}
                                             <span class="mx-1">·</span>
-                                            <span class="text-brand-sun-deep font-semibold">−{r.points_cost} pts</span>
+                                            <span class="text-brand-sun-text font-semibold">−{r.points_cost} pts</span>
                                         </p>
                                     </div>
                                     {r.created_at && (
@@ -279,7 +278,7 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                                         {lang === "es" ? "Rechazar" : "Reject"}
                                     </button>
                                     <button type="button" data-action="approve"
-                                        class="px-4 py-2 rounded-lg bg-brand-mint-deep text-white font-semibold text-sm shadow-[var(--shadow-card)] hover:opacity-90 transition-opacity">
+                                        class={buttonClass("mint", "sm")}>
                                         {lang === "es" ? "Aprobar" : "Approve"}
                                     </button>
                                 </div>

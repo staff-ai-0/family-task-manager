@@ -1,6 +1,7 @@
 ---
 /** Kid home header (UX-C1): greeting, balance pill, weekly pay meter. */
 import type { PayMeter } from "../../lib/kidHome";
+import { headerToneClass } from "../../lib/headerTone";
 
 interface Props {
     name: string;
@@ -16,13 +17,14 @@ const { name, lang, skin, starMode, cashCents, points, meter, counter } = Astro.
 const es = lang === "es";
 const money = (cents: number) =>
     `$${Math.round(cents / 100).toLocaleString(es ? "es-MX" : "en-US")}`;
-const bg = skin === "teen" ? "bg-[#1E2230]" : "bg-brand-sky-deep";
+// Teen keeps its dark skin; the child skin is the sky section tone (ink text, 6.5:1).
+const skinClass = skin === "teen" ? "bg-[#1E2230] text-white" : headerToneClass("sky");
 ---
 
-<header class={`${bg} text-white pt-12 pb-5 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]`}>
+<header class={`${skinClass} pt-12 pb-5 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]`}>
     <div class="flex items-center justify-between gap-3">
         <div class="min-w-0">
-            <p class="text-xs opacity-75">{es ? "Hola," : "Hi,"}</p>
+            <p class="text-xs">{es ? "Hola," : "Hi,"}</p>
             <h1 class="text-2xl font-extrabold leading-tight truncate">{name}</h1>
         </div>
         <a
@@ -35,7 +37,7 @@ const bg = skin === "teen" ? "bg-[#1E2230]" : "bg-brand-sky-deep";
     </div>
     {meter.show && (
         <div class="mt-4 rounded-2xl bg-white/10 border border-white/15 px-4 py-3">
-            <div class="flex justify-between gap-2 text-[11px] opacity-90">
+            <div class="flex justify-between gap-2 text-[11px]">
                 <span>💵 {es ? "Pago de la semana" : "This week's pay"} · {es ? "meta" : "goal"} {money(meter.capCents)}</span>
                 {counter.total > 0 && (
                     <span data-today-counter data-done={counter.done} data-total={counter.total} data-suffix={counter.suffix}>
@@ -52,7 +54,7 @@ const bg = skin === "teen" ? "bg-[#1E2230]" : "bg-brand-sky-deep";
                 <div class="h-full bg-red-400" style={`width:${meter.redPct}%`}></div>
             </div>
             {meter.released && (
-                <p class="text-[11px] mt-1.5 opacity-90">{es ? "¡Pago de esta semana liberado! 🎉" : "This week's pay is released! 🎉"}</p>
+                <p class="text-[11px] mt-1.5">{es ? "¡Pago de esta semana liberado! 🎉" : "This week's pay is released! 🎉"}</p>
             )}
         </div>
     )}

@@ -109,7 +109,7 @@ if (isTeen) {
 
 <ChatShell
     title={`${labels.title} - Family Task Manager`}
-    headerClass="bg-gradient-to-br from-violet-600 to-fuchsia-500"
+    tone="cream"
     feedId="chat-scroll"
     feedClass="flex-1 px-4 py-4 space-y-3 overflow-y-auto"
     active="parent"
@@ -119,12 +119,12 @@ if (isTeen) {
     <Fragment slot="header">
             <div class="flex items-baseline justify-between">
                 <div>
-                    <h1 class="text-2xl font-bold">🤖 {labels.title}</h1>
-                    <p class="text-violet-100 text-xs mt-1">{labels.subtitle}</p>
+                    <h1 class="text-2xl font-bold">{labels.title}</h1>
+                    <p class="text-brand-ink text-xs mt-1">{labels.subtitle}</p>
                 </div>
                 <div class="flex gap-2 items-center">
                     {!isTeen && (
-                        <a href="/parent/jarvis-schedules" class="text-xs underline text-violet-200 hover:text-white">
+                        <a href="/parent/jarvis-schedules" class="text-xs underline text-brand-ink">
                             ⏰ {lang === "es" ? "Programaciones" : "Schedules"}
                         </a>
                     )}
@@ -133,7 +133,7 @@ if (isTeen) {
                             <input type="hidden" name="action" value="clear" />
                             <button
                                 type="submit"
-                                class="text-xs underline text-violet-200 hover:text-white"
+                                class="text-xs underline text-brand-ink"
                             >
                                 {labels.clear}
                             </button>
@@ -144,7 +144,7 @@ if (isTeen) {
             <div class="mt-3">
                 <select
                     id="model-select"
-                    class="w-full bg-white/15 text-white text-xs font-semibold rounded-xl px-3 py-2 border border-white/30 focus:outline-none focus:ring-2 focus:ring-white/50 appearance-none cursor-pointer"
+                    class="w-full bg-brand-ink/10 text-brand-ink text-xs font-semibold rounded-xl px-3 py-2 border border-brand-ink/20 focus:outline-none focus:ring-2 focus:ring-brand-ink appearance-none cursor-pointer"
                 >
                     <!-- jctux/platform#86 resolved 2026-07-20: qwen3 (Ollama) +
                          claude-haiku confirmed granted + working end-to-end.

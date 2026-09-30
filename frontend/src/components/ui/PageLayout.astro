@@ -4,15 +4,13 @@ import PageHeader from "./PageHeader.astro";
 import BottomNav from "../BottomNav.astro";
 import WelcomeTour from "../WelcomeTour.astro";
 import type { TourRole } from "../../lib/tourSteps";
+import type { HeaderTone } from "../../lib/headerTone";
 
 /**
  * PageLayout — full-page shell: Layout + PageHeader + <main> + BottomNav.
  * Reduces the ~25-line boilerplate on every page to a single component.
  * @prop title          Page title (also sets <title> tag as "{title} - Family Task Manager")
- * @prop tone           Header background color (default "sky")
- * @prop headerClass    Custom header bg classes (e.g. gradient) — replaces tone bg + ink border (see PageHeader)
- * @prop dark           White-text header mode for dark/gradient backgrounds
- * @prop backClass      Exact back-link color classes (overrides dark/light default)
+ * @prop tone           Section tone for the header (default "cream"; see lib/headerTone.ts)
  * @prop backHref       Optional back link in header
  * @prop backLabel      Back link text (default "Back" / "Volver"; pass t(lang,"back_parent") for context-specific label)
  * @prop description    Meta description for the page
@@ -31,10 +29,7 @@ import type { TourRole } from "../../lib/tourSteps";
  */
 interface Props {
   title: string;
-  tone?: "sky" | "coral" | "mint" | "sun" | "cream";
-  headerClass?: string;
-  dark?: boolean;
-  backClass?: string;
+  tone?: HeaderTone;
   backHref?: string;
   backLabel?: string;
   description?: string;
@@ -59,10 +54,7 @@ interface Props {
 
 const {
   title,
-  tone = "sky",
-  headerClass,
-  dark = false,
-  backClass,
+  tone = "cream",
   backHref,
   backLabel,
   description,
@@ -99,7 +91,7 @@ const showWelcomeTour =
     {Astro.slots.has("header") ? (
       <slot name="header" />
     ) : (
-      <PageHeader title={title} tone={tone} headerClass={headerClass} dark={dark} backClass={backClass} backHref={backHref} backLabel={backLabel} lang={lang}>
+      <PageHeader title={title} tone={tone} backHref={backHref} backLabel={backLabel} lang={lang}>
         <slot name="actions" slot="actions" />
         <slot name="header-extra" slot="sub" />
       </PageHeader>

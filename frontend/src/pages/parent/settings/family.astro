@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../lib/api";
+import { buttonClass } from "../../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -148,9 +149,7 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
 
 <PageLayout
     title={L.title}
-    headerClass="bg-gradient-to-br from-slate-800 to-slate-700"
-    dark
-    backClass="text-brand-ink-soft hover:text-white"
+    tone="cream"
     backHref="/parent/settings"
     backLabel={L.back}
     role={user.role}
@@ -176,7 +175,7 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
             <button
                 type="submit"
                 id="save-btn"
-                class="px-4 py-2 bg-brand-sky-deep text-white rounded-lg text-sm font-medium hover:bg-brand-sky transition-colors disabled:opacity-60"
+                class={`disabled:opacity-60 ${buttonClass("secondary", "sm")}`}
             >
                 {L.save}
             </button>
@@ -214,13 +213,13 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
                 <label class="flex items-center gap-3 cursor-pointer rounded-xl bg-brand-cream-deep/60 px-3 py-2">
                     <input type="checkbox" data-module-key={key}
                         checked={family?.enabled_modules == null || family.enabled_modules.includes(key)}
-                        class="h-4 w-4 rounded border-brand-ink/30 text-brand-sky-deep focus:ring-brand-sky" />
+                        class="h-4 w-4 rounded border-brand-ink/30 text-brand-sky-text focus:ring-brand-sky" />
                     <span class="text-sm text-brand-ink">{label}</span>
                 </label>
             ))}
         </div>
         <button type="button" id="modules-save"
-            class="rounded-xl bg-brand-sky-deep text-white text-sm font-bold px-4 py-2 hover:opacity-90 transition-opacity">
+            class={buttonClass("secondary", "sm")}>
             {lang === "es" ? "Guardar módulos" : "Save modules"}
         </button>
         <span id="modules-status" class="text-sm block" aria-live="polite"></span>
@@ -233,13 +232,13 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
                 type="checkbox"
                 id="ai-consent-toggle"
                 checked={aiConsent}
-                class="mt-1 h-4 w-4 rounded border-brand-ink/30 text-brand-sky-deep focus:ring-brand-sky"
+                class="mt-1 h-4 w-4 rounded border-brand-ink/30 text-brand-sky-text focus:ring-brand-sky"
             />
             <span class="text-sm text-brand-ink">{L.ai_label}</span>
         </label>
         <p class="text-xs text-brand-ink-soft">
             {L.ai_hint}
-            <a href="/privacidad" class="text-brand-sky-deep font-semibold hover:underline">{L.ai_privacy}</a>
+            <a href="/privacidad" class="text-brand-sky-text font-semibold hover:underline">{L.ai_privacy}</a>
         </p>
         <span id="ai-status-msg" class="text-sm block" aria-live="polite"></span>
     </section>

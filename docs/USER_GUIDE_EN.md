@@ -2631,7 +2631,7 @@ Jarvis is your family's AI copilot — a chat assistant that can answer question
 ## 25.1 Opening Jarvis
 
 1. Open **More** → **Jarvis** (`/parent/jarvis`).
-2. You will see the chat screen headed **🤖 Jarvis** with the subtitle "Family copilot — ask anything".
+2. You will see the chat screen headed **Jarvis** with the subtitle "Family copilot — ask anything".
 3. If this is your first time, the screen shows **"No messages yet. Ask Jarvis something."**
 
 ## 25.2 Chatting with Jarvis

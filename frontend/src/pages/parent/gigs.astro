@@ -83,8 +83,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 
 <PageLayout
     title={gt.Many}
-    headerClass="bg-gradient-to-br from-violet-800 to-violet-600"
-    dark
+    tone="sun"
     role="parent"
     active="gigs"
     lang={lang}
@@ -94,19 +93,19 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
         slot="actions"
         id="new-gig-btn"
         data-tour="gig-fab"
-        class="bg-white text-violet-700 font-bold text-sm px-4 py-2 rounded-xl shadow hover:bg-violet-50 transition-colors"
+        class="bg-white text-brand-ink border-2 border-brand-ink font-bold text-sm px-4 py-2 rounded-xl shadow hover:bg-brand-cream transition-colors"
     >
         + {lang === "es" ? `Nueva ${gt.One}` : `New ${gt.One}`}
     </button>
     <div slot="header-extra">
-        <p class="text-violet-200 text-sm mt-0.5 mb-4">
+        <p class="text-brand-ink text-sm mt-0.5 mb-4">
             {lang === "es" ? "Publica tareas extras con recompensa" : "Post extra tasks with rewards"}
         </p>
         <!-- Claim approvals live in the unified /parent/approvals queue. -->
         <a
             href="/parent/approvals"
             data-tour="gig-approvals"
-            class="flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-xl bg-white/15 text-white hover:bg-white/25 transition-colors"
+            class="flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-xl bg-brand-ink/10 text-brand-ink hover:bg-brand-ink/15 transition-colors"
         >
             {lang === "es" ? "Revisar trabajo enviado" : "Review submitted work"}
             {pendingCount > 0 && (
@@ -115,20 +114,20 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
         </a>
         <a
             href="/parent/payouts"
-            class="flex items-center justify-center gap-2 py-2 mt-2 text-sm font-semibold rounded-xl bg-white/15 text-white hover:bg-white/25 transition-colors"
+            class="flex items-center justify-center gap-2 py-2 mt-2 text-sm font-semibold rounded-xl bg-brand-ink/10 text-brand-ink hover:bg-brand-ink/15 transition-colors"
         >
             💵 {lang === "es" ? "Pagar dinero ganado" : "Pay out earned cash"}
         </a>
         <a
             href="#historial"
-            class="flex items-center justify-center gap-2 py-2 mt-2 text-sm font-semibold rounded-xl bg-white/15 text-white hover:bg-white/25 transition-colors"
+            class="flex items-center justify-center gap-2 py-2 mt-2 text-sm font-semibold rounded-xl bg-brand-ink/10 text-brand-ink hover:bg-brand-ink/15 transition-colors"
         >
             📜 {lang === "es" ? `Historial de ${gt.many} completadas` : `Completed-${gt.one} history`}
         </a>
     </div>
 
     {flash && (
-                <div class="mb-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
+                <div class="mb-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-text text-sm rounded-xl">
                     {flash}
                 </div>
             )}

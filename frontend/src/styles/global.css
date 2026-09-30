@@ -19,6 +19,13 @@
   --color-brand-cream:      #FFF8F0;
   --color-brand-cream-deep: #F4E9D8;
 
+  /* Text-safe shades (UX-B3): ≥ 4.5:1 on white, cream and cream-deep.
+     Use these for colored TEXT; the -deep shades are fills/hovers only. */
+  --color-brand-sky-text:   #1A6F99;
+  --color-brand-mint-text:  #1E7552;
+  --color-brand-coral-text: #B8431F;
+  --color-brand-sun-text:   #8A5A00;
+
   /* skin/hair tokens used by illustrations only */
   --color-brand-skin-1: #FBD3B2;
   --color-brand-skin-2: #E8B690;
@@ -80,17 +87,6 @@
     --fg-soft: var(--color-brand-ink-soft);
     --surface: var(--color-brand-cream);
     --surface-deep: var(--color-brand-cream-deep);
-  }
-
-  [data-theme="dark"] {
-    color-scheme: dark;
-    --bg: #0F1A24;
-    --fg: var(--color-brand-cream);
-    --fg-soft: #A8C3D4;
-    --surface: #15222F;
-    --surface-deep: #1C2D3E;
-    --color-brand-coral: #FF6B3D;
-    --color-brand-mint:  #3DB689;
   }
 
   html { background: var(--bg); margin: 0; padding: 0; }

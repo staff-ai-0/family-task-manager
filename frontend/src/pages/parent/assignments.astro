@@ -2,6 +2,8 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
+import { headerToneClass } from "../../lib/headerTone";
+import { buttonClass } from "../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -132,23 +134,23 @@ function isToday(d: Date): boolean {
     lang={lang}
 >
     <!-- Header (week-navigator widget — page-owned via header slot) -->
-    <header slot="header" class="bg-gradient-to-br from-sky-700 to-sky-600 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+    <header slot="header" class={`${headerToneClass("sky")} pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]`}>
             <div class="flex items-center gap-3 mb-4">
-                <a href="/parent" class="text-sky-200 hover:text-white transition-colors">
+                <a href="/parent" class="p-1 -m-1 rounded-lg text-brand-ink hover:bg-brand-ink/10 transition-colors">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
                 </a>
-                <span class="text-sky-200 text-sm">{t(lang, "back_parent")}</span>
+                <span class="text-brand-ink text-sm">{t(lang, "back_parent")}</span>
             </div>
             <h1 class="text-2xl font-bold">{t(lang, "pac_title")}</h1>
-            <p class="text-sky-200 text-sm mt-1">{t(lang, "pac_subtitle")}</p>
+            <p class="text-brand-ink text-sm mt-1">{t(lang, "pac_subtitle")}</p>
 
             <!-- Week navigator -->
-            <div class="flex items-center justify-between mt-4 bg-brand-cream/15 backdrop-blur-md rounded-xl px-4 py-3 border border-white/20">
+            <div class="flex items-center justify-between mt-4 bg-brand-ink/10 backdrop-blur-md rounded-xl px-4 py-3 border border-brand-ink/20">
                 <a
                     href={`/parent/assignments?week=${prevWeek}${memberFilter !== "all" ? `&member=${memberFilter}` : ""}`}
-                    class="text-white hover:text-sky-200 transition-colors p-1"
+                    class="text-brand-ink hover:bg-brand-ink/10 rounded-lg transition-colors p-1"
                     title={t(lang, "pac_prev_week")}
                 >
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -156,12 +158,12 @@ function isToday(d: Date): boolean {
                     </svg>
                 </a>
                 <div class="text-center">
-                    <p class="text-xs text-sky-200 font-medium uppercase tracking-wider">{t(lang, "pac_week_of")}</p>
+                    <p class="text-xs text-brand-ink font-medium uppercase tracking-wider">{t(lang, "pac_week_of")}</p>
                     <p class="text-lg font-bold">{weekRange}</p>
                 </div>
                 <a
                     href={`/parent/assignments?week=${nextWeek}${memberFilter !== "all" ? `&member=${memberFilter}` : ""}`}
-                    class="text-white hover:text-sky-200 transition-colors p-1"
+                    class="text-brand-ink hover:bg-brand-ink/10 rounded-lg transition-colors p-1"
                     title={t(lang, "pac_next_week")}
                 >
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -312,12 +314,12 @@ function isToday(d: Date): boolean {
                                         )}
                                         {dayTasks.map((task: any) => {
                                             const statusColor = task.status === "completed"
-                                                ? "bg-brand-mint/20 text-brand-mint-deep border-brand-mint"
+                                                ? "bg-brand-mint/20 text-brand-mint-text border-brand-mint"
                                                 : task.status === "overdue"
                                                     ? "bg-red-100 text-red-700 border-red-200"
                                                     : task.status === "cancelled"
                                                         ? "bg-brand-cream-deep text-brand-ink-soft border-brand-ink/10 line-through"
-                                                        : "bg-brand-sun/20 text-brand-sun-deep border-brand-sun";
+                                                        : "bg-brand-sun/20 text-brand-sun-text border-brand-sun";
 
                                             const statusIcon = task.status === "completed"
                                                 ? "M5 13l4 4L19 7"
@@ -415,12 +417,12 @@ function isToday(d: Date): boolean {
                                             <div class="bg-brand-cream p-2 space-y-1.5">
                                                 {dayTasks.map((task: any) => {
                                                     const statusColor = task.status === "completed"
-                                                        ? "bg-brand-mint/20 text-brand-mint-deep border-brand-mint"
+                                                        ? "bg-brand-mint/20 text-brand-mint-text border-brand-mint"
                                                         : task.status === "overdue"
                                                             ? "bg-red-100 text-red-700 border-red-200"
                                                             : task.status === "cancelled"
                                                                 ? "bg-brand-cream-deep text-brand-ink-soft border-brand-ink/10 line-through"
-                                                                : "bg-brand-sun/20 text-brand-sun-deep border-brand-sun";
+                                                                : "bg-brand-sun/20 text-brand-sun-text border-brand-sun";
                                                     const displayTitle = (lang === "es" && task.template_title_es) ? task.template_title_es : task.template_title;
                                                     const editable = task.status === "pending" || task.status === "overdue" || task.status === "cancelled";
                                                     return (
@@ -440,7 +442,7 @@ function isToday(d: Date): boolean {
                                                             <span class="text-sm font-medium truncate flex items-center gap-1.5 flex-wrap">
                                                                 <span class="truncate">{displayTitle}</span>
                                                                 {task.template_is_bonus && (
-                                                                    <span class="text-[10px] font-semibold uppercase tracking-wide text-brand-sun-deep">{t(lang, "dashboard_bonus_badge")}</span>
+                                                                    <span class="text-[10px] font-semibold uppercase tracking-wide text-brand-sun-text">{t(lang, "dashboard_bonus_badge")}</span>
                                                                 )}
                                                                 {task.is_locked && (
                                                                     <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-800" title={lang === "es" ? "Termina las tareas obligatorias para desbloquear" : "Finish required tasks to unlock"}>
@@ -595,7 +597,7 @@ function isToday(d: Date): boolean {
                         </div>
                         <div id="markdone-photo-preview" class="hidden flex items-center gap-2">
                             <img id="markdone-photo-img" alt="" class="h-16 w-16 rounded-lg object-cover border border-brand-ink/10" />
-                            <span class="text-xs text-brand-mint-deep font-medium">✓ {t(lang, "pac_markdone_photo_ready")}</span>
+                            <span class="text-xs text-brand-mint-text font-medium">✓ {t(lang, "pac_markdone_photo_ready")}</span>
                         </div>
                     </div>
 
@@ -606,7 +608,7 @@ function isToday(d: Date): boolean {
                     <button
                         type="button"
                         id="markdone-btn"
-                        class="w-full py-2.5 bg-brand-mint-deep hover:bg-brand-mint text-white font-semibold text-sm rounded-lg transition-colors disabled:opacity-50"
+                        class={`w-full disabled:opacity-50 ${buttonClass("mint", "sm")}`}
                     >{t(lang, "pac_markdone_btn")}</button>
                 </div>
 
@@ -821,7 +823,7 @@ function isToday(d: Date): boolean {
                             : MARKDONE_OK;
                         markMsg.className = body?.week_already_paid
                             ? "text-xs text-amber-800"
-                            : "text-xs text-brand-mint-deep";
+                            : "text-xs text-brand-mint-text";
                     }
                     // Reload so the card moves to its completed styling and the
                     // approvals badge picks it up.

@@ -6,6 +6,7 @@
 import BudgetShell from "@components/ui/BudgetShell.astro";
 import RecycleBinTable from "@components/RecycleBinTable.astro";
 import { apiFetch } from "@lib/api";
+import { headerToneClass } from "@lib/headerTone";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -32,16 +33,16 @@ const pendingDraftsCount = draftsCount?.count ?? 0;
     lang={lang}
     containerClass="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep min-h-screen flex flex-col"
 >
-    <header slot="before-nav" class="bg-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+    <header slot="before-nav" class={`${headerToneClass("mint")} pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]`}>
             <div class="flex items-center gap-4">
-                <a href="/budget/settings" class="text-white hover:text-brand-cream transition">
+                <a href="/budget/settings" class="p-1 -m-1 rounded-lg text-brand-ink hover:bg-brand-ink/10 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
                 </a>
                 <div>
                     <h1 class="text-2xl font-bold">{es ? "Papelera de reciclaje" : "Recycle Bin"}</h1>
-                    <p class="text-brand-cream text-sm mt-0.5">
+                    <p class="text-brand-ink text-sm mt-0.5">
                         {es ? "Los elementos se eliminan permanentemente después de 30 días" : "Items are permanently deleted after 30 days"}
                     </p>
                 </div>

@@ -80,9 +80,7 @@ const members: any[] = family?.members ?? [];
 
 <PageLayout
     title={t(lang, "pc_title") as string}
-    headerClass="bg-gradient-to-br from-rose-700 to-red-600"
-    dark
-    backClass="text-rose-200"
+    tone="coral"
     backHref="/parent"
     backLabel={t(lang, "back_parent") as string}
     role={user.role}
@@ -90,12 +88,12 @@ const members: any[] = family?.members ?? [];
     lang={lang as "en" | "es"}
     mainClass="flex-1 px-4 py-6 space-y-6"
 >
-    <p slot="header-extra" class="text-rose-200 text-sm mt-1">
+    <p slot="header-extra" class="text-brand-ink text-sm mt-1">
         {(t(lang, "pc_total_count") as Function)(consequences.length)}
     </p>
             {
                 successMsg && (
-                    <div class="p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
+                    <div class="p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-text text-sm rounded-xl">
                         {successMsg}
                     </div>
                 )
@@ -235,7 +233,7 @@ const members: any[] = family?.members ?? [];
                                                     {c.title}
                                                 </h3>
                                                 {c.resolved_at ? (
-                                                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-mint/20 text-brand-mint-deep">
+                                                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-mint/20 text-brand-mint-text">
                                                         {t(lang, "pc_resolved")}
                                                     </span>
                                                 ) : (
@@ -276,7 +274,7 @@ const members: any[] = family?.members ?? [];
                                                     />
                                                     <button
                                                         type="submit"
-                                                        class="h-7 px-2 rounded-lg bg-brand-mint/20 hover:bg-brand-mint text-brand-mint-deep text-xs font-semibold transition-colors"
+                                                        class="h-7 px-2 rounded-lg bg-brand-mint/20 hover:bg-brand-mint text-brand-mint-text hover:text-brand-ink text-xs font-semibold transition-colors"
                                                     >
                                                         {t(
                                                             lang,

@@ -10,6 +10,7 @@
  * worse than one extra page.
  */
 import Layout from '../../../../layouts/Layout.astro';
+import { buttonClass } from '../../../../lib/buttonClasses';
 
 const token = Astro.cookies.get('access_token')?.value;
 if (!token) return Astro.redirect('/login');
@@ -45,7 +46,7 @@ if (subscriptionId) {
         If you were charged, your plan will activate automatically within a
         few minutes — PayPal confirms it to us directly.
       </p>
-      <a href="/parent/settings/subscription" class="inline-block mt-4 px-4 py-2 bg-brand-sky-deep text-white rounded">Back to settings</a>
+      <a href="/parent/settings/subscription" class={`${buttonClass("secondary", "sm")} inline-block mt-4`}>Back to settings</a>
     </div>
   </main>
 </Layout>

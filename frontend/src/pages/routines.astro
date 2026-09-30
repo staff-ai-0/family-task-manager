@@ -63,8 +63,7 @@ import { serializeForClient } from "@lib/safe-vars";
 
 <PageLayout
     title={`⛅ ${L.title}`}
-    headerClass="bg-gradient-to-br from-brand-sky to-brand-mint"
-    dark
+    tone="sky"
     role={user.role}
     lang={lang}
     mainClass="flex-1 px-4 py-6 space-y-6"
@@ -154,7 +153,7 @@ import { serializeForClient } from "@lib/safe-vars";
         <div id="runner-finish" class="hidden w-full max-w-sm space-y-4">
             <p class="text-7xl">🎉</p>
             <p class="font-display font-extrabold text-3xl text-brand-ink">{L.finish_title}</p>
-            <p id="runner-points" class="font-display font-extrabold text-2xl text-brand-sun-deep"></p>
+            <p id="runner-points" class="font-display font-extrabold text-2xl text-brand-sun-text"></p>
             <p id="runner-pet" class="text-brand-ink-soft"></p>
             <button
                 id="runner-finish-close"

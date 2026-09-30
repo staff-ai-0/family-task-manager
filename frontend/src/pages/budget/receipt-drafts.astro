@@ -7,6 +7,7 @@
 import BudgetShell from "@components/ui/BudgetShell.astro";
 import { apiFetch } from "@lib/api";
 import { fmtDate } from "@lib/datetime";
+import { buttonClass } from "@lib/buttonClasses";
 
 export const prerender = false;
 
@@ -108,7 +109,7 @@ const l = {
                     <a
                         href="/budget/scan-receipt?scan=1"
                         data-scan-receipt-open
-                        class="mt-6 inline-block bg-brand-coral-deep hover:bg-brand-ink text-white text-sm font-medium px-5 py-2.5 rounded-xl transition"
+                        class={`${buttonClass("primary", "sm")} mt-6 inline-block`}
                     >
                         {l.scanMore}
                     </a>
@@ -120,7 +121,7 @@ const l = {
                 {pendingDrafts.map((draft: any) => {
                     const sd = draft.scanned_data ?? {};
                     const confPct = Math.round((draft.confidence ?? 0) * 100);
-                    const confColor = confPct >= 60 ? "text-brand-sun-deep bg-brand-sun/20" : "text-red-600 bg-red-100";
+                    const confColor = confPct >= 60 ? "text-brand-sun-text bg-brand-sun/20" : "text-red-600 bg-red-100";
                     const amt = sd.total_amount != null ? (sd.total_amount / 100).toFixed(2) : "";
                     const prefillNotes = (() => {
                         const lines: string[] = [];
@@ -216,7 +217,7 @@ const l = {
                                         <label class="block text-xs text-brand-ink-soft mb-1">{l.account} *</label>
                                         {(accounts ?? []).length === 0 ? (
                                             <a href="/budget/settings#accounts"
-                                               class="block text-center text-sm font-medium border border-brand-coral-deep text-brand-coral-deep rounded-lg px-3 py-2 hover:bg-brand-coral-deep hover:text-white transition">
+                                               class={`${buttonClass("primary", "sm")} block text-center`}>
                                                 {lang === "es" ? "Crear una cuenta primero" : "Create an account first"}
                                             </a>
                                         ) : (
@@ -275,7 +276,7 @@ const l = {
                                 <div class="flex gap-2 pt-1">
                                     <button
                                         type="submit"
-                                        class="approve-btn flex-1 bg-brand-coral-deep hover:bg-brand-ink text-white text-sm font-medium py-2.5 rounded-xl transition disabled:opacity-50"
+                                        class={`${buttonClass("primary", "sm")} approve-btn flex-1 disabled:opacity-50`}
                                     >
                                         {l.approve}
                                     </button>
@@ -308,7 +309,7 @@ const l = {
     function showStatus(form, msg, isError) {
         const el = form.querySelector(".status-msg");
         el.textContent = msg;
-        el.className = `status-msg text-sm text-center pt-1 ${isError ? "text-red-600" : "text-brand-mint-deep"}`;
+        el.className = `status-msg text-sm text-center pt-1 ${isError ? "text-red-600" : "text-brand-mint-text"}`;
     }
 
     function removeDraftCard(draftId) {

@@ -21,7 +21,7 @@ const { lang } = Astro.props;
                 <h2 class="text-xl font-bold">
                     {lang === "es" ? "Editar Miembro" : "Edit Member"}
                 </h2>
-                <button id="edit-member-close-btn" class="text-white hover:text-brand-coral-deep transition">
+                <button id="edit-member-close-btn" class="text-brand-ink hover:text-brand-ink-soft transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -44,7 +44,7 @@ const { lang } = Astro.props;
             <div id="edit-member-error" class="hidden p-3 rounded-lg bg-red-100 border border-red-200 text-red-700 text-sm"></div>
 
             <!-- Success message -->
-            <div id="edit-member-success" class="hidden p-3 rounded-lg bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm"></div>
+            <div id="edit-member-success" class="hidden p-3 rounded-lg bg-brand-mint/20 border border-brand-mint text-brand-mint-text text-sm"></div>
 
             <!-- Edit form -->
             <form id="edit-member-form" class="space-y-4">

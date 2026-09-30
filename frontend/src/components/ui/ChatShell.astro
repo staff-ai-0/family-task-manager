@@ -1,6 +1,7 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import BottomNav from "../BottomNav.astro";
+import { headerToneClass, type HeaderTone } from "../../lib/headerTone";
 
 /**
  * ChatShell — h-screen chat page shell (chat, dm/[id], parent/jarvis).
@@ -8,7 +9,7 @@ import BottomNav from "../BottomNav.astro";
  * and BottomNav stay pinned. Owns the chrome those pages repeated verbatim.
  *
  * @prop title       <title> tag content (passed to Layout verbatim)
- * @prop headerClass Gradient/bg classes for the header (e.g. "bg-gradient-to-br from-cyan-500 to-blue-600")
+ * @prop tone        Section tone for the header (chat screens use "cream"; see lib/headerTone.ts)
  * @prop feedId      id for the scrolling <main> (scripts target it: chat-feed, dm-feed, chat-scroll)
  * @prop feedClass   Feed classes (default "flex-1 px-4 py-4 space-y-2 overflow-y-auto")
  * @prop active      BottomNav active tab
@@ -21,7 +22,7 @@ import BottomNav from "../BottomNav.astro";
  */
 interface Props {
   title: string;
-  headerClass: string;
+  tone: HeaderTone;
   feedId: string;
   feedClass?: string;
   active?: "tasks" | "rewards" | "profile" | "parent" | "budget" | "notifications" | "pet" | "chat" | "gigs";
@@ -31,7 +32,7 @@ interface Props {
 
 const {
   title,
-  headerClass,
+  tone,
   feedId,
   feedClass = "flex-1 px-4 py-4 space-y-2 overflow-y-auto",
   active,
@@ -42,7 +43,7 @@ const {
 
 <Layout title={title} lang={lang}>
   <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col h-screen">
-    <header class={`${headerClass} text-white pt-12 pb-4 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)] flex-shrink-0`}>
+    <header class={`${headerToneClass(tone)} pt-12 pb-4 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)] flex-shrink-0`}>
       <slot name="header" />
     </header>
 

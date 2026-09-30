@@ -35,7 +35,7 @@ export function showToast(message: string, type: ToastType = 'info', durationMs:
   toast.innerHTML = `
     ${ICONS[type]}
     <p class="text-sm text-slate-700 flex-1">${escapeHtml(message)}</p>
-    <button class="text-slate-400 hover:text-slate-600 text-lg leading-none flex-shrink-0">&times;</button>
+    <button class="text-brand-ink-soft hover:text-brand-ink text-lg leading-none flex-shrink-0">&times;</button>
     <div class="absolute bottom-0 left-0 h-0.5 ${BAR_COLORS[type]} animate-countdown"></div>
   `;
 

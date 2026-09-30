@@ -8,7 +8,6 @@ interface Props {
 	title?: string;
 	description?: string;
 	lang?: string;
-	theme?: "light" | "dark" | "system";
 	uiMode?: "kid" | "teen" | "adult";
 	/** SEO: canonical URL override (defaults to the current request URL). */
 	canonical?: string;
@@ -27,7 +26,6 @@ const lang = Astro.props.lang ?? Astro.cookies.get("lang")?.value ?? "es";
 const {
 	title = "Family Task Manager",
 	description = t(lang, "meta_description") as string,
-	theme = "system",
 	uiMode,
 	canonical,
 	ogImage,
@@ -45,7 +43,7 @@ const resolvedUiMode = uiMode
 ---
 
 <!doctype html>
-<html lang={lang} data-theme={theme === "dark" ? "dark" : undefined}>
+<html lang={lang}>
 	<head>
 		<script is:inline>
 			// UX-B1 fail-safe (F1): Astro streams <body> before AppDialog's
@@ -104,17 +102,6 @@ const resolvedUiMode = uiMode
 			jsonLd={jsonLd}
 			alternates={alternates}
 		/>
-		{theme === "system" && (
-			<script is:inline>
-				try {
-					const m = window.matchMedia("(prefers-color-scheme: dark)");
-					if (m.matches) document.documentElement.setAttribute("data-theme", "dark");
-					m.addEventListener("change", (e) => {
-						document.documentElement.setAttribute("data-theme", e.matches ? "dark" : "light");
-					});
-				} catch (_) {}
-			</script>
-		)}
 	</head>
 <body class="bg-brand-cream text-brand-ink antialiased" data-ui-mode={resolvedUiMode}>
     <ToastContainer />
@@ -198,7 +185,7 @@ const resolvedUiMode = uiMode
                 + '<span style="flex:1;font-size:0.875rem;color:#1a1a2e">'
                 + (isES ? 'Agrega a tu pantalla de inicio' : 'Add to your home screen')
                 + '</span>'
-                + '<button id="install-banner-add" style="background:#4FB8E6;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:0.8rem;font-weight:600;cursor:pointer">'
+                + '<button id="install-banner-add" style="background:#4FB8E6;color:#1F2937;border:none;border-radius:8px;padding:6px 14px;font-size:0.8rem;font-weight:600;cursor:pointer">'
                 + (isES ? 'Agregar' : 'Add')
                 + '</button>'
                 + '<button id="install-banner-close" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#888;line-height:1;padding:4px">×</button>';

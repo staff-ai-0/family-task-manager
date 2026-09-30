@@ -1,6 +1,8 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../lib/api";
+import { headerToneClass } from "../lib/headerTone";
+import { buttonClass } from "../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -31,7 +33,7 @@ const META: Record<string, { emoji: string; label: string; blurb: string; bg: st
         label: es ? "Gastar" : "Spend",
         blurb: es ? "Dinero listo para usar." : "Money ready to use.",
         bg: "bg-brand-coral/15",
-        accent: "text-brand-coral-deep",
+        accent: "text-brand-coral-text",
         bar: "bg-brand-coral",
     },
     save: {
@@ -39,7 +41,7 @@ const META: Record<string, { emoji: string; label: string; blurb: string; bg: st
         label: es ? "Ahorrar" : "Save",
         blurb: es ? "Para tus metas." : "For your goals.",
         bg: "bg-brand-mint/20",
-        accent: "text-brand-mint-deep",
+        accent: "text-brand-mint-text",
         bar: "bg-brand-mint-deep",
     },
     share: {
@@ -47,7 +49,7 @@ const META: Record<string, { emoji: string; label: string; blurb: string; bg: st
         label: es ? "Compartir" : "Share",
         blurb: es ? "Para dar a otros." : "To give to others.",
         bg: "bg-brand-sun/25",
-        accent: "text-brand-sun-deep",
+        accent: "text-brand-sun-text",
         bar: "bg-brand-sun-deep",
     },
 };
@@ -55,18 +57,18 @@ const ORDER = ["spend", "save", "share"];
 ---
 
 <PageLayout title={es ? "Mis sobres" : "My envelopes"} role={user.role} active="tasks" lang={lang}>
-    <header slot="header" class="bg-gradient-to-br from-brand-mint-deep to-brand-mint text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+    <header slot="header" class={`${headerToneClass("mint")} pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]`}>
         <div class="flex justify-between items-center mb-4">
             <div>
-                <p class="text-white/80 text-sm font-medium">{es ? "Mis sobres" : "My envelopes"}</p>
-                <h1 class="text-2xl font-bold">✉️ {user.name}</h1>
+                <p class="text-brand-ink text-sm font-medium">{es ? "Mis sobres" : "My envelopes"}</p>
+                <h1 class="text-2xl font-bold">{user.name}</h1>
             </div>
-            <a href="/bank" class="bg-white/20 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-white/30 transition-colors">
+            <a href="/bank" class="bg-brand-ink/10 backdrop-blur-sm border border-brand-ink/20 text-brand-ink text-sm font-semibold px-4 py-2 rounded-xl hover:bg-brand-ink/15 transition-colors">
                 {es ? "Mi Banco" : "My Bank"}
             </a>
         </div>
-        <div class="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3">
-            <p class="text-white/80 text-xs font-semibold uppercase tracking-wider mb-0.5">
+        <div class="bg-brand-ink/10 backdrop-blur-sm rounded-2xl px-4 py-3">
+            <p class="text-brand-ink text-xs font-semibold uppercase tracking-wider mb-0.5">
                 {es ? "Total en mis sobres" : "Total in my envelopes"}
             </p>
             <p class="text-3xl font-extrabold tracking-tight">
@@ -120,14 +122,14 @@ const ORDER = ["spend", "save", "share"];
                             <div class="flex items-center gap-2 mb-2">
                                 <span class="text-2xl">{goal.emoji || "🎯"}</span>
                                 <div>
-                                    <p class="text-xs font-bold uppercase tracking-wide text-brand-mint-deep">
+                                    <p class="text-xs font-bold uppercase tracking-wide text-brand-mint-text">
                                         {es ? "Mi meta de ahorro" : "My savings goal"}
                                     </p>
                                     <p class="font-display font-extrabold text-brand-ink leading-tight">{goal.name}</p>
                                 </div>
                             </div>
                             {goal.pending_approval && (
-                                <p class="text-xs bg-brand-sun/25 text-brand-sun-deep font-semibold rounded-lg px-3 py-1.5 mb-2 inline-block">
+                                <p class="text-xs bg-brand-sun/25 text-brand-sun-text font-semibold rounded-lg px-3 py-1.5 mb-2 inline-block">
                                     ⏳ {es ? "Esperando aprobación de tus papás" : "Waiting for your parents' approval"}
                                 </p>
                             )}
@@ -136,7 +138,7 @@ const ORDER = ["spend", "save", "share"];
                             </div>
                             <div class="flex justify-between text-sm">
                                 <span class="font-bold text-brand-ink">{fmt(goal.saved_cents)} / {fmt(goal.target_cents)}</span>
-                                <span class="font-semibold text-brand-mint-deep">{goal.progress_pct}%</span>
+                                <span class="font-semibold text-brand-mint-text">{goal.progress_pct}%</span>
                             </div>
                             {goal.reached ? (
                                 <p class="text-sm font-display font-extrabold text-brand-ink mt-2">🎉 {es ? "¡Meta alcanzada!" : "Goal reached!"}</p>
@@ -150,7 +152,7 @@ const ORDER = ["spend", "save", "share"];
 
                     {/* Prompt to set a goal on the Save envelope when none exists */}
                     {k === "save" && !goal && (
-                        <a href="/bank" class="mt-4 flex items-center gap-2 text-sm font-semibold text-brand-mint-deep hover:text-brand-ink transition-colors">
+                        <a href="/bank" class="mt-4 flex items-center gap-2 text-sm font-semibold text-brand-mint-text hover:text-brand-ink transition-colors">
                             🎯 {es ? "Ponte una meta de ahorro en Mi Banco" : "Set a savings goal in My Bank"}
                         </a>
                     )}
@@ -160,7 +162,7 @@ const ORDER = ["spend", "save", "share"];
     </section>
 
     <div class="mt-6 flex gap-3">
-        <a href="/bank" class="flex-1 text-center press bg-brand-mint-deep text-white font-bold rounded-[var(--radius-card)] px-4 py-3 border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-mint transition-colors">
+        <a href="/bank" class={`${buttonClass("mint", "md")} flex-1 text-center`}>
             {es ? "Mover mi dinero 🏦" : "Move my money 🏦"}
         </a>
         <a href="/dashboard" class="flex-1 text-center press bg-brand-cream text-brand-ink font-bold rounded-[var(--radius-card)] px-4 py-3 border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-cream-deep transition-colors">

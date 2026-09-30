@@ -13,6 +13,8 @@
  * - baseRoute?: string - for open/close trigger IDs
  */
 
+import { buttonClass } from "../lib/buttonClasses";
+
 interface Props {
     readyToAssign: number;
     categories: any[];
@@ -38,12 +40,12 @@ const {
 
 <div id={`${baseRoute}-modal`} class="hidden fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-6">
     <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] max-w-md w-full">
-        <div class="bg-brand-sky-deep text-white px-6 py-4 rounded-t-[var(--radius-card)]">
+        <div class="bg-brand-sky-deep text-brand-ink px-6 py-4 rounded-t-[var(--radius-card)]">
             <div class="flex items-center justify-between">
                 <h2 class="text-xl font-bold">
                     {lang === "es" ? "Asignar Fondos" : "Assign Funds"}
                 </h2>
-                <button id={`${baseRoute}-close-btn`} class="text-white hover:text-brand-cream transition">
+                <button id={`${baseRoute}-close-btn`} class="text-brand-ink hover:text-brand-ink-soft transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -53,14 +55,14 @@ const {
         <div class="p-6 space-y-4">
             <!-- Ready to Assign Balance Display -->
             <div class="bg-brand-sky/15 border border-brand-sky rounded-xl p-4">
-                <p class="text-xs text-brand-sky-deep font-semibold mb-1 uppercase tracking-wider">
+                <p class="text-xs text-brand-sky-text font-semibold mb-1 uppercase tracking-wider">
                     {t(lang, 'fin_ready_to_assign')}
                 </p>
-                <p class="text-2xl font-bold text-brand-sky-deep" id={`${baseRoute}-available-display`}>
+                <p class="text-2xl font-bold text-brand-sky-text" id={`${baseRoute}-available-display`}>
                     {formatCurrency(readyToAssign)}
                 </p>
                             <button type="button" id={`${baseRoute}-hold-btn`}
-                    class="mt-2 text-xs underline text-brand-sky-deep hover:text-brand-ink">
+                    class="mt-2 text-xs underline text-brand-sky-text hover:text-brand-ink">
                     {lang === "es" ? "⏸ Guardar para el próximo mes…" : "⏸ Hold for next month…"}
                 </button>
 </div>
@@ -113,7 +115,7 @@ const {
                         {[25, 50, 100].filter(amt => amt * 100 < readyToAssign).map(amt => (
                             <button
                                 type="button"
-                                class={`${baseRoute}-quick-amount px-3 py-2 rounded-lg text-sm font-semibold transition border border-brand-ink/20 hover:border-brand-sky-deep hover:text-brand-sky-deep`}
+                                class={`${baseRoute}-quick-amount px-3 py-2 rounded-lg text-sm font-semibold transition border border-brand-ink/20 hover:border-brand-sky-deep hover:text-brand-sky-text`}
                                 data-amount={amt}
                             >
                                 ${amt}
@@ -121,7 +123,7 @@ const {
                         ))}
                         <button
                             type="button"
-                            class={`${baseRoute}-quick-amount px-3 py-2 rounded-lg text-sm font-semibold transition border border-brand-ink/20 hover:border-brand-sky-deep hover:text-brand-sky-deep`}
+                            class={`${baseRoute}-quick-amount px-3 py-2 rounded-lg text-sm font-semibold transition border border-brand-ink/20 hover:border-brand-sky-deep hover:text-brand-sky-text`}
                             data-amount="all"
                             title={lang === "es" ? "Asignar todo" : "Assign all"}
                         >
@@ -135,7 +137,7 @@ const {
             <div id={`${baseRoute}-error`} class="hidden bg-red-100 border border-red-200 rounded-lg p-3 text-red-700 text-sm"></div>
 
             <!-- Success Display -->
-            <div id={`${baseRoute}-success`} class="hidden bg-brand-mint/20 border border-brand-mint rounded-lg p-3 text-brand-mint-deep text-sm">
+            <div id={`${baseRoute}-success`} class="hidden bg-brand-mint/20 border border-brand-mint rounded-lg p-3 text-brand-mint-text text-sm">
                 {lang === "es" ? "Fondos asignados exitosamente" : "Funds assigned successfully"}
             </div>
 
@@ -144,7 +146,7 @@ const {
                 <button id={`${baseRoute}-cancel-btn`} class="flex-1 bg-brand-cream-deep text-brand-ink px-4 py-2 rounded-lg font-semibold hover:bg-brand-cream-deep transition text-sm">
                     {lang === "es" ? "Cancelar" : "Cancel"}
                 </button>
-                <button id={`${baseRoute}-confirm-btn`} class="flex-1 bg-brand-sky-deep text-white px-4 py-2 rounded-lg font-semibold hover:bg-brand-sky-deep transition text-sm">
+                <button id={`${baseRoute}-confirm-btn`} class={`${buttonClass("secondary", "sm")} flex-1`}>
                     {lang === "es" ? "Asignar" : "Assign"}
                 </button>
             </div>

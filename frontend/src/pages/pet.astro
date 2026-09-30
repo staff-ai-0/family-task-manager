@@ -94,8 +94,7 @@ const nextStageName = stage < MAX_STAGE ? stageLabel(stage + 1, lang) : "";
 
 <PageLayout
     title={`🐾 ${L.title}`}
-    headerClass="bg-gradient-to-br from-pink-400 to-violet-500"
-    dark
+    tone="coral"
     role={user.role}
     active="pet"
     lang={lang}
@@ -202,7 +201,7 @@ const nextStageName = stage < MAX_STAGE ? stageLabel(stage + 1, lang) : "";
             >
                 <div class="flex items-baseline justify-between mb-1">
                     <h3 class="text-sm font-display font-extrabold text-brand-ink">{L.care_title}</h3>
-                    <span class="text-xs font-bold text-brand-sun-deep">
+                    <span class="text-xs font-bold text-brand-sun-text">
                         <span data-points-val>{points}</span> {L.pts}
                     </span>
                 </div>
@@ -223,7 +222,7 @@ const nextStageName = stage < MAX_STAGE ? stageLabel(stage + 1, lang) : "";
                             >
                                 <span class="text-2xl">{careIcon[a.action] ?? "✨"}</span>
                                 <span class="text-xs">{label}</span>
-                                <span class="text-[10px] font-bold text-brand-sun-deep">-{a.cost} {L.pts}</span>
+                                <span class="text-[10px] font-bold text-brand-sun-text">-{a.cost} {L.pts}</span>
                             </button>
                         );
                     })}

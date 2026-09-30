@@ -15,8 +15,10 @@ import MoveMoneyModal from "@components/MoveMoneyModal.astro";
 import FABButton from "@components/FABButton.astro";
 import FABModal from "@components/FABModal.astro";
 import { apiFetch } from "@lib/api";
+import { headerToneClass } from "@lib/headerTone";
 import { getMonthBudget, getCategoryGroups, formatCurrency, getMonthStatus } from "@lib/api/budget";
 import { monthSummaryView } from "@lib/parentHub";
+import { buttonClass } from "@lib/buttonClasses";
 import { t } from "@lib/i18n";
 import ModuleTour from "@components/ModuleTour.astro";
 
@@ -113,7 +115,7 @@ const jarvisQuestions: string[] =
 >
     <div slot="after-nav">
         <!-- Header with month nav + ready to assign -->
-        <header class="bg-brand-sky-deep text-white pt-3 pb-5 px-4 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+        <header class={`${headerToneClass("mint")} pt-3 pb-5 px-4 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]`}>
             <BudgetMonthNav
                 year={year}
                 month={month}
@@ -151,7 +153,7 @@ const jarvisQuestions: string[] =
                 <button
                     type="button"
                     data-open-account-modal="reload"
-                    class="px-5 py-2.5 rounded-xl bg-brand-sky-deep hover:bg-brand-ink text-white font-semibold text-sm shadow-[var(--shadow-card)] active:scale-[0.98] transition-all"
+                    class={buttonClass("secondary", "sm")}
                 >
                     + {lang === "es" ? "Nueva cuenta" : "New account"}
                 </button>
@@ -168,21 +170,21 @@ const jarvisQuestions: string[] =
             id="copy-last-month"
             data-month={`${year}-${String(month).padStart(2, "0")}-01`}
             data-busy={lang === "es" ? "Copiando…" : "Copying…"}
-            class="w-full py-2.5 rounded-xl border border-brand-sky-deep/30 bg-brand-sky-deep/10 text-brand-sky-deep font-semibold text-sm hover:bg-brand-sky-deep/20 transition-colors"
+            class="w-full py-2.5 rounded-xl border border-brand-sky-deep/30 bg-brand-sky-deep/10 text-brand-sky-text font-semibold text-sm hover:bg-brand-sky-deep/20 transition-colors"
         >
             {lang === "es" ? "📋 Copiar presupuesto del mes anterior" : "📋 Copy last month's budget"}
         </button>
         <p id="copy-last-month-msg" class="text-xs text-brand-ink-soft mt-1 hidden text-center"></p>
         <div class="flex justify-center mt-1">
             <button type="button" id="autofill-more"
-                class="text-xs text-brand-ink-soft underline hover:text-brand-sky-deep">
+                class="text-xs text-brand-ink-soft underline hover:text-brand-sky-text">
                 {lang === "es" ? "Más estrategias ▾" : "More strategies ▾"}
             </button>
         </div>
         <div class="flex justify-center mt-1">
             <button type="button" id="month-lock-btn" data-closed={monthClosed ? "1" : "0"}
                 data-year={year} data-month={month}
-                class="text-xs underline text-brand-ink-soft hover:text-brand-sky-deep">
+                class="text-xs underline text-brand-ink-soft hover:text-brand-sky-text">
                 {monthClosed
                     ? (lang === "es" ? "🔓 Reabrir este mes" : "🔓 Reopen this month")
                     : (lang === "es" ? "🔒 Cerrar este mes (bloquear cambios)" : "🔒 Close this month (lock changes)")}
@@ -263,7 +265,7 @@ const jarvisQuestions: string[] =
             <p class="text-brand-ink-soft text-sm">
                 {lang === "es" ? "No hay categorias configuradas para este mes." : "No categories set up for this month."}
             </p>
-            <a href="/budget/settings#categories" class="text-brand-sky-deep font-semibold text-sm mt-2 inline-block">
+            <a href="/budget/settings#categories" class="text-brand-sky-text font-semibold text-sm mt-2 inline-block">
                 {lang === "es" ? "Crear categorias" : "Create categories"}
             </a>
         </div>

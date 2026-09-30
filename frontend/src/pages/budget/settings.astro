@@ -8,6 +8,7 @@ import SettingsAccordion from "@components/SettingsAccordion.astro";
 import { apiFetch } from "@lib/api";
 import { fmtDate } from "@lib/datetime";
 import { formatCurrency } from "@lib/api/budget";
+import { buttonClass } from "@lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -97,10 +98,10 @@ import { serializeForClient } from "@lib/safe-vars";
         <!-- ACCOUNTS -->
         <SettingsAccordion id="accounts" title={es ? "Cuentas" : "Accounts"} icon="🏦">
             <div class="flex justify-end gap-2 mb-3">
-                <button onclick="openTransferModal()" class="px-3 py-1.5 border border-brand-sky-deep text-brand-sky-deep hover:bg-brand-sky-deep hover:text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openTransferModal()" class={buttonClass("secondary", "sm")}>
                     ⇄ {es ? "Transferir" : "Transfer"}
                 </button>
-                <button onclick="openAccountModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openAccountModal()" class={buttonClass("secondary", "sm")}>
                     + {es ? "Nueva cuenta" : "New account"}
                 </button>
             </div>
@@ -121,11 +122,11 @@ import { serializeForClient } from "@lib/safe-vars";
                                 </span>
                                 <button onclick={`openReconcileModal('${acc.id}','${acc.name.replace(/'/g,"\\'")}')`}
                                     title={es ? "Conciliar" : "Reconcile"}
-                                    class="text-brand-ink-soft hover:text-brand-mint-deep transition text-sm font-semibold">
+                                    class="text-brand-ink-soft hover:text-brand-mint-text transition text-sm font-semibold">
                                     ✓$
                                 </button>
                                 <button onclick={`openAccountModal(${JSON.stringify(acc)})`}
-                                    class="text-brand-ink-soft hover:text-brand-sky-deep transition">
+                                    class="text-brand-ink-soft hover:text-brand-sky-text transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
@@ -146,7 +147,7 @@ import { serializeForClient } from "@lib/safe-vars";
         <!-- CATEGORIES -->
         <SettingsAccordion id="categories" title={es ? "Categorías" : "Categories"} icon="🏷️">
             <div class="flex justify-end mb-3">
-                <button onclick="promptNewGroup()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="promptNewGroup()" class={buttonClass("secondary", "sm")}>
                     + {es ? "Nuevo grupo" : "New group"}
                 </button>
             </div>
@@ -162,13 +163,13 @@ import { serializeForClient } from "@lib/safe-vars";
                                 </span>
                                 <div class="flex items-center gap-2 text-xs">
                                     <button onclick={`promptRenameGroup('${g.id}','${(g.name||"").replace(/'/g,"\'")}')`}
-                                        class="text-brand-ink-soft hover:text-brand-sky-deep underline">{es ? "Renombrar" : "Rename"}</button>
+                                        class="text-brand-ink-soft hover:text-brand-sky-text underline">{es ? "Renombrar" : "Rename"}</button>
                                     <button onclick={`toggleGroupHidden('${g.id}',${g.hidden ? "false" : "true"})`}
-                                        class="text-brand-ink-soft hover:text-brand-sky-deep underline">
+                                        class="text-brand-ink-soft hover:text-brand-sky-text underline">
                                         {g.hidden ? (es ? "Mostrar" : "Unhide") : (es ? "Ocultar" : "Hide")}
                                     </button>
                                     <button onclick={`promptAddCategory('${g.id}','${(g.name||"").replace(/'/g,"\'")}')`}
-                                        class="text-brand-ink-soft hover:text-brand-sky-deep underline">+ {es ? "Categoría" : "Category"}</button>
+                                        class="text-brand-ink-soft hover:text-brand-sky-text underline">+ {es ? "Categoría" : "Category"}</button>
                                     <button onclick={`confirmDeleteGroup('${g.id}','${(g.name||"").replace(/'/g,"\'")}')`}
                                         class="text-brand-ink-soft hover:text-red-600 underline">{es ? "Eliminar" : "Delete"}</button>
                                 </div>
@@ -179,19 +180,19 @@ import { serializeForClient } from "@lib/safe-vars";
                                         <span class={`text-sm ${c.hidden ? "line-through text-brand-ink-soft" : "text-brand-ink"}`}>{c.name}</span>
                                         <div class="flex items-center gap-2 text-xs">
                                             <button onclick={`promptRenameCategory('${c.id}','${(c.name||"").replace(/'/g,"\'")}')`}
-                                                class="text-brand-ink-soft hover:text-brand-sky-deep underline">{es ? "Renombrar" : "Rename"}</button>
+                                                class="text-brand-ink-soft hover:text-brand-sky-text underline">{es ? "Renombrar" : "Rename"}</button>
                                             <button onclick={`toggleCategoryHidden('${c.id}',${c.hidden ? "false" : "true"})`}
-                                                class="text-brand-ink-soft hover:text-brand-sky-deep underline">
+                                                class="text-brand-ink-soft hover:text-brand-sky-text underline">
                                                 {c.hidden ? (es ? "Mostrar" : "Unhide") : (es ? "Ocultar" : "Hide")}
                                             </button>
                                             <button onclick={`promptCategoryNotes('${c.id}','${(c.name||"").replace(/'/g,"\'")}')`}
                                                 title={c.notes || (es ? "Sin notas" : "No notes")}
-                                                class="text-brand-ink-soft hover:text-brand-sky-deep underline">{c.notes ? "📝*" : "📝"}</button>
+                                                class="text-brand-ink-soft hover:text-brand-sky-text underline">{c.notes ? "📝*" : "📝"}</button>
                                             <button onclick={`promptCategoryGoal('${c.id}','${(c.name||"").replace(/'/g,"\'")}',${c.goal_amount ?? 0})`}
-                                                class="text-brand-ink-soft hover:text-brand-sky-deep underline">{c.goal_amount ? `🎯$${Math.round(c.goal_amount/100)}` : (es ? "Meta" : "Goal")}</button>
+                                                class="text-brand-ink-soft hover:text-brand-sky-text underline">{c.goal_amount ? `🎯$${Math.round(c.goal_amount/100)}` : (es ? "Meta" : "Goal")}</button>
                                             <button onclick={`toggleCategoryRollover('${c.id}',${c.rollover_enabled ? "false" : "true"})`}
                                                 title={es ? "El sobrante pasa (o no) al mes siguiente" : "Leftover carries (or not) into next month"}
-                                                class="text-brand-ink-soft hover:text-brand-sky-deep underline">
+                                                class="text-brand-ink-soft hover:text-brand-sky-text underline">
                                                 {c.rollover_enabled ? "↻on" : "↻off"}
                                             </button>
                                             <button onclick={`confirmDeleteCategory('${c.id}','${(c.name||"").replace(/'/g,"\'")}')`}
@@ -214,10 +215,10 @@ import { serializeForClient } from "@lib/safe-vars";
         <!-- PAYEES -->
         <SettingsAccordion id="payees" title={es ? "Beneficiarios" : "Payees"} icon="👤">
             <div class="flex justify-end mb-3">
-                <button onclick="openPayeeMerge()" class="px-3 py-1.5 border border-brand-sky-deep text-brand-sky-deep hover:bg-brand-sky-deep hover:text-white text-sm font-semibold rounded-lg transition mr-2">
+                <button onclick="openPayeeMerge()" class={`${buttonClass("secondary", "sm")} mr-2`}>
                     ⇉ {es ? "Fusionar" : "Merge"}
                 </button>
-                <button onclick="openPayeeModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openPayeeModal()" class={buttonClass("secondary", "sm")}>
                     + {es ? "Nuevo" : "New"}
                 </button>
             </div>
@@ -236,7 +237,7 @@ import { serializeForClient } from "@lib/safe-vars";
                                     title={es ? "Favorito" : "Favorite"}
                                 >&#9733;</button>
                                 <button onclick={`openPayeeModal(${JSON.stringify(p)})`}
-                                    class="text-brand-ink-soft hover:text-brand-sky-deep transition">
+                                    class="text-brand-ink-soft hover:text-brand-sky-text transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
@@ -257,7 +258,7 @@ import { serializeForClient } from "@lib/safe-vars";
         <!-- CATEGORIZATION RULES -->
         <SettingsAccordion id="rules" title={es ? "Reglas de categorización" : "Categorization Rules"} icon="🤖">
             <div class="flex justify-end mb-3">
-                <button onclick="openRuleModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openRuleModal()" class={buttonClass("secondary", "sm")}>
                     + {es ? "Nueva regla" : "New rule"}
                 </button>
             </div>
@@ -279,7 +280,7 @@ import { serializeForClient } from "@lib/safe-vars";
                                 </div>
                             </div>
                             <div class="flex items-center gap-1.5 flex-shrink-0">
-                                <button onclick={`openRuleModal(${JSON.stringify(rule)})`} class="text-brand-ink-soft hover:text-brand-sky-deep transition">
+                                <button onclick={`openRuleModal(${JSON.stringify(rule)})`} class="text-brand-ink-soft hover:text-brand-sky-text transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
@@ -299,10 +300,10 @@ import { serializeForClient } from "@lib/safe-vars";
         <!-- RECURRING TRANSACTIONS -->
         <SettingsAccordion id="recurring" title={es ? "Transacciones recurrentes" : "Recurring Transactions"} icon="🔄">
             <div class="flex justify-end gap-2 mb-3">
-                <button onclick="detectSubscriptions()" class="px-3 py-1.5 border border-brand-sky-deep text-brand-sky-deep hover:bg-brand-sky-deep hover:text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="detectSubscriptions()" class={buttonClass("secondary", "sm")}>
                     🔍 {es ? "Detectar suscripciones" : "Detect subscriptions"}
                 </button>
-                <button onclick="openRecurringModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openRecurringModal()" class={buttonClass("secondary", "sm")}>
                     + {es ? "Nueva" : "New"}
                 </button>
             </div>
@@ -321,17 +322,17 @@ import { serializeForClient } from "@lib/safe-vars";
                                 </p>
                             </div>
                             <div class="flex items-center gap-1.5 flex-shrink-0">
-                                <span class={`text-sm font-semibold ${txn.amount > 0 ? 'text-brand-mint-deep' : 'text-red-600'}`}>
+                                <span class={`text-sm font-semibold ${txn.amount > 0 ? 'text-brand-mint-text' : 'text-red-600'}`}>
                                     {txn.amount > 0 ? '+' : '-'}{formatCurrency(Math.abs(txn.amount))}
                                 </span>
                                 <button onclick={`postRecurring('${txn.id}')`}
-                                    class="text-brand-ink-soft hover:text-brand-mint-deep transition" title={es ? "Registrar ahora" : "Post now"}>
+                                    class="text-brand-ink-soft hover:text-brand-mint-text transition" title={es ? "Registrar ahora" : "Post now"}>
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                 </button>
-                                <button onclick={`openRecurringModal(${JSON.stringify(txn)})`} class="text-brand-ink-soft hover:text-brand-sky-deep transition">
+                                <button onclick={`openRecurringModal(${JSON.stringify(txn)})`} class="text-brand-ink-soft hover:text-brand-sky-text transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
@@ -351,7 +352,7 @@ import { serializeForClient } from "@lib/safe-vars";
         <!-- GOALS -->
         <SettingsAccordion id="goals" title={es ? "Metas" : "Goals"} icon="🎯">
             <div class="flex justify-end mb-3">
-                <button onclick="openGoalModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openGoalModal()" class={buttonClass("secondary", "sm")}>
                     + {es ? "Nueva meta" : "New goal"}
                 </button>
             </div>
@@ -371,7 +372,7 @@ import { serializeForClient } from "@lib/safe-vars";
                                 </p>
                             </div>
                             <div class="flex items-center gap-1.5 flex-shrink-0">
-                                <button onclick={`openGoalModal(${JSON.stringify(g)})`} class="text-brand-ink-soft hover:text-brand-sky-deep transition">
+                                <button onclick={`openGoalModal(${JSON.stringify(g)})`} class="text-brand-ink-soft hover:text-brand-sky-text transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
@@ -391,7 +392,7 @@ import { serializeForClient } from "@lib/safe-vars";
         <!-- TAGS -->
         <SettingsAccordion id="tags" title={es ? "Etiquetas" : "Tags"} icon="🏷️">
             <div class="flex justify-end mb-3">
-                <button onclick="openTagModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openTagModal()" class={buttonClass("secondary", "sm")}>
                     + {es ? "Nueva etiqueta" : "New tag"}
                 </button>
             </div>
@@ -402,7 +403,7 @@ import { serializeForClient } from "@lib/safe-vars";
                     {tags.map((tag: any) => (
                         <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-cream-deep rounded-full text-sm text-brand-ink">
                             {tag.name}
-                            <button onclick={`openTagModal(${JSON.stringify(tag)})`} class="text-brand-ink-soft hover:text-brand-sky-deep transition">
+                            <button onclick={`openTagModal(${JSON.stringify(tag)})`} class="text-brand-ink-soft hover:text-brand-sky-text transition">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                 </svg>
@@ -434,7 +435,7 @@ import { serializeForClient } from "@lib/safe-vars";
                             <option value={m.id} selected={m.id === aiModels.current_model}>{m.label}</option>
                         ))}
                     </select>
-                    <button id="ai-model-save-btn" class="px-4 py-2 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                    <button id="ai-model-save-btn" class={buttonClass("secondary", "sm")}>
                         {es ? "Guardar" : "Save"}
                     </button>
                 </div>
@@ -447,7 +448,7 @@ import { serializeForClient } from "@lib/safe-vars";
             <div>
                 <div class="flex items-center justify-between mb-2">
                     <p class="text-sm font-semibold text-brand-ink">{es ? "Consumo de tokens (LiteLLM)" : "Token consumption (LiteLLM)"}</p>
-                    <button id="ai-usage-refresh-btn" class="text-xs text-brand-sky-deep hover:text-brand-ink font-semibold transition">
+                    <button id="ai-usage-refresh-btn" class="text-xs text-brand-sky-text hover:text-brand-ink font-semibold transition">
                         {es ? "Actualizar" : "Refresh"}
                     </button>
                 </div>
@@ -549,7 +550,7 @@ import { serializeForClient } from "@lib/safe-vars";
             <button onclick="closeSettingsModal()" class="flex-1 py-2.5 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-semibold rounded-xl transition">
                 {es ? "Cancelar" : "Cancel"}
             </button>
-            <button id="modal-save-btn" class="flex-1 py-2.5 bg-brand-sky-deep hover:bg-brand-ink text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition">
+            <button id="modal-save-btn" class={`${buttonClass("secondary", "sm")} flex-1`}>
                 {es ? "Guardar" : "Save"}
             </button>
         </div>
@@ -598,7 +599,8 @@ function showToast(msg, type = "success") {
     const t = document.getElementById("settings-toast");
     if (!t) return;
     t.textContent = msg;
-    t.className = `fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl text-white text-sm font-semibold shadow-[var(--shadow-pop)] ${type === "success" ? "bg-brand-mint-deep" : "bg-red-600"}`;
+    const toneClass = type === "success" ? "bg-brand-mint-deep text-brand-ink" : "bg-red-600 text-white";
+    t.className = `fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl text-sm font-semibold shadow-[var(--shadow-pop)] ${toneClass}`;
     t.classList.remove("hidden");
     setTimeout(() => t.classList.add("hidden"), 3000);
 }
@@ -776,7 +778,7 @@ window.openReconcileModal = async function(accountId, accountName) {
                         <label class="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-brand-cream-deep">
                             <input type="checkbox" class="rec-check" value="${t.id}" ${t.cleared ? "checked" : ""}>
                             <span class="flex-1 truncate">${escapeHtml(t.notes || t.date)}</span>
-                            <span class="${t.amount < 0 ? "text-red-600" : "text-brand-mint-deep"} font-semibold">${fmtc(t.amount)}</span>
+                            <span class="${t.amount < 0 ? "text-red-600" : "text-brand-mint-text"} font-semibold">${fmtc(t.amount)}</span>
                         </label>`).join("")}
                 </div>
             </div>
@@ -1074,7 +1076,7 @@ window.detectSubscriptions = async function() {
                             <p class="text-sm font-medium text-brand-ink truncate">${escapeHtml(c.payee_name)}</p>
                             <p class="text-xs text-brand-ink-soft">${fmtc(c.amount_cents)} · ${escapeHtml(c.cadence)}</p>
                         </div>
-                        <button data-cand="${i}" class="cand-create text-xs px-2 py-1 rounded-lg bg-brand-sky-deep text-white whitespace-nowrap">
+                        <button data-cand="${i}" class="cand-create press inline-flex items-center justify-center gap-2 font-display font-extrabold border-2 border-brand-ink rounded-full shadow-[var(--shadow-card)] tracking-tight whitespace-nowrap select-none cursor-pointer px-4 py-2 text-sm bg-brand-sky text-brand-ink hover:bg-brand-sky-deep">
                             + ${es ? "Crear" : "Create"}
                         </button>
                     </div>`).join("")}

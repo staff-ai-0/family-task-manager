@@ -7,6 +7,8 @@
  * proxy routes, which attach the caller's credentials from the httpOnly cookie.
  */
 
+import { buttonClass } from "../lib/buttonClasses";
+
 interface DeletedItem {
   id: string;
   type: "transaction" | "account" | "category" | "category_group";
@@ -66,7 +68,7 @@ interface DeletedItem {
         <tr>
           <td colspan="5" class="px-6 py-8 text-center">
             <div class="flex justify-center">
-              <div class="animate-spin h-6 w-6 text-brand-sky-deep"></div>
+              <div class="animate-spin h-6 w-6 text-brand-sky-text"></div>
             </div>
           </td>
         </tr>
@@ -113,7 +115,7 @@ interface DeletedItem {
       </button>
       <button
         id="restore-confirm-btn"
-        class="px-4 py-2 text-white bg-brand-mint-deep hover:bg-brand-ink rounded-lg transition"
+        class={buttonClass("mint", "sm")}
       >
         Restore
       </button>
@@ -251,7 +253,7 @@ interface DeletedItem {
           </td>
           <td class="px-6 py-4 text-right text-sm">
             <button
-              class="restore-btn text-brand-mint-deep hover:text-brand-mint-deep font-medium mr-4"
+              class="restore-btn text-brand-mint-text hover:text-brand-mint-text font-medium mr-4"
               data-id="${item.id}"
               data-type="${item.type}"
               data-name="${item.name}"
@@ -403,9 +405,8 @@ interface DeletedItem {
 
   function showNotification(message, type) {
     const notification = document.createElement("div");
-    notification.className = `fixed top-4 right-4 px-4 py-3 rounded-lg text-white ${
-      type === "success" ? "bg-brand-mint-deep" : "bg-red-600"
-    } shadow-[var(--shadow-pop)] z-40`;
+    const toneClass = type === "success" ? "bg-brand-mint-deep text-brand-ink" : "bg-red-600 text-white";
+    notification.className = `fixed top-4 right-4 px-4 py-3 rounded-lg ${toneClass} shadow-[var(--shadow-pop)] z-40`;
     notification.textContent = message;
     document.body.appendChild(notification);
 

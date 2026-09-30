@@ -123,15 +123,14 @@ function timeAgo(iso: string | null): string {
 
 <PageLayout
     title={`📺 ${labels.title}`}
-    headerClass="bg-gradient-to-br from-slate-700 to-slate-900"
-    dark
+    tone="sky"
     role={user.role}
     active="parent"
     lang={lang}
     mainClass="flex-1 px-4 py-6 space-y-4"
     containerClass="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep"
 >
-    <p slot="header-extra" class="text-slate-300 text-sm mt-1">{labels.subtitle}</p>
+    <p slot="header-extra" class="text-brand-ink text-sm mt-1">{labels.subtitle}</p>
             {errorMsg && (
                 <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
                     {errorMsg}
@@ -140,7 +139,7 @@ function timeAgo(iso: string | null): string {
 
             {createdToken && (
                 <div class="p-4 bg-brand-mint/15 border-2 border-brand-mint-deep rounded-xl space-y-2">
-                    <p class="text-sm font-bold text-brand-mint-deep">
+                    <p class="text-sm font-bold text-brand-mint-text">
                         {labels.save_token}
                     </p>
                     <p class="text-xs text-brand-ink">{labels.url_label}</p>
@@ -189,7 +188,7 @@ function timeAgo(iso: string | null): string {
                                     {m.has_pin ? `🔒 ${labels.pin_set}` : labels.pin_unset}
                                 </p>
                             </div>
-                            <span data-save-status class="text-[11px] font-semibold text-brand-mint-deep"></span>
+                            <span data-save-status class="text-[11px] font-semibold text-brand-mint-text"></span>
                         </div>
                         <div class="flex flex-wrap items-center gap-1.5 mb-2">
                             {PALETTE.map((c) => (
@@ -282,7 +281,7 @@ function timeAgo(iso: string | null): string {
                 if (!el) return;
                 el.textContent = text;
                 el.classList.toggle("text-red-600", !!isError);
-                el.classList.toggle("text-brand-mint-deep", !isError);
+                el.classList.toggle("text-brand-mint-text", !isError);
                 setTimeout(() => { el.textContent = ""; }, 2500);
             }
 

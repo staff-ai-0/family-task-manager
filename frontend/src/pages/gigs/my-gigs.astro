@@ -38,9 +38,7 @@ const sl = (s: string) => statusLabel[s]?.[lang] ?? s;
 
 <PageLayout
     title={lang === "es" ? `Mis ${gt.Many}` : `My ${gt.Many}`}
-    headerClass="bg-gradient-to-br from-violet-700 to-violet-500"
-    dark
-    backClass="text-violet-200 hover:text-white"
+    tone="sun"
     backHref="/gigs"
     backLabel={lang === "es" ? `Tablero de ${gt.Many}` : `${gt.One} Board`}
     role={user.role?.toLowerCase()}
@@ -49,7 +47,7 @@ const sl = (s: string) => statusLabel[s]?.[lang] ?? s;
     gigTerm={gt.Many}
 >
             {flash && (
-                <div class="mb-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
+                <div class="mb-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-text text-sm rounded-xl">
                     {flash}
                 </div>
             )}

@@ -2,6 +2,7 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../lib/api";
 import { isFreePlan } from "../lib/plan";
+import { buttonClass } from "../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -155,14 +156,13 @@ import { serializeForClient } from "@lib/safe-vars";
 
 <PageLayout
     title={`🍽️ ${labels.title}`}
-    headerClass="bg-gradient-to-br from-orange-500 to-amber-500"
-    dark
+    tone="coral"
     role={user.role}
     active="tasks"
     lang={lang as "en" | "es"}
     mainClass="flex-1 px-4 py-6 space-y-4"
 >
-    <p slot="header-extra" class="text-amber-100 text-sm mt-1">
+    <p slot="header-extra" class="text-brand-ink text-sm mt-1">
         {labels.subtitle} · {days[0].key} → {days[6].key}
     </p>
     {errorMsg && (
@@ -302,7 +302,7 @@ import { serializeForClient } from "@lib/safe-vars";
             <input type="text" id="form-recipe-name" name="recipe_name" required maxlength="200" placeholder={labels.recipe_name_ph} class="w-full px-2 py-1.5 rounded-lg border border-brand-ink/20 text-sm" />
             <textarea id="form-ingredients" name="ingredients" rows="3" maxlength="4000" placeholder={labels.ingredients_ph} class="w-full px-2 py-1.5 rounded-lg border border-brand-ink/20 text-xs"></textarea>
             <input type="number" id="form-prep" name="prep_minutes" min="1" max="600" placeholder={labels.prep_ph} class="w-full px-2 py-1.5 rounded-lg border border-brand-ink/20 text-xs" />
-            <button type="submit" class="w-full py-2 rounded-lg bg-brand-sky-deep text-white text-sm font-bold hover:bg-brand-ink">
+            <button type="submit" class={`w-full ${buttonClass("secondary", "sm")}`}>
                 {labels.save}
             </button>
         </form>

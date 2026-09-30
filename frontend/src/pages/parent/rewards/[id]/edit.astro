@@ -44,9 +44,7 @@ if (!reward) return Astro.redirect("/parent/rewards");
 
 <PageLayout
     title={t(lang, "pr_edit_title") as string}
-    headerClass="bg-gradient-to-br from-amber-600 to-orange-500"
-    dark
-    backClass="text-amber-200"
+    tone="coral"
     backHref="/parent/rewards"
     backLabel={t(lang, "back_all_rewards") as string}
     role={user.role}
