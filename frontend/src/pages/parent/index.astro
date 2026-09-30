@@ -125,7 +125,7 @@ const hello = firstName(user.name);
 >
     <header
         slot="header"
-        class="bg-gradient-to-br from-slate-800 to-slate-700 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
+        class="bg-brand-ink text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
     >
         <p class="text-slate-300 text-sm mb-1">{greetingDate(now, lang, tz)}</p>
         <h1 class="text-2xl font-bold">{lang === "es" ? "Hola" : "Hi"}{hello ? `, ${hello}` : ""}</h1>

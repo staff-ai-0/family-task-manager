@@ -61,3 +61,49 @@ describe("PageHeader renders through headerToneClass", () => {
         expect(src).not.toMatch(/headerClass|backClass|\bdark\b/);
     });
 });
+
+/** Custom hero headers compose headerToneClass directly (spec "Custom hero headers"). */
+const HERO_TONES: Record<string, HeaderTone> = {
+    "pages/bank.astro": "mint",
+    "pages/envelopes.astro": "mint",
+    "pages/budget/index.astro": "mint",
+    "pages/budget/import.astro": "mint",
+    "pages/budget/recycle-bin/index.astro": "mint",
+    "pages/gigs/index.astro": "sun",
+    "pages/parent/assignments.astro": "sky",
+    "pages/calendar/month.astro": "sky",
+    "pages/profile.astro": "cream",
+    "components/home/KidHeader.astro": "sky",
+};
+
+describe("custom hero headers use their section tone", () => {
+    it.each(Object.entries(HERO_TONES))("%s → %s", (file, tone) => {
+        const src = read(file);
+        expect(src).toContain(`headerToneClass("${tone}")`);
+        expect(src).not.toMatch(/<header[^>]*bg-gradient-to-/);
+    });
+});
+
+describe("chat screens use ChatShell tone", () => {
+    it.each(["pages/chat.astro", "pages/soporte.astro", "pages/dm/[id].astro", "pages/parent/jarvis.astro"])("%s → cream", (file) => {
+        const src = read(file);
+        expect(src).toMatch(/<ChatShell[\s\S]*?\btone="cream"/);
+        expect(src).not.toMatch(/headerClass=/);
+    });
+    it("ChatShell renders through headerToneClass with no hardcoded white text", () => {
+        const src = read("components/ui/ChatShell.astro");
+        expect(src).toMatch(/headerToneClass\(tone\)/);
+        expect(src).not.toMatch(/text-white|headerClass/);
+    });
+});
+
+describe("home heroes", () => {
+    it("parent hub hero is flat brand ink with white text", () => {
+        expect(read("pages/parent/index.astro")).toMatch(/<header[\s\S]*?class="bg-brand-ink text-white/);
+    });
+    it("kid hero: teen keeps its dark skin, child uses the sky tone", () => {
+        const src = read("components/home/KidHeader.astro");
+        expect(src).toContain('"bg-[#1E2230] text-white"');
+        expect(src).not.toMatch(/bg-brand-sky-deep/);
+    });
+});

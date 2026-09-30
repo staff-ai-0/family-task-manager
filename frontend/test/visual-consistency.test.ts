@@ -36,14 +36,14 @@ const GLOBAL_RULES: RuleId[] = ["dark-theme", "header-class-prop"];
  * its number. Every entry reaches 0; the last task deletes this map.
  */
 const ALLOWANCE: Record<RuleId, number> = {
-    "header-gradient": 6,
-    "light-text-in-header": 34,
-    "white-on-brand-fill": 103,
+    "header-gradient": 0,
+    "light-text-in-header": 0,
+    "white-on-brand-fill": 100,
     "deep-text": 308,
     "faint-text": 1,
-    "h1-emoji": 7,
+    "h1-emoji": 0,
     "dark-theme": 0,
-    "header-class-prop": 4,
+    "header-class-prop": 0,
 };
 
 function walk(dir: string): string[] {

@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../lib/api";
+import { headerToneClass } from "../lib/headerTone";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -78,23 +79,23 @@ function countdownText(): string {
 ---
 
 <PageLayout title={es ? "Mi Banco" : "My Bank"} role={user.role} active="tasks" lang={lang}>
-    <header slot="header" class="bg-gradient-to-br from-brand-mint-deep to-brand-mint text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+    <header slot="header" class={`${headerToneClass("mint")} pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]`}>
         <div class="flex justify-between items-center mb-4">
             <div>
-                <p class="text-white/80 text-sm font-medium">{es ? "Mi Banco" : "My Bank"}</p>
-                <h1 class="text-2xl font-bold">🏦 {user.name}</h1>
+                <p class="text-brand-ink text-sm font-medium">{es ? "Mi Banco" : "My Bank"}</p>
+                <h1 class="text-2xl font-bold">{user.name}</h1>
             </div>
             <div class="flex gap-2">
-                <a href="/envelopes" class="bg-white/20 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-white/30 transition-colors">
+                <a href="/envelopes" class="bg-brand-ink/10 backdrop-blur-sm border border-brand-ink/20 text-brand-ink text-sm font-semibold px-4 py-2 rounded-xl hover:bg-brand-ink/15 transition-colors">
                     {es ? "Mis sobres" : "My envelopes"}
                 </a>
-                <a href="/dashboard" class="bg-white/20 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-white/30 transition-colors">
+                <a href="/dashboard" class="bg-brand-ink/10 backdrop-blur-sm border border-brand-ink/20 text-brand-ink text-sm font-semibold px-4 py-2 rounded-xl hover:bg-brand-ink/15 transition-colors">
                     {es ? "Inicio" : "Home"}
                 </a>
             </div>
         </div>
-        <div class="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3">
-            <p class="text-white/80 text-xs font-semibold uppercase tracking-wider mb-0.5">
+        <div class="bg-brand-ink/10 backdrop-blur-sm rounded-2xl px-4 py-3">
+            <p class="text-brand-ink text-xs font-semibold uppercase tracking-wider mb-0.5">
                 {es ? "Total en mi banco" : "Total in my bank"}
             </p>
             <p class="text-3xl font-extrabold tracking-tight" data-total-balance>

@@ -15,6 +15,7 @@ import MoveMoneyModal from "@components/MoveMoneyModal.astro";
 import FABButton from "@components/FABButton.astro";
 import FABModal from "@components/FABModal.astro";
 import { apiFetch } from "@lib/api";
+import { headerToneClass } from "@lib/headerTone";
 import { getMonthBudget, getCategoryGroups, formatCurrency, getMonthStatus } from "@lib/api/budget";
 import { monthSummaryView } from "@lib/parentHub";
 import { t } from "@lib/i18n";
@@ -113,7 +114,7 @@ const jarvisQuestions: string[] =
 >
     <div slot="after-nav">
         <!-- Header with month nav + ready to assign -->
-        <header class="bg-brand-sky-deep text-white pt-3 pb-5 px-4 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+        <header class={`${headerToneClass("mint")} pt-3 pb-5 px-4 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]`}>
             <BudgetMonthNav
                 year={year}
                 month={month}

@@ -4,6 +4,7 @@ import TourReplayButton from "../components/TourReplayButton.astro";
 import { apiFetch } from "../lib/api";
 import { fmtDate } from "../lib/datetime";
 import { t } from "../lib/i18n";
+import { headerToneClass } from "../lib/headerTone";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -131,11 +132,11 @@ const ledgerDate = (iso: string) =>
 >
     <header
         slot="header"
-        class="bg-brand-coral text-brand-ink border-b-4 border-brand-ink pt-12 pb-8 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
+        class={`${headerToneClass("cream")} pt-12 pb-8 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]`}
     >
             <div class="flex items-center gap-4">
                 <div
-                    class="h-16 w-16 rounded-full bg-brand-cream/20 border-2 border-white flex items-center justify-center text-3xl font-bold"
+                    class="h-16 w-16 rounded-full bg-brand-ink/10 border-2 border-brand-ink/20 flex items-center justify-center text-3xl font-bold"
                 >
                     {user.name.charAt(0).toUpperCase()}
                 </div>
@@ -143,7 +144,7 @@ const ledgerDate = (iso: string) =>
                     <h1 class="text-2xl font-bold">{user.name}</h1>
                     <p class="text-brand-coral-deep text-sm">{user.email}</p>
                     <span
-                        class="inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-brand-cream/20 border border-white/30"
+                        class="inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-brand-ink/10 border border-brand-ink/20"
                         >{t(lang, `pt_role_${String(user.role).toLowerCase()}`)}</span
                     >
                 </div>

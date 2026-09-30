@@ -73,7 +73,7 @@ const exampleChips = es
 
 <ChatShell
     title={`${labels.title} - Family Task Manager`}
-    headerClass="bg-gradient-to-br from-teal-600 to-cyan-500"
+    tone="cream"
     feedId="chat-scroll"
     feedClass="flex-1 px-4 py-4 space-y-3 overflow-y-auto"
     role={user.role}
@@ -82,22 +82,22 @@ const exampleChips = es
     <Fragment slot="header">
         <div class="flex items-baseline justify-between">
             <div>
-                <h1 class="text-2xl font-bold">🛟 {labels.title}</h1>
-                <p class="text-teal-100 text-xs mt-1">{labels.subtitle}</p>
+                <h1 class="text-2xl font-bold">{labels.title}</h1>
+                <p class="text-brand-ink text-xs mt-1">{labels.subtitle}</p>
             </div>
             {history.length > 0 && (
                 <form method="POST">
                     <input type="hidden" name="action" value="clear" />
                     <button
                         type="submit"
-                        class="text-xs underline text-teal-100 hover:text-white"
+                        class="text-xs underline text-brand-ink"
                     >
                         {labels.clear}
                     </button>
                 </form>
             )}
         </div>
-        <p class="text-teal-100 text-[11px] mt-2">
+        <p class="text-brand-ink text-[11px] mt-2">
             {labels.mailto}
             <a href="mailto:soporte@agent-ia.mx" class="underline font-semibold">soporte@agent-ia.mx</a>
             <span aria-hidden="true"> · </span>
