@@ -41,17 +41,19 @@ const fillCls = skin === "teen" ? "bg-brand-mint" : "bg-brand-ink";
         </a>
     </div>
     {progress && (
-        <div class="mt-2" data-progress-row>
+        <div class="mt-2" data-progress-row data-skin={skin} data-lang={lang}>
             <div class="flex flex-wrap gap-2">
-                <button type="button" data-progress-open class={`rounded-full border px-3 py-1 text-xs font-extrabold ${pillCls}`}>
+                <button type="button" data-progress-open data-progress-streak aria-haspopup="dialog"
+                        class={`rounded-full border px-3 py-1 text-xs font-extrabold ${pillCls}`}>
                     {progress.streakLabel}
                 </button>
-                <button type="button" data-progress-open class={`rounded-full border px-3 py-1 text-xs font-extrabold ${pillCls}`}>
+                <button type="button" data-progress-open data-progress-rank aria-haspopup="dialog"
+                        class={`rounded-full border px-3 py-1 text-xs font-extrabold ${pillCls}`}>
                     {progress.rankLabel}
                 </button>
             </div>
             <div class={`mt-2 h-1.5 rounded-full overflow-hidden ${trackCls}`} role="img"
-                 aria-label={progress.toNextLabel}>
+                 aria-label={progress.toNextLabel} data-progress-bar>
                 <div class={`h-full ${fillCls}`} style={`width:${progress.barPct}%`}></div>
             </div>
         </div>
@@ -80,3 +82,45 @@ const fillCls = skin === "teen" ? "bg-brand-mint" : "bg-brand-ink";
         </div>
     )}
 </header>
+
+<script>
+    // F4: TaskDeck dispatches "ftm:deck-empty" (bubbles) when the day's deck
+    // is finished, with no page reload — the streak/rank pills, XP bar and
+    // ProgressSheet's streak heading otherwise go stale until the kid
+    // navigates away and back. This re-fetches the same view the SSR page
+    // used and re-renders it client-side; it never re-runs the rank-up
+    // celebration (that's ack'd server-side and only ever shows once).
+    import { progressDomUpdate, progressView, type Skin } from "../../lib/progress";
+
+    async function refreshProgress() {
+        const row = document.querySelector<HTMLElement>("[data-progress-row]");
+        if (!row) return;
+        const skin = row.dataset.skin as Skin | undefined;
+        const lang = row.dataset.lang as "es" | "en" | undefined;
+        if (!skin || !lang) return;
+        try {
+            const res = await fetch("/api/progress/me", { credentials: "same-origin" });
+            if (!res.ok) return;
+            const view = progressView(await res.json(), skin, lang);
+            if (!view) return;
+            const u = progressDomUpdate(view);
+            const streakEl = row.querySelector("[data-progress-streak]");
+            const rankEl = row.querySelector("[data-progress-rank]");
+            const barEl = row.querySelector<HTMLElement>("[data-progress-bar]");
+            if (streakEl) streakEl.textContent = u.streak;
+            if (rankEl) rankEl.textContent = u.rank;
+            if (barEl) {
+                barEl.setAttribute("aria-label", u.barAriaLabel);
+                const fill = barEl.firstElementChild as HTMLElement | null;
+                if (fill) fill.style.width = `${u.barWidthPct}%`;
+            }
+            const sheetStreak = document.querySelector("[data-progress-sheet-streak]");
+            if (sheetStreak) sheetStreak.textContent = u.sheetStreak;
+        } catch {
+            // Best-effort refresh — keep whatever the SSR page already
+            // rendered rather than surface an error to the kid.
+        }
+    }
+
+    window.addEventListener("ftm:deck-empty", refreshProgress);
+</script>

@@ -37,7 +37,7 @@ const es = lang === "es";
     const dlg = document.getElementById("rank-up") as HTMLDialogElement | null;
     if (dlg) {
         dlg.showModal();
-        fireConfetti();
+        fireConfetti(dlg);
         const okBtn = dlg.querySelector<HTMLButtonElement>("[data-rank-up-ok]");
         // showModal() usually focuses the first focusable element already;
         // focus explicitly so the confirm button always gets it.

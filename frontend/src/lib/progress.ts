@@ -67,6 +67,28 @@ export function progressView(resp: any, skin: Skin, lang: "es" | "en"): Progress
     };
 }
 
+/** F4: the exact DOM values a live refresh (on `ftm:deck-empty`) writes into
+ * KidHeader's pills/bar and ProgressSheet's streak heading. Pure mapping —
+ * kept separate from the DOM-touching code in KidHeader.astro so it's
+ * testable without a DOM. */
+export interface ProgressDomUpdate {
+    streak: string;
+    rank: string;
+    barWidthPct: number;
+    barAriaLabel: string;
+    sheetStreak: string;
+}
+
+export function progressDomUpdate(view: ProgressView): ProgressDomUpdate {
+    return {
+        streak: view.streakLabel,
+        rank: view.rankLabel,
+        barWidthPct: view.barPct,
+        barAriaLabel: view.toNextLabel,
+        sheetStreak: view.streakLabel,
+    };
+}
+
 export function progressLine(kid: any, lang: "es" | "en"): string | null {
     if (kid?.rank == null || kid?.streak_days == null) return null;
     const skin: Skin = kid.role === "teen" ? "teen" : "child";

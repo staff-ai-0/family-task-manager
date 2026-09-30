@@ -1,6 +1,10 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { progressLine, progressView, rankName, RANK_NAMES } from "../src/lib/progress";
+import { progressDomUpdate, progressLine, progressView, rankName, RANK_NAMES } from "../src/lib/progress";
+
+const read = (p: string) => readFileSync(fileURLToPath(new URL(`../src/${p}`, import.meta.url)), "utf8");
 
 const resp = (over: Record<string, unknown> = {}) => ({
     applies: true, xp: 450, rank: 3, rank_floor_xp: 300, next_rank_xp: 600, streak_days: 5,
@@ -69,6 +73,70 @@ describe("progressView", () => {
         const v = progressView(resp({ xp: 650, rank_floor_xp: 300, next_rank_xp: 600 }), "child", "es")!;
         expect(v.toNextLabel).toBe("0 XP para Estrella");
         expect(v.barPct).toBe(100);
+    });
+});
+
+describe("progressDomUpdate (F4 — live refresh after ftm:deck-empty)", () => {
+    it("maps a ProgressView to the exact DOM values KidHeader/ProgressSheet write", () => {
+        const v = progressView(resp(), "child", "es")!;
+        expect(progressDomUpdate(v)).toEqual({
+            streak: "🔥 5 días",
+            rank: "Explorador · 3/10",
+            barWidthPct: 50,
+            barAriaLabel: "150 XP para Estrella",
+            sheetStreak: "🔥 5 días",
+        });
+    });
+    it("reflects a same-day rank-up (bar hits 100%) without re-deriving anything", () => {
+        const v = progressView(resp({ xp: 650, rank_floor_xp: 300, next_rank_xp: 600 }), "child", "es")!;
+        const u = progressDomUpdate(v);
+        expect(u.barWidthPct).toBe(100);
+        expect(u.barAriaLabel).toBe("0 XP para Estrella");
+    });
+});
+
+describe("KidHeader live progress refresh (F4)", () => {
+    const src = read("components/home/KidHeader.astro");
+    it("carries skin/lang on the progress row so the refresh script can call progressView", () => {
+        expect(src).toMatch(/data-progress-row[^>]*data-skin=\{skin\}/);
+        expect(src).toMatch(/data-progress-row[^>]*data-lang=\{lang\}/);
+    });
+    it("tags the streak pill, rank pill and XP bar with data hooks", () => {
+        expect(src).toMatch(/data-progress-streak/);
+        expect(src).toMatch(/data-progress-rank\b/);
+        expect(src).toMatch(/data-progress-bar\b/);
+    });
+    it("the two pills advertise the sheet they open (aria-haspopup, F5)", () => {
+        const pills = src.slice(src.indexOf("data-progress-row"), src.indexOf("meter.show &&"));
+        const opens = pills.match(/data-progress-open[^>]*>/g) ?? [];
+        expect(opens.length).toBeGreaterThanOrEqual(2);
+        for (const tag of opens) expect(tag).toMatch(/aria-haspopup="dialog"/);
+    });
+    it("listens for ftm:deck-empty on window and fetches /api/progress/me", () => {
+        expect(src).toMatch(/window\.addEventListener\(\s*["']ftm:deck-empty["']/);
+        expect(src).toMatch(/fetch\(\s*["']\/api\/progress\/me["']/);
+    });
+    it("failures are silent — no unhandled throw path updates nothing", () => {
+        const script = src.slice(src.indexOf("<script"));
+        expect(script).toMatch(/catch/);
+    });
+    it("never re-fires the rank-up celebration from the live refresh", () => {
+        const script = src.slice(src.indexOf("<script"));
+        expect(script).not.toMatch(/ack-rank/);
+        expect(script).not.toMatch(/RankUpCelebration/);
+    });
+});
+
+describe("ProgressSheet backdrop tap closes the sheet (F5)", () => {
+    const src = read("components/home/ProgressSheet.astro");
+    it("wraps the visible content in an inner panel, dialog itself is backdrop-only", () => {
+        const openTag = src.match(/<dialog id="progress-sheet"[^>]*>/s)?.[0] ?? "";
+        expect(openTag).toMatch(/bg-transparent/);
+        expect(openTag).not.toMatch(/bg-brand-cream/);
+        expect(src).toMatch(/bg-brand-cream/); // moved to the panel, not dropped
+    });
+    it("closes when the click target is the <dialog> itself", () => {
+        expect(src).toMatch(/addEventListener\(\s*["']click["'][\s\S]*?e\.target\s*===\s*\w+[\s\S]*?\.close\(\)/);
     });
 });
 
