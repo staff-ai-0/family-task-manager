@@ -41,9 +41,9 @@
 }
 
 .driver-popover .driver-popover-next-btn {
-    background: var(--color-brand-sky-deep, #2563eb);
-    color: #fff;
-    border: none;
+    background: var(--color-brand-sky, #4FB8E6);
+    color: var(--color-brand-ink, #1F2937);
+    border: 2px solid var(--color-brand-ink, #1F2937);
 }
 
 .driver-popover .driver-popover-prev-btn {

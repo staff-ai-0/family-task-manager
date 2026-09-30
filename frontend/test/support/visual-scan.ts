@@ -93,6 +93,10 @@ const HEADER_BLOCK = /<header\b([^>]*)>([\s\S]*?)<\/header>/g;
 // custom hero <div slot="header">) is scanned like a <header> block (F-3a).
 const SLOT_HEADER_OPEN = /<([A-Za-z][\w.:-]*)\b([^>]*?(?<![\w-])slot=["']header["'][^>]*?)(\/?)>/g;
 const H1_BLOCK = /<h1\b[^>]*>([\s\S]*?)<\/h1>/g;
+// CSS declaration blocks (.css files, <style> blocks): brand background + white text.
+const CSS_BLOCK = /\{([^{}]*)\}/g;
+const CSS_BRAND_BG = /background(?:-color)?\s*:\s*var\(\s*--color-brand-(?:sky|mint|coral|sun)(?:-deep)?(?![\w-])/;
+const CSS_WHITE_TEXT = /(?:^|[;{\s])color\s*:\s*(?:#fff(?:fff)?|white)(?![\w-])/i;
 const EMOJI = /\p{Extended_Pictographic}/u;
 const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*|<!--|\{\/\*)/;
 
@@ -563,6 +567,15 @@ export function scanVisual(raw: string): Hit[] {
 
     for (const m of text.matchAll(H1_BLOCK)) {
         if (EMOJI.test(m[1])) hits.push({ rule: "h1-emoji", line: lineAt(text, m.index ?? 0), match: "<h1>" });
+    }
+
+    for (const m of text.matchAll(CSS_BLOCK)) {
+        const body = m[1];
+        if (!CSS_BRAND_BG.test(body)) continue;
+        const w = CSS_WHITE_TEXT.exec(body);
+        if (w) {
+            hits.push({ rule: "white-on-brand-fill", line: lineAt(text, (m.index ?? 0) + 1 + w.index), match: "color: white on brand background (CSS)" });
+        }
     }
 
     const seen = new Set<string>();

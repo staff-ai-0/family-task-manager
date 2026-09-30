@@ -407,3 +407,25 @@ describe("DEEP_TEXT_CODEMOD", () => {
         expect(run(s)).toBe(s);
     });
 });
+
+describe("scanVisual — white-on-brand-fill in CSS blocks", () => {
+    it("flags a CSS block with a brand background and white text", () => {
+        const css = [
+            ".driver-popover .driver-popover-next-btn {",
+            "    background: var(--color-brand-sky-deep, #2563eb);",
+            "    color: #fff;",
+            "}",
+            ".b { background-color: var(--color-brand-mint); color: white; }",
+        ].join("\n");
+        expect(rules(css, "white-on-brand-fill").map((h) => h.line)).toEqual([3, 5]);
+    });
+    it("leaves CSS blocks with ink text, ink backgrounds or no brand var alone", () => {
+        const css = [
+            ".a { background: var(--color-brand-sky); color: var(--color-brand-ink); }",
+            ".b { background: var(--color-brand-ink); color: #fff; }",
+            ".c { background-color: #fff; color: white; }",
+            "const style = { background: 'var(--color-brand-sky)', border: 0 };",
+        ].join("\n");
+        expect(rules(css, "white-on-brand-fill")).toEqual([]);
+    });
+});
