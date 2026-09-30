@@ -1,7 +1,7 @@
 # UX-B3 follow-ups — Design
 
 **Date:** 2026-09-30
-**Status:** design approved in chat (2026-09-30)
+**Status:** approved 2026-09-30; implemented on fix/ux-b3-followups
 **Program:** UX/GUI program, follow-up to **B3** (visual consistency, PR #285). Found by the B3 final review and the 2026-09-30 prod screenshot pass.
 
 ## What is wrong today
