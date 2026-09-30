@@ -16,3 +16,13 @@ export function contrastRatio(a: string, b: string): number {
     const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
     return (hi + 0.05) / (lo + 0.05);
 }
+
+/** Composite `fg` at `alpha` (0–1) over opaque `bg`; #RRGGBB in, uppercase #RRGGBB out. */
+export function mix(fg: string, bg: string, alpha: number): string {
+    const rgb = (h: string) => {
+        const n = parseInt(h.replace("#", ""), 16);
+        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    };
+    const [f, b] = [rgb(fg), rgb(bg)];
+    return "#" + f.map((c, i) => Math.round(c * alpha + b[i] * (1 - alpha)).toString(16).padStart(2, "0")).join("").toUpperCase();
+}
