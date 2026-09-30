@@ -148,7 +148,7 @@ const L = {
             <div class="pt-1">
                 <p class="text-xs font-bold text-brand-ink-soft mb-1">{L.steps}</p>
                 <div id="step-rows" class="space-y-2"></div>
-                <button type="button" id="add-step-row" class="mt-2 text-sm font-bold text-brand-sky-deep">+ {L.add_step}</button>
+                <button type="button" id="add-step-row" class="mt-2 text-sm font-bold text-brand-sky-text">+ {L.add_step}</button>
             </div>
 
             <p class="text-[11px] text-brand-ink-soft">⭐ {L.points_note}</p>
@@ -179,7 +179,7 @@ const L = {
                             <button type="button" class="toggle-active text-xs font-bold px-2 py-1 rounded-full border-2 border-brand-ink" data-id={r.id} data-active={r.is_active ? "1" : "0"} style={r.is_active ? "background:#5DD4A8;" : ""}>
                                 {r.is_active ? L.active : L.inactive}
                             </button>
-                            <button type="button" class="del-routine text-xs font-bold text-brand-coral-deep" data-id={r.id}>{L.del_routine}</button>
+                            <button type="button" class="del-routine text-xs font-bold text-brand-coral-text" data-id={r.id}>{L.del_routine}</button>
                         </div>
                     </div>
 
@@ -194,7 +194,7 @@ const L = {
                                         <span class="w-6 text-center text-brand-ink-soft">{i + 1}</span>
                                         <span class="text-lg">{s.icon}</span>
                                         <span class="flex-1 truncate">{lang === "es" ? s.label_es || s.label : s.label}</span>
-                                        <button type="button" class="del-step text-brand-coral-deep font-bold" data-rid={r.id} data-sid={s.id} aria-label={L.del}>×</button>
+                                        <button type="button" class="del-step text-brand-coral-text font-bold" data-rid={r.id} data-sid={s.id} aria-label={L.del}>×</button>
                                     </li>
                                 ))}
                             </ul>
@@ -203,7 +203,7 @@ const L = {
                             <input name="icon" value="✅" maxlength="2" class="icon-input w-11 px-1 py-1.5 rounded-lg border-2 border-brand-ink/20 text-center text-lg outline-none" />
                             <input name="label" required placeholder={L.step_label_en} maxlength="120" class="flex-1 px-2 py-1.5 rounded-lg border-2 border-brand-ink/20 text-sm outline-none" />
                             <input name="label_es" placeholder={L.step_label_es} maxlength="120" class="flex-1 px-2 py-1.5 rounded-lg border-2 border-brand-ink/20 text-sm outline-none" />
-                            <button type="submit" class="text-sm font-bold text-brand-sky-deep whitespace-nowrap">+ {L.add_step}</button>
+                            <button type="submit" class="text-sm font-bold text-brand-sky-text whitespace-nowrap">+ {L.add_step}</button>
                         </form>
                     </div>
                 </div>
@@ -211,7 +211,7 @@ const L = {
         )}
     </section>
 
-    <a href="/routines" class="block text-center text-sm font-bold text-brand-sky-deep">→ {L.kid_link}</a>
+    <a href="/routines" class="block text-center text-sm font-bold text-brand-sky-text">→ {L.kid_link}</a>
 </PageLayout>
 
 <script define:vars={{ L }}>
@@ -254,7 +254,7 @@ const L = {
                 '<input name="s_icon" value="' + (icon || "✅") + '" maxlength="2" class="w-11 px-1 py-1.5 rounded-lg border-2 border-brand-ink/20 text-center text-lg outline-none" />' +
                 '<input name="s_label" placeholder="' + L.step_label_en + '" maxlength="120" class="flex-1 px-2 py-1.5 rounded-lg border-2 border-brand-ink/20 text-sm outline-none" />' +
                 '<input name="s_label_es" placeholder="' + L.step_label_es + '" maxlength="120" class="flex-1 px-2 py-1.5 rounded-lg border-2 border-brand-ink/20 text-sm outline-none" />' +
-                '<button type="button" class="rm-step text-brand-coral-deep font-bold px-1">×</button>';
+                '<button type="button" class="rm-step text-brand-coral-text font-bold px-1">×</button>';
             row.querySelector(".rm-step").addEventListener("click", () => row.remove());
             stepRows.appendChild(row);
         }

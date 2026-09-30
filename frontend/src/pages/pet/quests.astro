@@ -105,7 +105,7 @@ const L = {
         <div class="bg-brand-cream rounded-[var(--radius-card)] p-6 border-2 border-brand-ink shadow-[var(--shadow-card)] text-center space-y-2">
             <p class="text-5xl">🥚</p>
             <p class="text-brand-ink font-semibold">{L.no_pet}</p>
-            <a href="/pet" class="inline-block mt-1 font-bold text-brand-sky-deep">{L.adopt}</a>
+            <a href="/pet" class="inline-block mt-1 font-bold text-brand-sky-text">{L.adopt}</a>
         </div>
     )}
 
@@ -139,11 +139,11 @@ const L = {
                     <div class="flex-1 min-w-0">
                         <p class="font-bold text-brand-ink leading-tight">{qt(q)}</p>
                         <div class="flex items-center gap-2 mt-2 flex-wrap">
-                            <span class="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-brand-sky/25 text-brand-sky-deep border border-brand-sky-deep/30">
+                            <span class="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-brand-sky/25 text-brand-sky-text border border-brand-sky-deep/30">
                                 ⭐ +{q.pet_xp_reward} {L.xp}
                             </span>
                             {q.points > 0 && (
-                                <span class="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-sun/20 text-brand-sun-deep">
+                                <span class="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-sun/20 text-brand-sun-text">
                                     +{q.points} {L.pts}
                                 </span>
                             )}
@@ -164,7 +164,7 @@ const L = {
     <!-- Epic quests (gigs — need proof, complete on the tasks page) -->
     {epic.length > 0 && (
         <section class="space-y-3">
-            <h3 class="text-lg font-display font-extrabold text-brand-sun-deep px-1">⚔️ {L.epic}</h3>
+            <h3 class="text-lg font-display font-extrabold text-brand-sun-text px-1">⚔️ {L.epic}</h3>
             <p class="text-xs text-brand-ink-soft px-1 -mt-2">{L.epic_hint}</p>
             {epic.map((q) => (
                 <a
@@ -175,17 +175,17 @@ const L = {
                     <div class="flex-1 min-w-0">
                         <p class="font-bold text-brand-ink leading-tight">{qt(q)}</p>
                         <div class="flex items-center gap-2 mt-2 flex-wrap">
-                            <span class="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-brand-sky/25 text-brand-sky-deep border border-brand-sky-deep/30">
+                            <span class="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-brand-sky/25 text-brand-sky-text border border-brand-sky-deep/30">
                                 ⭐ +{q.pet_xp_reward} {L.xp}
                             </span>
                             {q.points > 0 && (
-                                <span class="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-sun/20 text-brand-sun-deep">
+                                <span class="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-sun/20 text-brand-sun-text">
                                     +{q.points} {L.pts}
                                 </span>
                             )}
                         </div>
                     </div>
-                    <span class="text-brand-sun-deep font-bold flex-shrink-0 text-sm">{L.go_tasks}</span>
+                    <span class="text-brand-sun-text font-bold flex-shrink-0 text-sm">{L.go_tasks}</span>
                 </a>
             ))}
         </section>
@@ -200,7 +200,7 @@ const L = {
                 <div class="bg-brand-cream/60 rounded-[var(--radius-card)] px-4 py-3 border-2 border-brand-ink/10 flex items-center gap-3 opacity-70">
                     <span class="text-xl flex-shrink-0">🔒</span>
                     <p class="flex-1 min-w-0 font-medium text-brand-ink-soft truncate">{qt(q)}</p>
-                    <span class="text-xs font-bold text-brand-sky-deep flex-shrink-0">⭐ +{q.pet_xp_reward}</span>
+                    <span class="text-xs font-bold text-brand-sky-text flex-shrink-0">⭐ +{q.pet_xp_reward}</span>
                 </div>
             ))}
         </section>
@@ -217,7 +217,7 @@ const L = {
                 {done.map((q) => (
                     <div class="bg-brand-cream/60 rounded-[var(--radius-card)] px-4 py-3 border border-brand-ink/10 flex items-center gap-3 opacity-70">
                         <span class="h-7 w-7 rounded-full bg-brand-mint/20 flex items-center justify-center flex-shrink-0">
-                            <svg class="h-4 w-4 text-brand-mint-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                            <svg class="h-4 w-4 text-brand-mint-text" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
                         </span>
                         <p class="flex-1 min-w-0 font-medium text-brand-ink-soft line-through truncate">{qt(q)}</p>
                     </div>

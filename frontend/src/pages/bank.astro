@@ -124,7 +124,7 @@ function countdownText(): string {
                  caption changes. -->
             <div class="flex items-baseline gap-1">
                 <span class="text-xs text-brand-ink-soft">{es ? "Meta de esta semana:" : "This week's goal:"}</span>
-                <span class="text-lg font-extrabold text-brand-mint-deep">{pcFmt(paycheck.cap_cents)}</span>
+                <span class="text-lg font-extrabold text-brand-mint-text">{pcFmt(paycheck.cap_cents)}</span>
             </div>
             <div class="h-3 rounded-full bg-brand-cream-deep overflow-hidden mt-2 flex">
                 <div class="h-full bg-brand-mint-deep transition-all" style={`width:${barPct}%`}></div>
@@ -151,19 +151,19 @@ function countdownText(): string {
         <!-- Gastar / Spend -->
         <div class="bg-brand-coral/15 border-2 border-brand-ink rounded-[var(--radius-card)] p-5 shadow-[var(--shadow-card)] text-center">
             <div class="text-4xl mb-1">🛍️</div>
-            <p class="text-xs font-bold uppercase tracking-wide text-brand-coral-deep">{es ? "Gastar" : "Spend"}</p>
+            <p class="text-xs font-bold uppercase tracking-wide text-brand-coral-text">{es ? "Gastar" : "Spend"}</p>
             <p class="text-2xl font-extrabold text-brand-ink mt-1" data-jar-balance="spend">{fmt(spend)}</p>
         </div>
         <!-- Ahorrar / Save -->
         <div class="bg-brand-mint/20 border-2 border-brand-ink rounded-[var(--radius-card)] p-5 shadow-[var(--shadow-card)] text-center">
             <div class="text-4xl mb-1">🐷</div>
-            <p class="text-xs font-bold uppercase tracking-wide text-brand-mint-deep">{es ? "Ahorrar" : "Save"}</p>
+            <p class="text-xs font-bold uppercase tracking-wide text-brand-mint-text">{es ? "Ahorrar" : "Save"}</p>
             <p class="text-2xl font-extrabold text-brand-ink mt-1" data-jar-balance="save">{fmt(save)}</p>
         </div>
         <!-- Compartir / Share -->
         <div class="bg-brand-sun/25 border-2 border-brand-ink rounded-[var(--radius-card)] p-5 shadow-[var(--shadow-card)] text-center">
             <div class="text-4xl mb-1">💝</div>
-            <p class="text-xs font-bold uppercase tracking-wide text-brand-sun-deep">{es ? "Compartir" : "Share"}</p>
+            <p class="text-xs font-bold uppercase tracking-wide text-brand-sun-text">{es ? "Compartir" : "Share"}</p>
             <p class="text-2xl font-extrabold text-brand-ink mt-1" data-jar-balance="share">{fmt(share)}</p>
         </div>
     </section>
@@ -176,7 +176,7 @@ function countdownText(): string {
                     <div class="flex items-center gap-2">
                         <span class="text-3xl">{goalEmoji}</span>
                         <div>
-                            <p class="text-xs font-bold uppercase tracking-wide text-brand-mint-deep">{es ? "Mi meta de ahorro" : "My savings goal"}</p>
+                            <p class="text-xs font-bold uppercase tracking-wide text-brand-mint-text">{es ? "Mi meta de ahorro" : "My savings goal"}</p>
                             <p class="font-display font-extrabold text-brand-ink text-lg leading-tight">{goalName}</p>
                         </div>
                     </div>
@@ -185,7 +185,7 @@ function countdownText(): string {
                     </button>
                 </div>
                 {goalPending && (
-                    <p class="text-xs bg-brand-sun/25 text-brand-sun-deep font-semibold rounded-lg px-3 py-1.5 mb-3 inline-block">
+                    <p class="text-xs bg-brand-sun/25 text-brand-sun-text font-semibold rounded-lg px-3 py-1.5 mb-3 inline-block">
                         ⏳ {es ? "Esperando que tus papás la aprueben" : "Waiting for your parents to approve"}
                     </p>
                 )}
@@ -194,7 +194,7 @@ function countdownText(): string {
                 </div>
                 <div class="flex justify-between text-sm">
                     <span class="font-bold text-brand-ink" data-goal-saved>{fmt(goalSaved)} / {fmt(goalTarget)}</span>
-                    <span class="font-semibold text-brand-mint-deep" data-goal-pct>{goalPct}%</span>
+                    <span class="font-semibold text-brand-mint-text" data-goal-pct>{goalPct}%</span>
                 </div>
                 {goalReached ? (
                     <div class="mt-3 bg-brand-sun/25 border-2 border-brand-ink rounded-xl px-3 py-2.5 text-center" data-goal-celebrate>
@@ -242,14 +242,14 @@ function countdownText(): string {
                 </p>
             )}
             {interestPreview > 0 && (
-                <p class="text-sm text-brand-mint-deep font-semibold mt-2 bg-brand-mint/15 rounded-xl px-3 py-2">
+                <p class="text-sm text-brand-mint-text font-semibold mt-2 bg-brand-mint/15 rounded-xl px-3 py-2">
                     ✨ {es
                         ? `Si dejas tu dinero en Ahorrar, el ${paydayName} ganas +${fmt(interestPreview)} de interés.`
                         : `If you keep your money in Save, you'll earn +${fmt(interestPreview)} in interest on ${paydayName}.`}
                 </p>
             )}
             {showMatchPreview && (
-                <p class="text-sm text-brand-sun-deep font-semibold mt-2 bg-brand-sun/15 rounded-xl px-3 py-2">
+                <p class="text-sm text-brand-sun-text font-semibold mt-2 bg-brand-sun/15 rounded-xl px-3 py-2">
                     💪 {es
                         ? `Has ahorrado desde tu último pago → tus papás pondrán +${fmt(pendingMatch)}.`
                         : `You've saved since your last payday → your parents will add +${fmt(pendingMatch)}.`}

@@ -200,7 +200,7 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                 <div class="grid grid-cols-3 gap-2 text-center mt-3">
                     <div>
                         <p class="text-[10px] font-semibold uppercase tracking-wider text-brand-ink-soft">{es ? "Ingresos" : "Income"}</p>
-                        <p class="text-sm font-bold text-brand-mint-deep">{formatCurrency(totalIncome)}</p>
+                        <p class="text-sm font-bold text-brand-mint-text">{formatCurrency(totalIncome)}</p>
                     </div>
                     <div>
                         <p class="text-[10px] font-semibold uppercase tracking-wider text-brand-ink-soft">{es ? "Gastos" : "Expenses"}</p>
@@ -258,13 +258,13 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
             )}
             {user.role === "parent" && (
                 <button id="select-mode-btn"
-                    class="text-xs px-2 py-1.5 rounded-lg border border-brand-ink/10 bg-brand-cream-deep text-brand-ink-soft hover:bg-brand-sky/20 hover:text-brand-sky-deep transition whitespace-nowrap">
+                    class="text-xs px-2 py-1.5 rounded-lg border border-brand-ink/10 bg-brand-cream-deep text-brand-ink-soft hover:bg-brand-sky/20 hover:text-brand-sky-text transition whitespace-nowrap">
                     ☑ {es ? "Seleccionar" : "Select"}
                 </button>
             )}
             {user.role === "parent" && (
                 <button id="save-filter-btn" title={es ? "Guardar filtro actual" : "Save current filter"}
-                    class="text-xs px-2 py-1.5 rounded-lg border border-brand-ink/10 bg-brand-cream-deep text-brand-ink-soft hover:bg-brand-mint/20 hover:text-brand-mint-deep transition whitespace-nowrap">
+                    class="text-xs px-2 py-1.5 rounded-lg border border-brand-ink/10 bg-brand-cream-deep text-brand-ink-soft hover:bg-brand-mint/20 hover:text-brand-mint-text transition whitespace-nowrap">
                     ★ {es ? "Guardar filtro" : "Save filter"}
                 </button>
             )}
@@ -316,7 +316,7 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                             <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden">
                                 <div class="bg-brand-cream-deep px-4 py-2 border-b border-brand-ink/10 flex items-center justify-between">
                                     <h2 class="font-semibold text-brand-ink text-sm">{formatDate(date, lang)}</h2>
-                                    <span class={`text-sm font-bold ${dayTotal >= 0 ? 'text-brand-mint-deep' : 'text-red-600'}`}>
+                                    <span class={`text-sm font-bold ${dayTotal >= 0 ? 'text-brand-mint-text' : 'text-red-600'}`}>
                                         {formatCurrency(dayTotal)}
                                     </span>
                                 </div>
@@ -364,7 +364,7 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                                                 </div>
                                                 <div class="text-right flex-shrink-0 flex items-center gap-2">
                                                     <div>
-                                                        <p class={`text-sm font-bold ${isIncome ? 'text-brand-mint-deep' : 'text-red-600'}`}>
+                                                        <p class={`text-sm font-bold ${isIncome ? 'text-brand-mint-text' : 'text-red-600'}`}>
                                                             {isIncome ? '+' : ''}{formatCurrency(transaction.amount)}
                                                         </p>
                                                         {transaction.cleared && (
@@ -485,14 +485,14 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
 
                     <!-- Cleared -->
                     <div class="mb-4 flex items-center gap-3">
-                        <input id="edit-cleared" type="checkbox" class="h-4 w-4 rounded text-brand-sky-deep border-brand-ink/20" />
+                        <input id="edit-cleared" type="checkbox" class="h-4 w-4 rounded text-brand-sky-text border-brand-ink/20" />
                         <label for="edit-cleared" class="text-sm text-brand-ink-soft">
                             {es ? "Conciliado" : "Cleared"}
                         </label>
                     </div>
 
                     <button id="edit-split-btn" type="button"
-                        class="w-full mb-3 py-2 text-sm font-semibold rounded-lg border border-brand-sky-deep/40 text-brand-sky-deep hover:bg-brand-sky-deep/10 transition">
+                        class="w-full mb-3 py-2 text-sm font-semibold rounded-lg border border-brand-sky-deep/40 text-brand-sky-text hover:bg-brand-sky-deep/10 transition">
                         ✂ {es ? "Dividir en categorías" : "Split into categories"}
                     </button>
 
@@ -503,7 +503,7 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                         </p>
                         <div id="split-rows" class="space-y-2"></div>
                         <div class="flex items-center justify-between">
-                            <button id="split-add-row" type="button" class="text-xs underline text-brand-sky-deep">
+                            <button id="split-add-row" type="button" class="text-xs underline text-brand-sky-text">
                                 + {es ? "Agregar renglón" : "Add row"}
                             </button>
                             <span class="text-xs font-semibold" id="split-remaining"></span>
@@ -653,7 +653,7 @@ document.addEventListener("astro:after-swap", initFilters);
             .reduce((sum, i) => sum + Math.round(parseFloat(i.value || "0") * 100), 0);
         const rem = totalCents() - assigned;
         splitRemaining.textContent = (es ? "Restante: " : "Remaining: ") + "$" + (rem/100).toFixed(2);
-        splitRemaining.className = "text-xs font-semibold " + (rem === 0 ? "text-brand-mint-deep" : "text-amber-600");
+        splitRemaining.className = "text-xs font-semibold " + (rem === 0 ? "text-brand-mint-text" : "text-amber-600");
         document.getElementById("split-save-btn").disabled = rem !== 0;
         return rem;
     }
@@ -785,7 +785,7 @@ document.addEventListener("astro:after-swap", initFilters);
             typeIncomeBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-brand-ink/10 bg-brand-cream text-brand-ink-soft";
         } else {
             typeExpenseBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-brand-ink/10 bg-brand-cream text-brand-ink-soft";
-            typeIncomeBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-brand-mint-deep bg-brand-mint/20 text-brand-mint-deep";
+            typeIncomeBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-brand-mint-deep bg-brand-mint/20 text-brand-mint-text";
         }
     }
 
@@ -1037,7 +1037,7 @@ document.addEventListener("astro:after-swap", initFilters);
                                 a.href = it.cheapest.url;
                                 a.target = "_blank";
                                 a.rel = "noopener";
-                                a.className = "ml-2 underline text-brand-coral-deep";
+                                a.className = "ml-2 underline text-brand-coral-text";
                                 a.textContent = lang === "es" ? "Ver →" : "View →";
                                 row2.append(a);
                             }
@@ -1381,7 +1381,7 @@ function initPowerTools() {
             bar.classList.remove("hidden");
             filters.forEach((f: any) => {
                 const chip = document.createElement("button");
-                chip.className = "text-xs px-2.5 py-1 rounded-full bg-brand-sky/15 text-brand-sky-deep font-semibold hover:bg-brand-sky/30";
+                chip.className = "text-xs px-2.5 py-1 rounded-full bg-brand-sky/15 text-brand-sky-text font-semibold hover:bg-brand-sky/30";
                 chip.textContent = f.name;
                 chip.addEventListener("click", () => {
                     const params = new URLSearchParams(window.location.search);

@@ -212,7 +212,7 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
                 <label class="flex items-center gap-3 cursor-pointer rounded-xl bg-brand-cream-deep/60 px-3 py-2">
                     <input type="checkbox" data-module-key={key}
                         checked={family?.enabled_modules == null || family.enabled_modules.includes(key)}
-                        class="h-4 w-4 rounded border-brand-ink/30 text-brand-sky-deep focus:ring-brand-sky" />
+                        class="h-4 w-4 rounded border-brand-ink/30 text-brand-sky-text focus:ring-brand-sky" />
                     <span class="text-sm text-brand-ink">{label}</span>
                 </label>
             ))}
@@ -231,13 +231,13 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
                 type="checkbox"
                 id="ai-consent-toggle"
                 checked={aiConsent}
-                class="mt-1 h-4 w-4 rounded border-brand-ink/30 text-brand-sky-deep focus:ring-brand-sky"
+                class="mt-1 h-4 w-4 rounded border-brand-ink/30 text-brand-sky-text focus:ring-brand-sky"
             />
             <span class="text-sm text-brand-ink">{L.ai_label}</span>
         </label>
         <p class="text-xs text-brand-ink-soft">
             {L.ai_hint}
-            <a href="/privacidad" class="text-brand-sky-deep font-semibold hover:underline">{L.ai_privacy}</a>
+            <a href="/privacidad" class="text-brand-sky-text font-semibold hover:underline">{L.ai_privacy}</a>
         </p>
         <span id="ai-status-msg" class="text-sm block" aria-live="polite"></span>
     </section>

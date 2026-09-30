@@ -32,7 +32,7 @@ const META: Record<string, { emoji: string; label: string; blurb: string; bg: st
         label: es ? "Gastar" : "Spend",
         blurb: es ? "Dinero listo para usar." : "Money ready to use.",
         bg: "bg-brand-coral/15",
-        accent: "text-brand-coral-deep",
+        accent: "text-brand-coral-text",
         bar: "bg-brand-coral",
     },
     save: {
@@ -40,7 +40,7 @@ const META: Record<string, { emoji: string; label: string; blurb: string; bg: st
         label: es ? "Ahorrar" : "Save",
         blurb: es ? "Para tus metas." : "For your goals.",
         bg: "bg-brand-mint/20",
-        accent: "text-brand-mint-deep",
+        accent: "text-brand-mint-text",
         bar: "bg-brand-mint-deep",
     },
     share: {
@@ -48,7 +48,7 @@ const META: Record<string, { emoji: string; label: string; blurb: string; bg: st
         label: es ? "Compartir" : "Share",
         blurb: es ? "Para dar a otros." : "To give to others.",
         bg: "bg-brand-sun/25",
-        accent: "text-brand-sun-deep",
+        accent: "text-brand-sun-text",
         bar: "bg-brand-sun-deep",
     },
 };
@@ -121,14 +121,14 @@ const ORDER = ["spend", "save", "share"];
                             <div class="flex items-center gap-2 mb-2">
                                 <span class="text-2xl">{goal.emoji || "🎯"}</span>
                                 <div>
-                                    <p class="text-xs font-bold uppercase tracking-wide text-brand-mint-deep">
+                                    <p class="text-xs font-bold uppercase tracking-wide text-brand-mint-text">
                                         {es ? "Mi meta de ahorro" : "My savings goal"}
                                     </p>
                                     <p class="font-display font-extrabold text-brand-ink leading-tight">{goal.name}</p>
                                 </div>
                             </div>
                             {goal.pending_approval && (
-                                <p class="text-xs bg-brand-sun/25 text-brand-sun-deep font-semibold rounded-lg px-3 py-1.5 mb-2 inline-block">
+                                <p class="text-xs bg-brand-sun/25 text-brand-sun-text font-semibold rounded-lg px-3 py-1.5 mb-2 inline-block">
                                     ⏳ {es ? "Esperando aprobación de tus papás" : "Waiting for your parents' approval"}
                                 </p>
                             )}
@@ -137,7 +137,7 @@ const ORDER = ["spend", "save", "share"];
                             </div>
                             <div class="flex justify-between text-sm">
                                 <span class="font-bold text-brand-ink">{fmt(goal.saved_cents)} / {fmt(goal.target_cents)}</span>
-                                <span class="font-semibold text-brand-mint-deep">{goal.progress_pct}%</span>
+                                <span class="font-semibold text-brand-mint-text">{goal.progress_pct}%</span>
                             </div>
                             {goal.reached ? (
                                 <p class="text-sm font-display font-extrabold text-brand-ink mt-2">🎉 {es ? "¡Meta alcanzada!" : "Goal reached!"}</p>
@@ -151,7 +151,7 @@ const ORDER = ["spend", "save", "share"];
 
                     {/* Prompt to set a goal on the Save envelope when none exists */}
                     {k === "save" && !goal && (
-                        <a href="/bank" class="mt-4 flex items-center gap-2 text-sm font-semibold text-brand-mint-deep hover:text-brand-ink transition-colors">
+                        <a href="/bank" class="mt-4 flex items-center gap-2 text-sm font-semibold text-brand-mint-text hover:text-brand-ink transition-colors">
                             🎯 {es ? "Ponte una meta de ahorro en Mi Banco" : "Set a savings goal in My Bank"}
                         </a>
                     )}

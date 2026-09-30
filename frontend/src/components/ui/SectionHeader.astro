@@ -16,7 +16,7 @@ const { title, href, lang = "en" } = Astro.props;
 <div class="flex items-center justify-between mb-3">
   <h2 class="font-display text-lg font-extrabold text-brand-ink">{title}</h2>
   {href && (
-    <a href={href} class="text-sm text-brand-sky-deep font-semibold hover:underline">
+    <a href={href} class="text-sm text-brand-sky-text font-semibold hover:underline">
       {lang === "es" ? "Ver todo" : "See all"} →
     </a>
   )}

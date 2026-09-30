@@ -20,9 +20,9 @@ const kids: any[] = Array.isArray(rowsRaw) ? rowsRaw : [];
 const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
 const META: Record<string, { emoji: string; label: string; accent: string; bg: string; bar: string }> = {
-    spend: { emoji: "🛍️", label: es ? "Gastar" : "Spend", accent: "text-brand-coral-deep", bg: "bg-brand-coral/15", bar: "bg-brand-coral" },
-    save: { emoji: "🐷", label: es ? "Ahorrar" : "Save", accent: "text-brand-mint-deep", bg: "bg-brand-mint/20", bar: "bg-brand-mint-deep" },
-    share: { emoji: "💝", label: es ? "Compartir" : "Share", accent: "text-brand-sun-deep", bg: "bg-brand-sun/25", bar: "bg-brand-sun-deep" },
+    spend: { emoji: "🛍️", label: es ? "Gastar" : "Spend", accent: "text-brand-coral-text", bg: "bg-brand-coral/15", bar: "bg-brand-coral" },
+    save: { emoji: "🐷", label: es ? "Ahorrar" : "Save", accent: "text-brand-mint-text", bg: "bg-brand-mint/20", bar: "bg-brand-mint-deep" },
+    share: { emoji: "💝", label: es ? "Compartir" : "Share", accent: "text-brand-sun-text", bg: "bg-brand-sun/25", bar: "bg-brand-sun-deep" },
 };
 const ORDER = ["spend", "save", "share"];
 const byKey = (row: any): Record<string, any> => {
@@ -103,7 +103,7 @@ const byKey = (row: any): Record<string, any> => {
                                     <div class="flex items-center justify-between mb-1">
                                         <p class="text-sm font-bold text-brand-ink">🎯 {goal.emoji || ""} {goal.name}</p>
                                         {goal.pending_approval && (
-                                            <span class="text-xs bg-brand-sun/25 text-brand-sun-deep font-semibold rounded-lg px-2 py-0.5">
+                                            <span class="text-xs bg-brand-sun/25 text-brand-sun-text font-semibold rounded-lg px-2 py-0.5">
                                                 ⏳ {es ? "pendiente" : "pending"}
                                             </span>
                                         )}
@@ -123,7 +123,7 @@ const byKey = (row: any): Record<string, any> => {
 
                         <div class="px-5 pb-5">
                             <a href="/parent/settings/family-bank"
-                               class="inline-flex items-center gap-2 text-sm font-semibold text-brand-mint-deep hover:text-brand-ink transition-colors">
+                               class="inline-flex items-center gap-2 text-sm font-semibold text-brand-mint-text hover:text-brand-ink transition-colors">
                                 🏦 {es ? "Configurar en el Banco Familiar" : "Configure in the Family Bank"}
                             </a>
                         </div>

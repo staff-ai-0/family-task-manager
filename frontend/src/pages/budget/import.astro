@@ -159,7 +159,7 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
                                     type="checkbox"
                                     id="create-payees"
                                     checked
-                                    class="w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded"
+                                    class="w-4 h-4 text-brand-sky-text border-brand-ink/20 rounded"
                                 />
                                 <span class="text-brand-ink">
                                     {lang === "es" ? "Crear pagadores automáticamente" : "Create payees automatically"}
@@ -173,7 +173,7 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
                                     type="checkbox"
                                     id="prevent-duplicates"
                                     checked
-                                    class="w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded"
+                                    class="w-4 h-4 text-brand-sky-text border-brand-ink/20 rounded"
                                 />
                                 <span class="text-brand-ink">
                                     {lang === "es" ? "Evitar duplicados" : "Prevent duplicates"}
@@ -212,15 +212,15 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
 
             <!-- Help Section -->
             <div class="mt-6 bg-brand-sky/15 border border-brand-sky rounded-2xl p-4">
-                <h3 class="font-bold text-brand-sky-deep mb-2 text-sm">
+                <h3 class="font-bold text-brand-sky-text mb-2 text-sm">
                     {lang === "es" ? "Formato CSV Soportado" : "Supported CSV Format"}
                 </h3>
-                <p class="text-xs text-brand-sky-deep mb-2">
+                <p class="text-xs text-brand-sky-text mb-2">
                     {lang === "es" 
                         ? "El archivo CSV debe contener las siguientes columnas:"
                         : "Your CSV file should contain these columns:"}
                 </p>
-                <ul class="text-xs text-brand-sky-deep space-y-1 ml-4 list-disc">
+                <ul class="text-xs text-brand-sky-text space-y-1 ml-4 list-disc">
                     <li>{lang === "es" ? "Fecha (date, fecha, transaction_date)" : "Date (date, fecha, transaction_date)"}</li>
                     <li>{lang === "es" ? "Monto (amount, monto, value, quantity)" : "Amount (amount, monto, value, quantity)"}</li>
                     <li>{lang === "es" ? "Descripción (description, payee, memo, descripción)" : "Description (description, payee, memo, descripción)"}</li>
@@ -374,8 +374,8 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
                         <p class="text-lg font-bold text-brand-ink">${result.total_rows}</p>
                     </div>
                     <div class="bg-brand-mint/20 p-3 rounded border border-brand-mint">
-                        <p class="text-xs text-brand-mint-deep">${lang === 'es' ? 'Importados' : 'Imported'}</p>
-                        <p class="text-lg font-bold text-brand-mint-deep">${result.successful_imports}</p>
+                        <p class="text-xs text-brand-mint-text">${lang === 'es' ? 'Importados' : 'Imported'}</p>
+                        <p class="text-lg font-bold text-brand-mint-text">${result.successful_imports}</p>
                     </div>
                 </div>
 
@@ -388,8 +388,8 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
 
                 ${result.created_payees.length > 0 ? `
                     <div class="bg-brand-sky/15 p-3 rounded border border-brand-sky">
-                        <p class="text-xs text-brand-sky-deep">${lang === 'es' ? 'Pagadores Creados' : 'Payees Created'}</p>
-                        <p class="text-xs text-brand-sky-deep mt-1">${result.created_payees.slice(0, 3).join(', ')}${result.created_payees.length > 3 ? '...' : ''}</p>
+                        <p class="text-xs text-brand-sky-text">${lang === 'es' ? 'Pagadores Creados' : 'Payees Created'}</p>
+                        <p class="text-xs text-brand-sky-text mt-1">${result.created_payees.slice(0, 3).join(', ')}${result.created_payees.length > 3 ? '...' : ''}</p>
                     </div>
                 ` : ''}
 

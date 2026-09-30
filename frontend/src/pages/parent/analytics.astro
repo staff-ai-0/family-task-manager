@@ -57,9 +57,9 @@ const labels = {
 };
 
 const tourStatusLabel: Record<string, { e: string; c: string; en: string; es: string }> = {
-    completed: { e: "✅", c: "text-brand-mint-deep", en: "completed", es: "completó" },
-    skipped: { e: "⏭️", c: "text-brand-sun-deep", en: "skipped", es: "saltó" },
-    started: { e: "▶️", c: "text-brand-sky-deep", en: "started", es: "empezó" },
+    completed: { e: "✅", c: "text-brand-mint-text", en: "completed", es: "completó" },
+    skipped: { e: "⏭️", c: "text-brand-sun-text", en: "skipped", es: "saltó" },
+    started: { e: "▶️", c: "text-brand-sky-text", en: "started", es: "empezó" },
     not_started: { e: "◻️", c: "text-brand-ink-soft", en: "not started", es: "sin empezar" },
 };
 
@@ -95,12 +95,12 @@ const tourStatusLabel: Record<string, { e: string; c: string; en: string; es: st
             <h2 class="text-sm font-bold text-brand-ink mb-3">🚀 {labels.onb_title}</h2>
             <div class="grid grid-cols-3 gap-2 text-center mb-3">
                 <div class="bg-brand-mint/20 rounded-xl p-2">
-                    <p class="text-2xl font-extrabold text-brand-mint-deep">{onb.tour_completed}</p>
-                    <p class="text-[11px] text-brand-mint-deep font-medium">{labels.onb_completed}</p>
+                    <p class="text-2xl font-extrabold text-brand-mint-text">{onb.tour_completed}</p>
+                    <p class="text-[11px] text-brand-mint-text font-medium">{labels.onb_completed}</p>
                 </div>
                 <div class="bg-brand-sun/20 rounded-xl p-2">
-                    <p class="text-2xl font-extrabold text-brand-sun-deep">{onb.tour_skipped}</p>
-                    <p class="text-[11px] text-brand-sun-deep font-medium">{labels.onb_skipped}</p>
+                    <p class="text-2xl font-extrabold text-brand-sun-text">{onb.tour_skipped}</p>
+                    <p class="text-[11px] text-brand-sun-text font-medium">{labels.onb_skipped}</p>
                 </div>
                 <div class="bg-brand-cream-deep rounded-xl p-2">
                     <p class="text-2xl font-extrabold text-brand-ink-soft">{(onb.tour_started ?? 0) + (onb.tour_not_started ?? 0)}</p>
@@ -130,7 +130,7 @@ const tourStatusLabel: Record<string, { e: string; c: string; en: string; es: st
                 📈 {lang === "es" ? "Tendencia 30 días" : "30-day trend"}
             </h2>
             <svg viewBox="0 0 300 50" class="w-full h-12" preserveAspectRatio="none">
-                <path d={sparklinePath} fill="none" stroke="currentColor" stroke-width="2" class="text-brand-sky-deep" />
+                <path d={sparklinePath} fill="none" stroke="currentColor" stroke-width="2" class="text-brand-sky-text" />
             </svg>
             <div class="flex justify-between text-xs text-brand-ink-soft mt-1">
                 <span>{history[0]?.date}</span>

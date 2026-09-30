@@ -120,7 +120,7 @@ const l = {
                 {pendingDrafts.map((draft: any) => {
                     const sd = draft.scanned_data ?? {};
                     const confPct = Math.round((draft.confidence ?? 0) * 100);
-                    const confColor = confPct >= 60 ? "text-brand-sun-deep bg-brand-sun/20" : "text-red-600 bg-red-100";
+                    const confColor = confPct >= 60 ? "text-brand-sun-text bg-brand-sun/20" : "text-red-600 bg-red-100";
                     const amt = sd.total_amount != null ? (sd.total_amount / 100).toFixed(2) : "";
                     const prefillNotes = (() => {
                         const lines: string[] = [];
@@ -216,7 +216,7 @@ const l = {
                                         <label class="block text-xs text-brand-ink-soft mb-1">{l.account} *</label>
                                         {(accounts ?? []).length === 0 ? (
                                             <a href="/budget/settings#accounts"
-                                               class="block text-center text-sm font-medium border border-brand-coral-deep text-brand-coral-deep rounded-lg px-3 py-2 hover:bg-brand-coral-deep hover:text-white transition">
+                                               class="block text-center text-sm font-medium border border-brand-coral-deep text-brand-coral-text rounded-lg px-3 py-2 hover:bg-brand-coral-deep hover:text-white transition">
                                                 {lang === "es" ? "Crear una cuenta primero" : "Create an account first"}
                                             </a>
                                         ) : (
@@ -308,7 +308,7 @@ const l = {
     function showStatus(form, msg, isError) {
         const el = form.querySelector(".status-msg");
         el.textContent = msg;
-        el.className = `status-msg text-sm text-center pt-1 ${isError ? "text-red-600" : "text-brand-mint-deep"}`;
+        el.className = `status-msg text-sm text-center pt-1 ${isError ? "text-red-600" : "text-brand-mint-text"}`;
     }
 
     function removeDraftCard(draftId) {

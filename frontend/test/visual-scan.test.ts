@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { scanVisual, type RuleId } from "./support/visual-scan";
+import { DEEP_TEXT_CODEMOD, scanVisual, type RuleId } from "./support/visual-scan";
 
 const rules = (src: string, rule: RuleId) => scanVisual(src).filter((h) => h.rule === rule);
 
@@ -176,5 +176,18 @@ describe("scanVisual — comments", () => {
             "{/* text-slate-500 */}",
         ].join("\n");
         expect(scanVisual(src)).toEqual([]);
+    });
+});
+
+describe("DEEP_TEXT_CODEMOD", () => {
+    const run = (s: string) => s.replace(DEEP_TEXT_CODEMOD, "text-brand-$1-text");
+    it("rewrites -deep text colors, keeping variant prefixes", () => {
+        expect(run('class="text-brand-sky-deep hover:text-brand-mint-deep md:text-brand-sun-deep"')).toBe(
+            'class="text-brand-sky-text hover:text-brand-mint-text md:text-brand-sun-text"',
+        );
+    });
+    it("leaves fills, borders, rings, alpha tints and already-safe shades alone", () => {
+        const s = 'class="bg-brand-sky-deep border-brand-coral-deep ring-brand-mint-deep/30 text-brand-sky-text text-brand-coral"';
+        expect(run(s)).toBe(s);
     });
 });

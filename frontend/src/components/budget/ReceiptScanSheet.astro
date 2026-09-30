@@ -51,7 +51,7 @@ const es = lang === "es";
         class="hidden fixed inset-0 z-[70] bg-brand-cream/95 flex flex-col items-center justify-center p-6"
     >
         <div class="size-32 rounded-2xl bg-brand-coral/15 mb-6 animate-pulse flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-brand-coral-deep animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-brand-coral-text animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
         </div>
@@ -97,7 +97,7 @@ const es = lang === "es";
         <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5 space-y-4">
             <div>
                 <h3 data-slot="payee-name" class="text-xl font-display font-extrabold text-brand-ink"></h3>
-                <div data-slot="total" class="text-3xl font-display font-extrabold text-brand-coral-deep num mt-1"></div>
+                <div data-slot="total" class="text-3xl font-display font-extrabold text-brand-coral-text num mt-1"></div>
                 <div data-slot="fx-line" class="text-sm text-brand-ink-soft mt-1 hidden"></div>
             </div>
 
@@ -339,7 +339,7 @@ const es = lang === "es";
             const strategy = b.account_match?.strategy;
             if (strategy === "card_last4") {
                 badge.textContent = "✓";
-                badge.classList.add("text-brand-mint-deep");
+                badge.classList.add("text-brand-mint-text");
             } else if (strategy === "override") {
                 badge.textContent = "●";
                 badge.classList.add("text-brand-ink");
@@ -380,7 +380,7 @@ const es = lang === "es";
                         const up = t.pct_change > 0;
                         const tb = rslot("trend-badge");
                         tb.textContent = `${up ? "📈" : "📉"} ${(t.pct_change * 100).toFixed(0)}%`;
-                        tb.classList.add(up ? "text-red-600" : "text-brand-mint-deep");
+                        tb.classList.add(up ? "text-red-600" : "text-brand-mint-text");
                         tb.classList.remove("hidden");
                     }
 
@@ -503,7 +503,7 @@ const es = lang === "es";
                     } else if (b?.success) {
                         created++;
                         status.textContent = es ? "✓ Creado" : "✓ Created";
-                        status.classList.add("text-brand-mint-deep");
+                        status.classList.add("text-brand-mint-text");
                     } else {
                         errors++;
                         status.textContent = es ? "✗ Falló" : "✗ Failed";

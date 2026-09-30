@@ -204,15 +204,15 @@ const weekdays = es
                             </div>
                             <div class="grid grid-cols-3 gap-2 text-center">
                                 <div class="bg-brand-coral/15 rounded-xl py-2">
-                                    <p class="text-[10px] font-bold uppercase text-brand-coral-deep">{es ? "Gastar" : "Spend"}</p>
+                                    <p class="text-[10px] font-bold uppercase text-brand-coral-text">{es ? "Gastar" : "Spend"}</p>
                                     <p class="font-extrabold text-brand-ink text-sm" data-jar-balance="spend">{fmt(spend)}</p>
                                 </div>
                                 <div class="bg-brand-mint/20 rounded-xl py-2">
-                                    <p class="text-[10px] font-bold uppercase text-brand-mint-deep">{es ? "Ahorrar" : "Save"}</p>
+                                    <p class="text-[10px] font-bold uppercase text-brand-mint-text">{es ? "Ahorrar" : "Save"}</p>
                                     <p class="font-extrabold text-brand-ink text-sm" data-jar-balance="save">{fmt(save)}</p>
                                 </div>
                                 <div class="bg-brand-sun/25 rounded-xl py-2">
-                                    <p class="text-[10px] font-bold uppercase text-brand-sun-deep">{es ? "Compartir" : "Share"}</p>
+                                    <p class="text-[10px] font-bold uppercase text-brand-sun-text">{es ? "Compartir" : "Share"}</p>
                                     <p class="font-extrabold text-brand-ink text-sm" data-jar-balance="share">{fmt(share)}</p>
                                 </div>
                             </div>
@@ -251,7 +251,7 @@ const weekdays = es
                                         </div>
                                     </div>
                                     {goal.pending_approval && (
-                                        <p class="text-xs bg-brand-sun/25 text-brand-sun-deep font-semibold rounded-lg px-2 py-1 mb-1.5 inline-block">
+                                        <p class="text-xs bg-brand-sun/25 text-brand-sun-text font-semibold rounded-lg px-2 py-1 mb-1.5 inline-block">
                                             ⏳ {es ? "Propuesta por tu hijo — pendiente" : "Proposed by your kid — pending"}
                                         </p>
                                     )}
@@ -267,7 +267,7 @@ const weekdays = es
                                 </div>
                             ) : (
                                 <button type="button" data-goal-set data-kid-user={k.user_id} data-kid-name={k.name}
-                                    class="w-full text-left flex items-center gap-2 text-sm font-semibold text-brand-mint-deep hover:text-brand-ink transition-colors">
+                                    class="w-full text-left flex items-center gap-2 text-sm font-semibold text-brand-mint-text hover:text-brand-ink transition-colors">
                                     🎯 {es ? "Ponerle una meta de ahorro" : "Set a savings goal"}
                                 </button>
                             )}
@@ -343,11 +343,11 @@ const weekdays = es
                                                     ? `${stillPending.length} semana(s) pendiente(s)`
                                                     : `${stillPending.length} week(s) pending`}
                                             </span>
-                                            <span class="text-sm font-extrabold text-brand-mint-deep">
+                                            <span class="text-sm font-extrabold text-brand-mint-text">
                                                 {fmt(stillPending.reduce((sum: number, w: any) => sum + w.amount_cents, 0))}
                                             </span>
                                         </div>
-                                        <a href="/parent/payouts" class="mt-2 inline-block text-xs font-semibold text-brand-mint-deep underline underline-offset-2">
+                                        <a href="/parent/payouts" class="mt-2 inline-block text-xs font-semibold text-brand-mint-text underline underline-offset-2">
                                             {es ? "Ir a Pagos →" : "Go to Payouts →"}
                                         </a>
                                     </div>
@@ -361,19 +361,19 @@ const weekdays = es
                                 </label>
                                 <div class="grid grid-cols-3 gap-2">
                                     <div>
-                                        <p class="text-[10px] font-bold uppercase text-brand-coral-deep text-center mb-1">{es ? "Gastar" : "Spend"}</p>
+                                        <p class="text-[10px] font-bold uppercase text-brand-coral-text text-center mb-1">{es ? "Gastar" : "Spend"}</p>
                                         <input type="number" min="0" max="100" step="1" data-field="split_spend" data-split
                                             value={k.split_spend_pct ?? 100} disabled={automationLocked}
                                             class="w-full text-center rounded-xl border border-brand-ink/20 bg-white px-2 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-coral-deep disabled:opacity-50 disabled:bg-brand-cream-deep" />
                                     </div>
                                     <div>
-                                        <p class="text-[10px] font-bold uppercase text-brand-mint-deep text-center mb-1">{es ? "Ahorrar" : "Save"}</p>
+                                        <p class="text-[10px] font-bold uppercase text-brand-mint-text text-center mb-1">{es ? "Ahorrar" : "Save"}</p>
                                         <input type="number" min="0" max="100" step="1" data-field="split_save" data-split
                                             value={k.split_save_pct ?? 0} disabled={automationLocked}
                                             class="w-full text-center rounded-xl border border-brand-ink/20 bg-white px-2 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep disabled:opacity-50 disabled:bg-brand-cream-deep" />
                                     </div>
                                     <div>
-                                        <p class="text-[10px] font-bold uppercase text-brand-sun-deep text-center mb-1">{es ? "Compartir" : "Share"}</p>
+                                        <p class="text-[10px] font-bold uppercase text-brand-sun-text text-center mb-1">{es ? "Compartir" : "Share"}</p>
                                         <input type="number" min="0" max="100" step="1" data-field="split_share" data-split
                                             value={k.split_share_pct ?? 0} disabled={automationLocked}
                                             class="w-full text-center rounded-xl border border-brand-ink/20 bg-white px-2 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-sun-deep disabled:opacity-50 disabled:bg-brand-cream-deep" />
@@ -536,7 +536,7 @@ const weekdays = es
             const sumEl = card.querySelector<HTMLElement>("[data-split-sum]");
             if (sumEl) {
                 sumEl.textContent = (es ? "Suma: " : "Sum: ") + `${sum}%`;
-                sumEl.className = "text-xs mt-1 " + (sum === 100 ? "text-brand-mint-deep font-semibold" : "text-red-600 font-semibold");
+                sumEl.className = "text-xs mt-1 " + (sum === 100 ? "text-brand-mint-text font-semibold" : "text-red-600 font-semibold");
             }
             return sum;
         }

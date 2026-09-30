@@ -33,7 +33,7 @@ const paycheckKids: any[] = (summary?.kids ?? []).filter(
 
 // Per-task chips under each paycheck row (hover/tap for details).
 const chipCls: Record<string, string> = {
-    credited: "bg-brand-mint/20 border-brand-mint-deep/40 text-brand-mint-deep",
+    credited: "bg-brand-mint/20 border-brand-mint-deep/40 text-brand-mint-text",
     pending_review: "bg-amber-100 border-amber-300 text-amber-800",
     missed: "bg-red-100 border-red-300 text-red-700",
     not_done: "bg-brand-ink/5 border-brand-ink/15 text-brand-ink-soft",
@@ -124,7 +124,7 @@ const dayLabel = (iso: string): string =>
                                 <p class="text-[11px] text-brand-ink-soft uppercase tracking-wider">
                                     {lang === "es" ? "Pendiente" : "Pending"}
                                 </p>
-                                <p class="text-2xl font-extrabold text-brand-mint-deep" data-balance>
+                                <p class="text-2xl font-extrabold text-brand-mint-text" data-balance>
                                     {fmt(k.current_balance_cents)}
                                 </p>
                             </div>
@@ -139,7 +139,7 @@ const dayLabel = (iso: string): string =>
                                     {k.recent_gigs.map((g: any) => (
                                         <button
                                             type="button"
-                                            class="group px-2 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 bg-brand-mint/20 border-brand-mint-deep/40 text-brand-mint-deep focus:outline-none focus:ring-2 focus:ring-brand-mint-deep/50"
+                                            class="group px-2 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 bg-brand-mint/20 border-brand-mint-deep/40 text-brand-mint-text focus:outline-none focus:ring-2 focus:ring-brand-mint-deep/50"
                                         >
                                             <span class="max-w-[9rem] truncate">{g.title}</span>
                                             <span class="opacity-70">{fmt(g.amount_cents)}</span>
@@ -234,11 +234,11 @@ const dayLabel = (iso: string): string =>
                                                 <p class="text-xs text-brand-ink-soft">{w.done_points}/{w.assigned_points} pts · {w.pct}%</p>
                                             </div>
                                             <div class="text-right">
-                                                <p class="text-2xl font-extrabold text-brand-mint-deep">{fmt(w.amount_cents)}</p>
+                                                <p class="text-2xl font-extrabold text-brand-mint-text">{fmt(w.amount_cents)}</p>
                                                 <div data-release-slot class="flex flex-col items-end gap-1 mt-1">
                                                     {w.already_released ? (
                                                         <>
-                                                            <span class="text-xs font-bold text-brand-mint-deep">
+                                                            <span class="text-xs font-bold text-brand-mint-text">
                                                                 {lang === "es" ? "Liberado ✓" : "Released ✓"}
                                                             </span>
                                                             {/* A retroactively-approved chore lands on a week that
@@ -267,7 +267,7 @@ const dayLabel = (iso: string): string =>
                                                                 <input type="number" step="1" min="1" max="1000" placeholder="0" data-topup-amount
                                                                     class="w-14 rounded-lg border border-brand-ink/20 bg-white px-1.5 py-1 text-xs text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep" />
                                                                 <button type="button" data-topup
-                                                                    class="px-2.5 py-1.5 border border-brand-mint-deep text-brand-mint-deep hover:bg-brand-mint/10 font-semibold text-xs rounded-lg transition-colors">
+                                                                    class="px-2.5 py-1.5 border border-brand-mint-deep text-brand-mint-text hover:bg-brand-mint/10 font-semibold text-xs rounded-lg transition-colors">
                                                                     {lang === "es" ? "Pagar" : "Pay"}
                                                                 </button>
                                                             </div>
@@ -329,7 +329,7 @@ const dayLabel = (iso: string): string =>
                                 type="button"
                                 data-history-toggle
                                 data-kid-id={k.user_id}
-                                class="mt-3 text-xs font-semibold text-brand-mint-deep underline underline-offset-2"
+                                class="mt-3 text-xs font-semibold text-brand-mint-text underline underline-offset-2"
                             >
                                 {lang === "es" ? "Ver historial" : "View history"}
                             </button>
@@ -568,7 +568,7 @@ import { normalizeErrorDetail } from "../../lib/errors";
                 if (isCurrentWeek) {
                     // Matches prior UX: the current week's row stays visible
                     // for the rest of the week, just flips to "Released".
-                    slot.innerHTML = `<span class="text-xs font-bold text-brand-mint-deep">${
+                    slot.innerHTML = `<span class="text-xs font-bold text-brand-mint-text">${
                         lang === "es" ? "Liberado ✓" : "Released ✓"
                     }</span>`;
                 } else {
@@ -594,7 +594,7 @@ import { normalizeErrorDetail } from "../../lib/errors";
 
     // ── Chore-paycheck history (lazy-fetched on first expand, per kid) ───
     const histChipCls: Record<string, string> = {
-        credited: "bg-brand-mint/20 border-brand-mint-deep/40 text-brand-mint-deep",
+        credited: "bg-brand-mint/20 border-brand-mint-deep/40 text-brand-mint-text",
         pending_review: "bg-amber-100 border-amber-300 text-amber-800",
         missed: "bg-red-100 border-red-300 text-red-700",
         not_done: "bg-brand-ink/5 border-brand-ink/15 text-brand-ink-soft",
@@ -641,7 +641,7 @@ import { normalizeErrorDetail } from "../../lib/errors";
                 <input type="number" step="1" min="1" max="1000" placeholder="0" data-topup-amount
                     class="w-14 rounded-lg border border-brand-ink/20 bg-brand-cream px-1.5 py-1 text-xs text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep" />
                 <button type="button" data-topup
-                    class="px-2.5 py-1.5 border border-brand-mint-deep text-brand-mint-deep hover:bg-brand-mint/10 font-semibold text-xs rounded-lg transition-colors">${pay}</button>
+                    class="px-2.5 py-1.5 border border-brand-mint-deep text-brand-mint-text hover:bg-brand-mint/10 font-semibold text-xs rounded-lg transition-colors">${pay}</button>
             </div>
             <p class="hidden text-xs mt-2" data-msg></p>
         `;
@@ -701,7 +701,7 @@ import { normalizeErrorDetail } from "../../lib/errors";
                          data-history-week data-week-of="${escapeHtml(w.week_of)}">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-bold text-brand-ink">${histDayLabel(w.week_of)}</span>
-                            <span class="text-sm font-extrabold text-brand-mint-deep">${fmt(w.amount_cents)}</span>
+                            <span class="text-sm font-extrabold text-brand-mint-text">${fmt(w.amount_cents)}</span>
                         </div>
                         <div class="flex flex-wrap gap-1.5 mt-2">${renderWeekTasks(w.tasks)}</div>
                         ${renderTopUp()}

@@ -413,7 +413,7 @@ function renderCell(value: any): string {
 }
 
 function cellClass(value: any): string {
-    if (value === true) return "text-brand-mint-deep font-bold";
+    if (value === true) return "text-brand-mint-text font-bold";
     if (value === null || value === false) return "text-brand-ink-soft";
     return "text-brand-ink font-medium";
 }
@@ -448,12 +448,12 @@ function cellClass(value: any): string {
                         <h2 class="text-xl font-bold text-brand-ink capitalize">{effectivePlanName}</h2>
                     </div>
                     {isActive && !cancelAtPeriodEnd && (
-                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-brand-mint/20 text-brand-mint-deep border border-brand-mint">
+                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-brand-mint/20 text-brand-mint-text border border-brand-mint">
                             {l.active}
                         </span>
                     )}
                     {isActive && cancelAtPeriodEnd && (
-                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-brand-sun/20 text-brand-sun-deep border border-brand-sun">
+                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-brand-sun/20 text-brand-sun-text border border-brand-sun">
                             {l.cancel_scheduled}
                         </span>
                     )}
@@ -464,7 +464,7 @@ function cellClass(value: any): string {
                     )}
                 </div>
                 {cancelAtPeriodEnd && periodEndLabel && (
-                    <p class="mt-3 text-sm text-brand-sun-deep bg-brand-sun/20 border border-brand-sun rounded-lg p-3">
+                    <p class="mt-3 text-sm text-brand-sun-text bg-brand-sun/20 border border-brand-sun rounded-lg p-3">
                         {l.access_until} <strong>{periodEndLabel}</strong>.
                     </p>
                 )}
@@ -553,7 +553,7 @@ function cellClass(value: any): string {
                                 <div class="font-bold text-brand-ink">{l.free}</div>
                                 <div class="text-xs text-brand-ink-soft">{l.free}</div>
                                 {effectivePlanName === "free" && (
-                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
+                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-text">
                                         {l.current_plan}
                                     </span>
                                 )}
@@ -562,7 +562,7 @@ function cellClass(value: any): string {
                                 <div class="font-bold text-brand-ink">{l.plus}</div>
                                 <div class="text-xs text-brand-ink-soft">{price(plusPlan, "monthly") ?? "—"}{l.month} ({price(plusPlan, "annual") ?? "—"}{l.year})</div>
                                 {effectivePlanName === "plus" && (
-                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
+                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-text">
                                         {l.current_plan}
                                     </span>
                                 )}
@@ -571,7 +571,7 @@ function cellClass(value: any): string {
                                 <div class="font-bold text-brand-ink">{l.pro}</div>
                                 <div class="text-xs text-brand-ink-soft">{price(proPlan, "monthly") ?? "—"}{l.month} ({price(proPlan, "annual") ?? "—"}{l.year})</div>
                                 {effectivePlanName === "pro" && (
-                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
+                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-text">
                                         {l.current_plan}
                                     </span>
                                 )}
@@ -696,7 +696,7 @@ function cellClass(value: any): string {
             <!-- Support contact -->
             <p class="mt-6 text-center text-sm text-brand-ink-soft font-sans">
                 {l.support_prompt}
-                <a href="mailto:soporte@agent-ia.mx" class="font-semibold underline hover:text-brand-coral-deep">soporte@agent-ia.mx</a>
+                <a href="mailto:soporte@agent-ia.mx" class="font-semibold underline hover:text-brand-coral-text">soporte@agent-ia.mx</a>
             </p>
 </PageLayout>
 

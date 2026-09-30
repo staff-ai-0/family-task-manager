@@ -53,14 +53,14 @@ const {
         <div class="p-6 space-y-4">
             <!-- Ready to Assign Balance Display -->
             <div class="bg-brand-sky/15 border border-brand-sky rounded-xl p-4">
-                <p class="text-xs text-brand-sky-deep font-semibold mb-1 uppercase tracking-wider">
+                <p class="text-xs text-brand-sky-text font-semibold mb-1 uppercase tracking-wider">
                     {t(lang, 'fin_ready_to_assign')}
                 </p>
-                <p class="text-2xl font-bold text-brand-sky-deep" id={`${baseRoute}-available-display`}>
+                <p class="text-2xl font-bold text-brand-sky-text" id={`${baseRoute}-available-display`}>
                     {formatCurrency(readyToAssign)}
                 </p>
                             <button type="button" id={`${baseRoute}-hold-btn`}
-                    class="mt-2 text-xs underline text-brand-sky-deep hover:text-brand-ink">
+                    class="mt-2 text-xs underline text-brand-sky-text hover:text-brand-ink">
                     {lang === "es" ? "⏸ Guardar para el próximo mes…" : "⏸ Hold for next month…"}
                 </button>
 </div>
@@ -113,7 +113,7 @@ const {
                         {[25, 50, 100].filter(amt => amt * 100 < readyToAssign).map(amt => (
                             <button
                                 type="button"
-                                class={`${baseRoute}-quick-amount px-3 py-2 rounded-lg text-sm font-semibold transition border border-brand-ink/20 hover:border-brand-sky-deep hover:text-brand-sky-deep`}
+                                class={`${baseRoute}-quick-amount px-3 py-2 rounded-lg text-sm font-semibold transition border border-brand-ink/20 hover:border-brand-sky-deep hover:text-brand-sky-text`}
                                 data-amount={amt}
                             >
                                 ${amt}
@@ -121,7 +121,7 @@ const {
                         ))}
                         <button
                             type="button"
-                            class={`${baseRoute}-quick-amount px-3 py-2 rounded-lg text-sm font-semibold transition border border-brand-ink/20 hover:border-brand-sky-deep hover:text-brand-sky-deep`}
+                            class={`${baseRoute}-quick-amount px-3 py-2 rounded-lg text-sm font-semibold transition border border-brand-ink/20 hover:border-brand-sky-deep hover:text-brand-sky-text`}
                             data-amount="all"
                             title={lang === "es" ? "Asignar todo" : "Assign all"}
                         >
@@ -135,7 +135,7 @@ const {
             <div id={`${baseRoute}-error`} class="hidden bg-red-100 border border-red-200 rounded-lg p-3 text-red-700 text-sm"></div>
 
             <!-- Success Display -->
-            <div id={`${baseRoute}-success`} class="hidden bg-brand-mint/20 border border-brand-mint rounded-lg p-3 text-brand-mint-deep text-sm">
+            <div id={`${baseRoute}-success`} class="hidden bg-brand-mint/20 border border-brand-mint rounded-lg p-3 text-brand-mint-text text-sm">
                 {lang === "es" ? "Fondos asignados exitosamente" : "Funds assigned successfully"}
             </div>
 

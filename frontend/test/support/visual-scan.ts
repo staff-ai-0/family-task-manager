@@ -33,6 +33,9 @@ export const RULE_IDS: readonly RuleId[] = [
     "header-class-prop",
 ];
 
+/** One-shot codemod regex (UX-B3 Task 6): text-brand-X-deep → text-brand-X-text. */
+export const DEEP_TEXT_CODEMOD = /(?<![\w-])text-brand-(sky|mint|coral|sun)-deep(?![\w-])/g;
+
 export interface Hit {
     rule: RuleId;
     line: number;

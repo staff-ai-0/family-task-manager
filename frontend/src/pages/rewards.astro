@@ -107,14 +107,14 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 
     {
         flash && (
-            <div class="mb-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
+            <div class="mb-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-text text-sm rounded-xl">
                 {flash}
             </div>
         )
     }
     {
         isLocked && (
-            <div class="mb-4 p-4 bg-brand-coral/15 border-2 border-brand-coral text-brand-coral-deep rounded-xl">
+            <div class="mb-4 p-4 bg-brand-coral/15 border-2 border-brand-coral text-brand-coral-text rounded-xl">
                 <div class="flex items-start gap-2">
                     <span class="text-2xl leading-none">🔒</span>
                     <div class="flex-1">
@@ -203,9 +203,9 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                     )}
                                 </div>
                                 <div class="flex flex-col items-center bg-brand-sun/20 rounded-xl px-3 py-2 flex-shrink-0">
-                                    <span class="text-brand-sun-deep text-xs font-semibold">{t(lang, "rewards_cost")}</span>
-                                    <span class="text-brand-sun-deep text-xl font-extrabold">{reward.points_cost}</span>
-                                    <span class="text-brand-sun-deep text-xs">{t(lang, "rewards_pts")}</span>
+                                    <span class="text-brand-sun-text text-xs font-semibold">{t(lang, "rewards_cost")}</span>
+                                    <span class="text-brand-sun-text text-xl font-extrabold">{reward.points_cost}</span>
+                                    <span class="text-brand-sun-text text-xs">{t(lang, "rewards_pts")}</span>
                                 </div>
                             </div>
                             <div class="mb-3">
@@ -247,7 +247,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                         <input type="hidden" name="reward_id" value={reward.id} />
                                         <button
                                             type="submit"
-                                            class="px-3 py-2.5 rounded-xl text-sm font-semibold bg-brand-cream-deep text-brand-sky-deep border border-brand-sky-deep/30 hover:bg-brand-sky-deep/10 active:scale-95 transition-colors"
+                                            class="px-3 py-2.5 rounded-xl text-sm font-semibold bg-brand-cream-deep text-brand-sky-text border border-brand-sky-deep/30 hover:bg-brand-sky-deep/10 active:scale-95 transition-colors"
                                             title={lang === "es" ? "Establecer como meta" : "Set as goal"}
                                         >
                                             {lang === "es" ? "🎯 Meta" : "🎯 Goal"}

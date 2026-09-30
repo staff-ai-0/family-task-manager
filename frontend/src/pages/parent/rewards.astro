@@ -76,7 +76,7 @@ const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
     </p>
             {
                 successMsg && (
-                    <div class="p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
+                    <div class="p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-text text-sm rounded-xl">
                         {successMsg}
                     </div>
                 )
@@ -188,14 +188,14 @@ const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
                                                 {reward.description}
                                             </p>
                                         )}
-                                        <p class="text-xs text-brand-sun-deep font-semibold mt-1">
+                                        <p class="text-xs text-brand-sun-text font-semibold mt-1">
                                             {reward.points_cost} pts
                                         </p>
                                     </div>
                                     <div class="flex gap-2">
                                         <a
                                             href={`/parent/rewards/${reward.id}/edit`}
-                                            class="h-8 w-8 rounded-lg bg-brand-cream-deep hover:bg-brand-sun/20 text-brand-ink-soft hover:text-brand-sun-deep flex items-center justify-center transition-colors"
+                                            class="h-8 w-8 rounded-lg bg-brand-cream-deep hover:bg-brand-sun/20 text-brand-ink-soft hover:text-brand-sun-text flex items-center justify-center transition-colors"
                                         >
                                             <svg
                                                 class="h-4 w-4"

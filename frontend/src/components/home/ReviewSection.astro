@@ -28,7 +28,7 @@ const total = items.length;
             {es ? "Por revisar" : "To review"}<span data-review-heading-count hidden={total === 0}> · <span data-review-count>{total}</span></span>
         </h2>
         {total > 0 && (
-            <a data-review-all href="/parent/approvals" class="text-xs font-semibold text-brand-sky-deep hover:underline">
+            <a data-review-all href="/parent/approvals" class="text-xs font-semibold text-brand-sky-text hover:underline">
                 {es ? "Ver todas" : "See all"} (<span data-review-count>{total}</span>) ›
             </a>
         )}
@@ -40,7 +40,7 @@ const total = items.length;
         ✓ {es ? "Nada por revisar" : "Nothing to review"}
     </p>
     <a data-review-more hidden href="/parent/approvals"
-        class="block rounded-xl border border-brand-sky-deep/30 bg-brand-sky/10 px-3 py-2 text-sm font-semibold text-brand-sky-deep">
+        class="block rounded-xl border border-brand-sky-deep/30 bg-brand-sky/10 px-3 py-2 text-sm font-semibold text-brand-sky-text">
         {es ? <>Quedan <span data-review-more-count></span></> : <><span data-review-more-count></span> left</>} · {es ? "Ver todas ›" : "See all ›"}
     </a>
     <EnablePushButton

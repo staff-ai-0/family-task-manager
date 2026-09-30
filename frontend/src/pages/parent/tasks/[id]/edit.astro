@@ -143,7 +143,7 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                                 type="button"
                                 id="btn-translate"
                                 data-id={id}
-                                class="text-xs bg-indigo-50 text-brand-coral-deep px-2 py-1 rounded hover:bg-brand-coral-deep transition-colors flex items-center gap-1"
+                                class="text-xs bg-indigo-50 text-brand-coral-text px-2 py-1 rounded hover:bg-brand-coral-deep transition-colors flex items-center gap-1"
                             >
                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path></svg>
                                 {t(lang, "translation_auto_translate")}
@@ -225,7 +225,7 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                                 {t(lang, "pt_interval_weekly")}
                             </option>
                         </select>
-                        <p id="freq-days-hint" class="hidden text-xs text-brand-sky-deep mt-1">
+                        <p id="freq-days-hint" class="hidden text-xs text-brand-sky-text mt-1">
                             {lang === "es"
                                 ? "Usando días específicos ↓ — la frecuencia se ignora."
                                 : "Using specific days ↓ — frequency is ignored."}
@@ -343,7 +343,7 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                                         name="assigned_user_ids[]"
                                         value={member.id}
                                         checked={isChecked}
-                                        class="w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep"
+                                        class="w-4 h-4 text-brand-sky-text border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep"
                                     />
                                     <span class="text-sm text-brand-ink">{member.name}</span>
                                     <span class="text-xs text-brand-ink-soft ml-auto">{member.role.toLowerCase()}</span>
@@ -366,7 +366,7 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                             const labelKey = role === "parent" ? "pt_role_parent" : role === "teen" ? "pt_role_teen" : "pt_role_child";
                             return (
                                 <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" name="allowed_roles[]" value={role} checked={checked} class="w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep" />
+                                    <input type="checkbox" name="allowed_roles[]" value={role} checked={checked} class="w-4 h-4 text-brand-sky-text border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep" />
                                     <span class="text-sm text-brand-ink">{t(lang, labelKey)}</span>
                                 </label>
                             );
@@ -460,7 +460,7 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                     </summary>
                     <div class="mt-3 space-y-2">
                         <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" name="auto_late_penalty" checked={tmpl.auto_late_penalty} class="w-4 h-4 text-brand-coral-deep border-brand-ink/20 rounded focus:ring-2" />
+                            <input type="checkbox" name="auto_late_penalty" checked={tmpl.auto_late_penalty} class="w-4 h-4 text-brand-coral-text border-brand-ink/20 rounded focus:ring-2" />
                             <span class="text-sm text-brand-ink">{lang === "es" ? "Aplicar penalización si vence" : "Apply penalty when overdue"}</span>
                         </label>
                         <div class="grid grid-cols-3 gap-2">
@@ -554,7 +554,7 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
             // Show loading
             if (statusDiv) {
                 statusDiv.textContent = "Translating...";
-                statusDiv.classList.remove("hidden", "text-brand-mint-deep", "text-red-600");
+                statusDiv.classList.remove("hidden", "text-brand-mint-text", "text-red-600");
                 statusDiv.classList.add("text-brand-ink-soft");
             }
             btnTranslate.setAttribute("disabled", "true");
@@ -575,7 +575,7 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                 if (statusDiv) {
                     statusDiv.textContent = "Translation complete!";
                     statusDiv.classList.remove("text-brand-ink-soft");
-                    statusDiv.classList.add("text-brand-mint-deep");
+                    statusDiv.classList.add("text-brand-mint-text");
                 }
             } catch (err) {
                 console.error(err);

@@ -140,7 +140,7 @@ const hello = firstName(user.name);
             </div>
         )}
         {flash && (
-            <div class="mx-4 mt-3 rounded-xl border border-brand-mint-deep/30 bg-brand-mint/15 px-4 py-2.5 text-sm font-semibold text-brand-mint-deep" data-flash-success>
+            <div class="mx-4 mt-3 rounded-xl border border-brand-mint-deep/30 bg-brand-mint/15 px-4 py-2.5 text-sm font-semibold text-brand-mint-text" data-flash-success>
                 {flash}
             </div>
         )}
@@ -160,7 +160,7 @@ const hello = firstName(user.name);
                 {lang === "es"
                     ? "Permitir que la IA procese fotos de tareas y mensajes del chat familiar para validar pruebas automáticamente y ayudar al asistente. Si no lo permites, las pruebas siempre pasan a tu aprobación manual. Puedes cambiarlo cuando quieras en Ajustes de la familia. "
                     : "Allow AI to process task proof photos and family chat messages to auto-validate proofs and help the assistant. If you decline, proofs always go to your manual approval. You can change this anytime in Family settings. "}
-                <a href="/privacidad" class="text-brand-sky-deep font-semibold hover:underline">
+                <a href="/privacidad" class="text-brand-sky-text font-semibold hover:underline">
                     {lang === "es" ? "Aviso de privacidad" : "Privacy notice"}
                 </a>
             </p>

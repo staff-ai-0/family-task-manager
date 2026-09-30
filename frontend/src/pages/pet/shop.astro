@@ -76,7 +76,7 @@ const L = {
         <div class="bg-brand-cream rounded-[var(--radius-card)] p-6 border-2 border-brand-ink shadow-[var(--shadow-card)] text-center space-y-2">
             <p class="text-5xl">🥚</p>
             <p class="text-brand-ink font-semibold">{L.no_pet}</p>
-            <a href="/pet" class="inline-block mt-1 font-bold text-brand-sky-deep">{L.adopt}</a>
+            <a href="/pet" class="inline-block mt-1 font-bold text-brand-sky-text">{L.adopt}</a>
         </div>
     ) : (
         <>
@@ -99,7 +99,7 @@ const L = {
                     <p class="text-[11px] font-bold uppercase tracking-wider text-brand-ink-soft">
                         {L.stage_word} {evoStage + 1} · {stageLabel(evoStage, lang)}
                     </p>
-                    <p class="mt-2 inline-flex items-center gap-1 text-sm font-bold text-brand-sun-deep bg-brand-sun/15 px-3 py-1 rounded-full border border-brand-sun-deep/20">
+                    <p class="mt-2 inline-flex items-center gap-1 text-sm font-bold text-brand-sun-text bg-brand-sun/15 px-3 py-1 rounded-full border border-brand-sun-deep/20">
                         💰 <span data-shop-points>{points}</span> {L.pts}
                     </p>
                 </div>
@@ -129,7 +129,7 @@ const L = {
                                 >
                                     <span class={`text-4xl ${c.unlocked ? "" : "grayscale opacity-40"}`}>{c.icon}</span>
                                     <p class="text-sm font-bold text-brand-ink leading-tight">{lang === "es" ? c.name.es : c.name.en}</p>
-                                    <p class="text-xs font-bold text-brand-sun-deep">{c.price} {L.pts}</p>
+                                    <p class="text-xs font-bold text-brand-sun-text">{c.price} {L.pts}</p>
                                     <div data-cos-actions class="w-full mt-1"></div>
                                     {!c.unlocked && (
                                         <span class="absolute top-2 right-2 text-xs" title={L.unlock_at(stageLabel(c.min_stage, lang))}>🔒</span>
@@ -231,7 +231,7 @@ const L = {
                 const wrap = document.createElement("div");
                 wrap.className = "w-full space-y-1";
                 const pill = document.createElement("span");
-                pill.className = "block text-[11px] font-bold text-brand-mint-deep";
+                pill.className = "block text-[11px] font-bold text-brand-mint-text";
                 pill.textContent = "✓ " + T.equipped;
                 const btn = document.createElement("button");
                 btn.type = "button";
