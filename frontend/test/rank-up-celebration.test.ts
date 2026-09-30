@@ -26,4 +26,10 @@ describe("RankUpCelebration is a real modal (T5-2)", () => {
         const acks = src.match(/\/api\/progress\/me\/ack-rank/g) ?? [];
         expect(acks).toHaveLength(1);
     });
+    it("centers the dialog (m-auto, not m-0 — Tailwind v4 preflight zeroes margins)", () => {
+        const openTag = src.match(/<dialog id="rank-up"[^>]*>/s)?.[0] ?? "";
+        expect(openTag).not.toBe("");
+        expect(openTag).toMatch(/(?<![\w-])m-auto(?![\w-])/);
+        expect(openTag).not.toMatch(/(?<![\w-])m-0(?![\w-])/);
+    });
 });
