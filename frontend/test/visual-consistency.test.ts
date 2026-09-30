@@ -30,22 +30,6 @@ const EXEMPT: { path: string; why: string }[] = [
 /** These apply everywhere, exemptions included. */
 const GLOBAL_RULES: RuleId[] = ["dark-theme", "header-class-prop"];
 
-/**
- * Remaining offenders per rule while B3 lands. The guard asserts EXACT
- * equality: a new offender fails, and so does a fix that forgets to lower
- * its number. Every entry reaches 0; the last task deletes this map.
- */
-const ALLOWANCE: Record<RuleId, number> = {
-    "header-gradient": 0,
-    "light-text-in-header": 0,
-    "white-on-brand-fill": 0,
-    "deep-text": 0,
-    "faint-text": 0,
-    "h1-emoji": 0,
-    "dark-theme": 0,
-    "header-class-prop": 0,
-};
-
 function walk(dir: string): string[] {
     return readdirSync(dir).flatMap((name) => {
         const path = join(dir, name);
@@ -65,9 +49,9 @@ const hits = walk(SRC).flatMap((abs) => {
 });
 
 describe("visual consistency guard (UX-B3)", () => {
-    it.each([...RULE_IDS])("%s: offenders match the allowance", (rule) => {
+    it.each([...RULE_IDS])("%s: no offenders", (rule) => {
         const offenders = hits.filter((h) => h.endsWith(`[${rule}]`));
-        expect(offenders.length, `${rule} offenders:\n${offenders.join("\n")}`).toBe(ALLOWANCE[rule]);
+        expect(offenders, `${rule} offenders`).toEqual([]);
     });
 
     it("every exemption still exists (no stale entries)", () => {

@@ -1,7 +1,7 @@
 # UX-B3 — Visual Consistency — Design
 
 **Date:** 2026-09-29
-**Status:** design approved in chat (2026-09-29), pending written-spec review
+**Status:** approved 2026-09-29; implemented on feat/ux-b3-visual-consistency
 **Program:** UX/GUI/engagement program, sub-project **B3** of B (design-system consolidation). A, C1, C2, B1, B4 shipped. B2 (dark mode) was **dropped** in the same brainstorm: the half-built dark theme is removed here, real dark mode only if families ask.
 **Evidence:** `docs/audit/2026-09-27-ux-competitive/findings.md` F2 + F12; static scan of `frontend/src` on 2026-09-29 (numbers below); WCAG 2.x contrast computed from the `@theme` hex values.
 
