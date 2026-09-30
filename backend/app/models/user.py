@@ -97,6 +97,10 @@ class User(Base):
         Integer, default=0, nullable=False, server_default="0"
     )
 
+    # UX-D1: highest rank whose one-time celebration the kid has dismissed.
+    # NULL = never seen one. Only ever moves up (POST /api/progress/me/ack-rank).
+    last_seen_rank = Column(Integer, nullable=True)
+
     # Consent capture (LFPDPPP / terms acceptance). Set when the user (or the
     # registering adult) accepts the terms + privacy notice at signup.
     consented_at = Column(DateTime(timezone=True), nullable=True)

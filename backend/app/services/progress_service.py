@@ -89,3 +89,120 @@ def compute_streak(states: dict[date, DayState], today: date) -> StreakResult:
         day = monday + timedelta(days=i)
         week.append((day, resolved.get(day, DayState.future if day > today else DayState.none)))
     return StreakResult(days=days, week=week, shield_used=monday in shield_weeks)
+
+
+# ── Queries (family-scoped) ──────────────────────────────────────────────
+from datetime import datetime  # noqa: E402
+from uuid import UUID  # noqa: E402
+from zoneinfo import ZoneInfo  # noqa: E402
+
+from sqlalchemy import and_, func, select  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
+
+from app.models.cash_transaction import CashTransaction, CashTransactionType  # noqa: E402
+from app.models.family import Family  # noqa: E402
+from app.models.point_transaction import PointTransaction, TransactionType  # noqa: E402
+from app.models.task_assignment import ApprovalStatus, AssignmentStatus, TaskAssignment  # noqa: E402
+from app.models.task_template import TaskTemplate  # noqa: E402
+from app.models.user import User, UserRole  # noqa: E402
+from app.schemas.progress import DayEntry, ProgressResponse  # noqa: E402
+from app.services.bank_service import _safe_zoneinfo  # noqa: E402
+
+XP_POINT_TYPES = (TransactionType.TASK_COMPLETED, TransactionType.BONUS, TransactionType.GIG_APPROVED)
+KID_ROLES = (UserRole.CHILD, UserRole.TEEN)
+
+
+class ProgressService:
+    @staticmethod
+    async def family_today(db: AsyncSession, family_id: UUID) -> tuple[date, ZoneInfo]:
+        tz = _safe_zoneinfo((await db.execute(select(Family.timezone).where(Family.id == family_id))).scalar())
+        return datetime.now(tz).date(), tz
+
+    @staticmethod
+    async def xp_for(db: AsyncSession, family_id: UUID, user_id: UUID) -> int:
+        points = (await db.execute(
+            select(func.coalesce(func.sum(PointTransaction.points), 0)).where(
+                PointTransaction.family_id == family_id,
+                PointTransaction.user_id == user_id,
+                PointTransaction.points > 0,
+                PointTransaction.type.in_(XP_POINT_TYPES),
+            )
+        )).scalar()
+        pesos = (await db.execute(
+            select(func.coalesce(func.sum(CashTransaction.amount_cents // 100), 0)).where(
+                CashTransaction.family_id == family_id,
+                CashTransaction.user_id == user_id,
+                CashTransaction.amount_cents > 0,
+                CashTransaction.type == CashTransactionType.GIG_EARNED,
+            )
+        )).scalar()
+        return int(points or 0) + int(pesos or 0)
+
+    @staticmethod
+    async def day_states(
+        db: AsyncSession, family_id: UUID, user_id: UUID, today: date, tz: ZoneInfo,
+    ) -> dict[date, DayState]:
+        start = today - timedelta(days=STREAK_LOOKBACK_DAYS)
+        rows = (await db.execute(
+            select(
+                TaskAssignment.assigned_date,
+                TaskAssignment.status,
+                TaskAssignment.completed_at,
+                TaskAssignment.completion_grade,
+                TaskAssignment.approval_status,
+            )
+            .join(TaskTemplate, TaskTemplate.id == TaskAssignment.template_id)
+            .where(and_(
+                TaskAssignment.family_id == family_id,
+                TaskAssignment.assigned_to == user_id,
+                TaskTemplate.is_bonus.is_(False),
+                TaskAssignment.status != AssignmentStatus.CANCELLED,
+                TaskAssignment.assigned_date >= start,
+                TaskAssignment.assigned_date <= today,
+            ))
+        )).all()
+
+        def done_in_time(row) -> bool:
+            if row.completion_grade == "missed" or row.approval_status == ApprovalStatus.REJECTED:
+                return False
+            if row.status != AssignmentStatus.COMPLETED:
+                return False
+            if row.completed_at is None:  # legacy rows: completed, no timestamp → on time
+                return True
+            return row.completed_at.astimezone(tz).date() <= row.assigned_date
+
+        by_day: dict[date, bool] = {}
+        for row in rows:
+            ok = done_in_time(row)
+            by_day[row.assigned_date] = by_day.get(row.assigned_date, True) and ok
+
+        states: dict[date, DayState] = {}
+        for day, all_done in by_day.items():
+            if all_done:
+                states[day] = DayState.done
+            else:
+                states[day] = DayState.today if day == today else DayState.missed
+        return states
+
+    @staticmethod
+    async def progress_for(db: AsyncSession, user: User) -> ProgressResponse:
+        if user.role not in KID_ROLES:
+            return ProgressResponse(applies=False)
+        today, tz = await ProgressService.family_today(db, user.family_id)
+        xp = await ProgressService.xp_for(db, user.family_id, user.id)
+        rank = rank_for_xp(xp)
+        streak = compute_streak(
+            await ProgressService.day_states(db, user.family_id, user.id, today, tz), today,
+        )
+        seen = user.last_seen_rank or 1
+        return ProgressResponse(
+            applies=True,
+            xp=int(xp),
+            rank=int(rank),
+            rank_floor_xp=int(rank_floor(rank)),
+            next_rank_xp=next_rank_xp(rank),
+            streak_days=int(streak.days),
+            week=[DayEntry(date=d, state=s.value) for d, s in streak.week],
+            shield_used=streak.shield_used,
+            celebrate_rank=rank if rank > seen else None,
+        )
