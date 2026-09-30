@@ -89,17 +89,6 @@
     --surface-deep: var(--color-brand-cream-deep);
   }
 
-  [data-theme="dark"] {
-    color-scheme: dark;
-    --bg: #0F1A24;
-    --fg: var(--color-brand-cream);
-    --fg-soft: #A8C3D4;
-    --surface: #15222F;
-    --surface-deep: #1C2D3E;
-    --color-brand-coral: #FF6B3D;
-    --color-brand-mint:  #3DB689;
-  }
-
   html { background: var(--bg); margin: 0; padding: 0; }
 
   body {

@@ -42,7 +42,7 @@ const ALLOWANCE: Record<RuleId, number> = {
     "deep-text": 308,
     "faint-text": 1,
     "h1-emoji": 7,
-    "dark-theme": 3,
+    "dark-theme": 0,
     "header-class-prop": 36,
 };
 
