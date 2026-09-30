@@ -2,6 +2,7 @@
 /** Kid home header (UX-C1): greeting, balance pill, weekly pay meter. */
 import type { PayMeter } from "../../lib/kidHome";
 import { headerToneClass } from "../../lib/headerTone";
+import type { ProgressView } from "../../lib/progress";
 
 interface Props {
     name: string;
@@ -12,13 +13,17 @@ interface Props {
     points: number;
     meter: PayMeter;
     counter: { done: number; total: number; suffix: string };
+    progress?: ProgressView | null;
 }
-const { name, lang, skin, starMode, cashCents, points, meter, counter } = Astro.props;
+const { name, lang, skin, starMode, cashCents, points, meter, counter, progress = null } = Astro.props;
 const es = lang === "es";
 const money = (cents: number) =>
     `$${Math.round(cents / 100).toLocaleString(es ? "es-MX" : "en-US")}`;
 // Teen keeps its dark skin; the child skin is the sky section tone (ink text, 6.5:1).
 const skinClass = skin === "teen" ? "bg-[#1E2230] text-white" : headerToneClass("sky");
+const pillCls = skin === "teen" ? "bg-white/10 border-white/25" : "bg-white/40 border-brand-ink/20";
+const trackCls = skin === "teen" ? "bg-white/15" : "bg-brand-ink/15";
+const fillCls = skin === "teen" ? "bg-brand-mint" : "bg-brand-ink";
 ---
 
 <header class={`${skinClass} pt-12 pb-5 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]`}>
@@ -35,6 +40,22 @@ const skinClass = skin === "teen" ? "bg-[#1E2230] text-white" : headerToneClass(
             {starMode ? `⭐ ${points}` : money(cashCents)}
         </a>
     </div>
+    {progress && (
+        <div class="mt-2" data-progress-row>
+            <div class="flex flex-wrap gap-2">
+                <button type="button" data-progress-open class={`rounded-full border px-3 py-1 text-xs font-extrabold ${pillCls}`}>
+                    {progress.streakLabel}
+                </button>
+                <button type="button" data-progress-open class={`rounded-full border px-3 py-1 text-xs font-extrabold ${pillCls}`}>
+                    {progress.rankLabel}
+                </button>
+            </div>
+            <div class={`mt-2 h-1.5 rounded-full overflow-hidden ${trackCls}`} role="img"
+                 aria-label={progress.toNextLabel}>
+                <div class={`h-full ${fillCls}`} style={`width:${progress.barPct}%`}></div>
+            </div>
+        </div>
+    )}
     {meter.show && (
         <div class="mt-4 rounded-2xl bg-white/10 border border-white/15 px-4 py-3">
             <div class="flex justify-between gap-2 text-[11px]">

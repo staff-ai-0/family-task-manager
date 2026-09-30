@@ -1,0 +1,48 @@
+---
+/**
+ * UX-D1 one-time rank-up celebration. Rendered only when /api/progress/me
+ * returns celebrate_rank; dismissing POSTs the ack so it never shows again.
+ */
+import { buttonClass } from "../../lib/buttonClasses";
+
+interface Props {
+    rank: number;
+    name: string;
+    lang: "es" | "en";
+}
+const { rank, name, lang } = Astro.props;
+const es = lang === "es";
+---
+
+<div id="rank-up" data-rank={rank} role="dialog" aria-modal="true" aria-labelledby="rank-up-title"
+     class="fixed inset-0 z-[60] flex items-center justify-center bg-brand-ink/60 p-6">
+    <div class="w-full max-w-sm rounded-[var(--radius-tile)] border-2 border-brand-ink bg-brand-cream p-6 text-center shadow-[var(--shadow-pop)]">
+        <p class="text-sm font-bold text-brand-ink-soft">{es ? "¡Subiste de rango!" : "You ranked up!"}</p>
+        <p id="rank-up-title" class="mt-1 font-display text-3xl font-extrabold text-brand-ink">
+            {es ? `¡Ahora eres ${name}!` : `You're now ${name}!`}
+        </p>
+        <p class="mt-1 text-sm text-brand-ink-soft">{es ? `Rango ${rank} de 10` : `Rank ${rank} of 10`}</p>
+        <button type="button" data-rank-up-ok class={`${buttonClass("primary", "lg")} mt-5 w-full`}>
+            {es ? "¡Genial!" : "Awesome!"}
+        </button>
+    </div>
+</div>
+
+<script>
+    import { fireConfetti } from "../../lib/celebrate";
+
+    const box = document.getElementById("rank-up");
+    if (box) {
+        fireConfetti();
+        box.querySelector("[data-rank-up-ok]")?.addEventListener("click", () => {
+            const rank = Number(box.dataset.rank);
+            box.remove();
+            fetch("/api/progress/me/ack-rank", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ rank }),
+            }).catch(() => {});
+        });
+    }
+</script>

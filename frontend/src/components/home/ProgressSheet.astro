@@ -1,0 +1,65 @@
+---
+/**
+ * UX-D1 progress sheet: rank ladder, XP to next, this week's streak strip.
+ * Opened by any [data-progress-open] on the page.
+ */
+import type { ProgressView } from "../../lib/progress";
+import { buttonClass } from "../../lib/buttonClasses";
+
+interface Props {
+    progress: ProgressView;
+    lang: "es" | "en";
+}
+const { progress, lang } = Astro.props;
+const es = lang === "es";
+const dayCls: Record<string, string> = {
+    done: "bg-brand-mint border-brand-ink text-brand-ink",
+    shield: "bg-brand-sun border-brand-ink text-brand-ink",
+    missed: "bg-white border-brand-ink/30 text-brand-ink-soft line-through",
+    today: "bg-white border-brand-ink text-brand-ink",
+    future: "bg-white border-brand-ink/15 text-brand-ink-soft",
+    none: "bg-brand-cream-deep border-brand-ink/15 text-brand-ink-soft",
+};
+const dayMark: Record<string, string> = { done: "✓", shield: "🛡️", missed: "✕", today: "•", future: "", none: "–" };
+---
+
+<dialog id="progress-sheet" aria-labelledby="progress-sheet-title"
+        class="m-0 mt-auto w-full max-w-md mx-auto rounded-t-[var(--radius-tile)] bg-brand-cream text-brand-ink p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] border-t-2 border-brand-ink backdrop:bg-brand-ink/50 z-[60]">
+    <h2 id="progress-sheet-title" class="font-display text-xl font-extrabold">{progress.rankLabel}</h2>
+    <p class="text-sm text-brand-ink-soft">{progress.toNextLabel}</p>
+
+    <h3 class="mt-4 text-xs font-extrabold uppercase tracking-wide">{es ? "Esta semana" : "This week"} · {progress.streakLabel}</h3>
+    <ol class="mt-2 grid grid-cols-7 gap-1.5">
+        {progress.week.map((d) => (
+            <li class={`flex flex-col items-center rounded-xl border-2 py-1.5 text-xs font-bold ${dayCls[d.state] ?? dayCls.none}`}>
+                <span>{d.label}</span><span aria-hidden="true">{dayMark[d.state] ?? ""}</span>
+            </li>
+        ))}
+    </ol>
+    <p class="mt-2 text-xs text-brand-ink-soft">
+        {es ? "Termina todas tus tareas del día. Tienes 1 día de perdón por semana." : "Finish all your chores each day. You get 1 free miss per week."}
+    </p>
+
+    <h3 class="mt-4 text-xs font-extrabold uppercase tracking-wide">{es ? "Rangos" : "Ranks"}</h3>
+    <ol class="mt-2 space-y-1">
+        {progress.ladder.map((r) => (
+            <li class={`flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm ${r.state === "current" ? "bg-brand-sun border-2 border-brand-ink font-extrabold" : r.state === "done" ? "font-bold" : "text-brand-ink-soft"}`}>
+                <span class="w-6 text-right">{r.rank}</span><span class="flex-1">{r.name}</span>
+                <span aria-hidden="true">{r.state === "done" ? "✓" : r.state === "locked" ? "🔒" : "★"}</span>
+            </li>
+        ))}
+    </ol>
+
+    <form method="dialog" class="mt-4">
+        <button class={`${buttonClass("ghost", "md")} w-full`}>{es ? "Cerrar" : "Close"}</button>
+    </form>
+</dialog>
+
+<script>
+    document.addEventListener("click", (e) => {
+        const t = (e.target as HTMLElement | null)?.closest("[data-progress-open]");
+        if (!t) return;
+        const dlg = document.getElementById("progress-sheet") as HTMLDialogElement | null;
+        dlg?.showModal();
+    });
+</script>

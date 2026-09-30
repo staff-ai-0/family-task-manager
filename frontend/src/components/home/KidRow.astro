@@ -30,6 +30,7 @@ const showButton = view.nudge.kind === "ready" || view.nudge.kind === "cooldown"
                     <span class="ml-1 inline-block rounded-full bg-red-100 text-red-700 px-1.5 py-0.5 text-[10px] font-bold">{view.overdueChip}</span>
                 )}
             </p>
+            {view.progressLine && <p class="text-xs font-bold text-brand-ink-soft" data-kid-progress>{view.progressLine}</p>}
             {view.meter.show ? (
                 <div class="mt-1.5 h-1.5 rounded-full bg-brand-ink/10 flex overflow-hidden" role="img" aria-label={es ? "Pago de la semana" : "Weekly pay"}>
                     <span class="bg-emerald-500" style={`width:${view.meter.greenPct}%`}></span>
