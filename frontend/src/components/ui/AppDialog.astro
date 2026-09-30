@@ -28,7 +28,7 @@
             <button type="button" id="app-dialog-cancel"
                 class="flex-1 rounded-xl border-2 border-brand-ink/15 bg-white py-3 text-sm font-bold text-brand-ink"></button>
             <button type="submit" id="app-dialog-ok"
-                class="flex-1 rounded-xl py-3 text-sm font-bold text-white disabled:opacity-40"></button>
+                class="flex-1 rounded-xl py-3 text-sm font-bold disabled:opacity-40"></button>
         </div>
     </form>
 </dialog>
@@ -76,6 +76,14 @@
     } from "../../lib/dialogs";
     import { showToast } from "../../lib/toast";
 
+    // #app-dialog-ok's tone is one of two complete class strings, never a
+    // classList toggle of an individual brand-fill class: the guard's
+    // runtime-brand-fill rule would otherwise flag every text-white in this
+    // file, including the (legitimate) white-on-red danger variant.
+    const OK_BASE = "flex-1 rounded-xl py-3 text-sm font-bold disabled:opacity-40";
+    const OK_DEFAULT_CLASSES = `${OK_BASE} bg-brand-sky-deep text-brand-ink`;
+    const OK_DANGER_CLASSES = `${OK_BASE} bg-red-600 text-white`;
+
     function initAppDialog() {
         const dlg = document.getElementById("app-dialog") as HTMLDialogElement | null;
         if (!dlg || dlg.dataset.bound === "1") return;
@@ -122,8 +130,7 @@
                     else dlg.removeAttribute("aria-describedby");
                     ok.textContent = o.confirmLabel ?? labels.ok;
                     cancel.textContent = o.cancelLabel ?? labels.cancel;
-                    ok.classList.toggle("bg-red-600", !!o.danger);
-                    ok.classList.toggle("bg-brand-sky-deep", !o.danger);
+                    ok.className = o.danger ? OK_DANGER_CLASSES : OK_DEFAULT_CLASSES;
                     if (req.kind === "prompt") {
                         field.hidden = false;
                         label.textContent = req.opts.label ?? o.title;

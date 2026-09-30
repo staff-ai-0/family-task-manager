@@ -3,6 +3,7 @@ import PageLayout from "@components/ui/PageLayout.astro";
 import PetAvatar from "../../components/pet/PetAvatar.astro";
 import { apiFetch } from "../../lib/api";
 import { stageLabel, stageProgressPct, MAX_STAGE } from "../../lib/pet-art";
+import { buttonClass } from "../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -152,7 +153,7 @@ const L = {
                     <button
                         type="button"
                         data-quest-complete
-                        class="quest-go flex-shrink-0 px-4 py-3 rounded-xl bg-brand-mint-deep text-white font-bold shadow-[var(--shadow-card)] active:scale-95 transition-all disabled:opacity-50"
+                        class={`quest-go flex-shrink-0 active:scale-95 transition-all ${buttonClass("mint", "md")} disabled:opacity-50`}
                     >
                         {L.complete}
                     </button>

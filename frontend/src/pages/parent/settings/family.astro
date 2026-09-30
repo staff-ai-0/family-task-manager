@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../lib/api";
+import { buttonClass } from "../../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -174,7 +175,7 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
             <button
                 type="submit"
                 id="save-btn"
-                class="px-4 py-2 bg-brand-sky-deep text-white rounded-lg text-sm font-medium hover:bg-brand-sky transition-colors disabled:opacity-60"
+                class={`disabled:opacity-60 ${buttonClass("secondary", "sm")}`}
             >
                 {L.save}
             </button>
@@ -218,7 +219,7 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
             ))}
         </div>
         <button type="button" id="modules-save"
-            class="rounded-xl bg-brand-sky-deep text-white text-sm font-bold px-4 py-2 hover:opacity-90 transition-opacity">
+            class={buttonClass("secondary", "sm")}>
             {lang === "es" ? "Guardar módulos" : "Save modules"}
         </button>
         <span id="modules-status" class="text-sm block" aria-live="polite"></span>

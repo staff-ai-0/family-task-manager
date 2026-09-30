@@ -2,6 +2,7 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
+import { buttonClass } from "../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -171,7 +172,7 @@ const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
                                 </p>
                                 <button
                                     id="open-create-reward"
-                                    class="bg-brand-coral text-white font-semibold px-5 py-2 rounded-xl hover:opacity-90 transition-opacity"
+                                    class={buttonClass("primary", "sm")}
                                 >
                                     {lang === "es" ? "+ Crear recompensa" : "+ Create reward"}
                                 </button>

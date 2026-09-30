@@ -7,6 +7,7 @@
  * The trigger button (id="tcm-trigger") is placed by the PARENT PAGE (tasks.astro).
  */
 import { TASK_PRESETS } from "@lib/task-presets";
+import { buttonClass } from "@lib/buttonClasses";
 
 interface Props {
     lang: "en" | "es";
@@ -397,7 +398,7 @@ const dowLabels = lang === "es"
                     id="tcm-submit"
                     type="button"
                     data-tour="task-submit"
-                    class="hidden flex-1 py-2.5 bg-brand-sky-deep hover:bg-brand-ink active:scale-[0.98] text-white font-semibold text-sm rounded-xl shadow-[var(--shadow-card)] transition-all duration-150"
+                    class={`hidden flex-1 active:scale-[0.98] transition-all duration-150 ${buttonClass("secondary", "sm")}`}
                 >
                     {lang === "es" ? "Crear tarea" : "Create Task"}
                 </button>
@@ -458,7 +459,7 @@ const dowLabels = lang === "es"
         modal.querySelectorAll(".tcm-dow").forEach((btn) => {
             const active = dowState.has(String(btn.dataset.dow));
             btn.classList.toggle("bg-brand-sky-deep", active);
-            btn.classList.toggle("text-white", active);
+            btn.classList.toggle("text-brand-ink", active);
             btn.classList.toggle("border-brand-sky-deep", active);
             btn.classList.toggle("bg-brand-cream-deep", !active);
             btn.classList.toggle("text-brand-ink-soft", !active);
@@ -517,7 +518,7 @@ const dowLabels = lang === "es"
         container.querySelectorAll(".tcm-chip").forEach((btn) => {
             const isActive = String(btn.dataset.value) === String(value);
             btn.classList.toggle("bg-brand-sky-deep", isActive);
-            btn.classList.toggle("text-white", isActive);
+            btn.classList.toggle("text-brand-ink", isActive);
             btn.classList.toggle("border-brand-sky-deep", isActive);
             btn.classList.toggle("bg-brand-cream-deep", !isActive);
             btn.classList.toggle("text-brand-ink-soft", !isActive);
@@ -907,7 +908,7 @@ const dowLabels = lang === "es"
             ? `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />`
             : `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />`;
         const toggleClass = isActive
-            ? "bg-brand-mint/20 text-brand-mint-text hover:bg-brand-mint"
+            ? "bg-brand-mint/20 text-brand-mint-text hover:bg-brand-mint hover:text-brand-ink"
             : "bg-brand-cream-deep text-brand-ink-soft hover:bg-brand-mint/20 hover:text-brand-mint-text";
 
         return `

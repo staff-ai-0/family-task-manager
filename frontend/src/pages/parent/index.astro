@@ -6,6 +6,7 @@ import { t } from "../../lib/i18n";
 import { buildDeck } from "../../lib/deck";
 import { buildReviewQueue } from "../../lib/reviewQueue";
 import { budgetGlanceView, firstName, greetingDate, kidRowView, monthLabel } from "../../lib/parentHub";
+import { buttonClass } from "../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -167,7 +168,7 @@ const hello = firstName(user.name);
             <div class="flex flex-wrap gap-2">
                 <button
                     id="ai-consent-allow"
-                    class="px-4 py-2 rounded-lg bg-brand-sky-deep text-white text-xs font-semibold hover:bg-brand-ink transition-colors cursor-pointer"
+                    class={buttonClass("secondary", "sm")}
                 >
                     {lang === "es" ? "Permitir" : "Allow"}
                 </button>

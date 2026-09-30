@@ -10,6 +10,7 @@
  */
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
+import { buttonClass } from "../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -103,7 +104,7 @@ const i18n = {
                     class:list={[
                         "px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap border-2 transition-colors",
                         pack.age_band === activeBand
-                            ? "bg-brand-sky-deep text-white border-brand-sky-deep"
+                            ? "bg-brand-sky-deep text-brand-ink border-brand-sky-deep"
                             : "bg-brand-cream text-brand-ink border-brand-ink/10 hover:border-brand-sky-deep/40",
                     ]}
                 >
@@ -218,7 +219,7 @@ const i18n = {
                 <button
                     type="button"
                     data-apply-band={pack.age_band}
-                    class="w-full py-3 bg-brand-sky-deep hover:bg-brand-ink active:scale-[0.98] text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition-all"
+                    class={`w-full active:scale-[0.98] transition-all ${buttonClass("secondary", "md")}`}
                 >
                     ✨ {es ? "Agregar seleccionados a mi familia" : "Add selected to my family"}
                     (<span data-count>0</span>)

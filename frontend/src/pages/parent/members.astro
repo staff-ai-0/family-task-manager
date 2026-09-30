@@ -4,6 +4,7 @@ import InvitationModal from "../../components/InvitationModal.astro";
 import EditMemberModal from "../../components/EditMemberModal.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
+import { buttonClass } from "../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -235,7 +236,7 @@ if (!joinCodeOk && joinCodeError) {
             <button 
               id="copy-code-btn"
               type="button"
-              class="px-3 py-3 rounded-lg bg-indigo-100 text-brand-coral-text hover:bg-brand-coral-deep transition-colors"
+              class="px-3 py-3 rounded-lg bg-indigo-100 text-brand-coral-text hover:bg-brand-coral-deep hover:text-brand-ink transition-colors"
               title={lang === "es" ? "Copiar" : "Copy"}
             >
               <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -258,9 +259,9 @@ if (!joinCodeOk && joinCodeError) {
         ) : (
           <form method="POST">
             <input type="hidden" name="action" value="generate_join_code" />
-            <button 
+            <button
               type="submit"
-              class="w-full py-2.5 bg-brand-coral-deep hover:bg-brand-ink text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]"
+              class={`w-full ${buttonClass("primary", "sm")}`}
             >
               {lang === "es" ? "Generar Codigo de Familia" : "Generate Family Code"}
             </button>
@@ -396,7 +397,7 @@ if (!joinCodeOk && joinCodeError) {
                         <input type="hidden" name="member_id" value={m.id} />
                         <button
                           type="submit"
-                          class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors bg-brand-mint/20 text-brand-mint-text hover:bg-brand-mint"
+                          class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors bg-brand-mint/20 text-brand-mint-text hover:bg-brand-mint hover:text-brand-ink"
                         >
                           {lang === "es" ? "Aprobar" : "Approve"}
                         </button>
@@ -477,7 +478,7 @@ if (!joinCodeOk && joinCodeError) {
                 />
                 <button
                   type="submit"
-                  class={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${m.is_active === false ? "bg-brand-mint/20 text-brand-mint-text hover:bg-brand-mint" : "bg-rose-100 text-rose-700 hover:bg-rose-200"}`}
+                  class={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${m.is_active === false ? "bg-brand-mint/20 text-brand-mint-text hover:bg-brand-mint hover:text-brand-ink" : "bg-rose-100 text-rose-700 hover:bg-rose-200"}`}
                 >
                   {m.is_active === false
                     ? t(lang, "pm_activate")
@@ -488,7 +489,7 @@ if (!joinCodeOk && joinCodeError) {
               <button
                 type="button"
                 onclick={`openEditMemberModal('${m.id}', '${m.name}', '${m.role}')`}
-                class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors bg-brand-coral/15 text-brand-coral-text hover:bg-brand-coral-deep"
+                class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors bg-brand-coral/15 text-brand-coral-text hover:bg-brand-coral-deep hover:text-brand-ink"
               >
                 {lang === "es" ? "Editar" : "Edit"}
               </button>
@@ -532,7 +533,7 @@ if (!joinCodeOk && joinCodeError) {
                 />
                 <button
                   type="submit"
-                  class="px-3 py-1.5 rounded-lg bg-brand-coral/15 text-brand-coral-text hover:bg-brand-coral-deep text-xs font-semibold transition-colors"
+                  class="px-3 py-1.5 rounded-lg bg-brand-coral/15 text-brand-coral-text hover:bg-brand-coral-deep hover:text-brand-ink text-xs font-semibold transition-colors"
                 >
                   {t(lang, "pm_apply")}
                 </button>
@@ -582,7 +583,7 @@ if (!joinCodeOk && joinCodeError) {
           </select>
           <button
             type="submit"
-            class="w-full py-2.5 bg-brand-coral-deep hover:bg-brand-ink text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]"
+            class={`w-full ${buttonClass("primary", "sm")}`}
           >
             {t(lang, "pm_register_btn")}
           </button>

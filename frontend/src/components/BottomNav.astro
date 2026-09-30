@@ -117,7 +117,7 @@ const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shad
         {items.map((it) => (
             <a href={it.href} data-nav-key={it.key} class={`${itemBase} relative ${active === it.key ? itemActive : itemIdle}`}>
                 {(it.badge ?? 0) > 0 && (
-                    <span class="absolute top-0 right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-brand-coral text-white text-[10px] font-bold rounded-full border-2 border-brand-cream">
+                    <span class="absolute top-0 right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-brand-coral text-brand-ink text-[10px] font-bold rounded-full border-2 border-brand-cream">
                         {it.badge! > 99 ? "99+" : it.badge}
                     </span>
                 )}
@@ -130,7 +130,7 @@ const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shad
 
         <button type="button" id="more-nav-btn" data-nav-key="more" aria-haspopup="dialog" aria-controls="more-sheet" aria-expanded="false" class={`${itemBase} relative ${active === "more" ? itemActive : itemIdle}`}>
             {unreadCount > 0 && (
-                <span class="absolute top-0 right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-brand-coral text-white text-[10px] font-bold rounded-full border-2 border-brand-cream">
+                <span class="absolute top-0 right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-brand-coral text-brand-ink text-[10px] font-bold rounded-full border-2 border-brand-cream">
                     {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
             )}

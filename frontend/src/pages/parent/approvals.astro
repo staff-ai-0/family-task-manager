@@ -4,6 +4,7 @@ import ImageLightbox from "@components/ui/ImageLightbox.astro";
 import { apiFetch } from "../../lib/api";
 import { fmtDateTime } from "../../lib/datetime";
 import { t } from "../../lib/i18n";
+import { buttonClass } from "../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -61,7 +62,7 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                         </button>
                     )}
                     <button type="button" id="approve-all" data-busy={lang === "es" ? "Aprobando…" : "Approving…"}
-                        class="px-4 py-2 rounded-lg bg-brand-mint-deep text-white font-semibold text-sm shadow-[var(--shadow-card)] hover:opacity-90 transition-opacity">
+                        class={buttonClass("mint", "sm")}>
                         {lang === "es" ? "Aprobar todo" : "Approve all"}
                     </button>
                 </div>
@@ -171,7 +172,7 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                                         </button>
                                     )}
                                     <button type="button" data-action="approve"
-                                        class="px-4 py-2 rounded-lg bg-brand-mint-deep text-white font-semibold text-sm shadow-[var(--shadow-card)] hover:opacity-90 transition-opacity">
+                                        class={buttonClass("mint", "sm")}>
                                         {lang === "es" ? "Completa" : "Complete"}
                                     </button>
                                 </div>
@@ -233,7 +234,7 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                                         {lang === "es" ? "Rechazar" : "Reject"}
                                     </button>
                                     <button type="button" data-action="approve"
-                                        class="px-4 py-2 rounded-lg bg-brand-mint-deep text-white font-semibold text-sm shadow-[var(--shadow-card)] hover:opacity-90 transition-opacity">
+                                        class={buttonClass("mint", "sm")}>
                                         {lang === "es" ? "Aprobar" : "Approve"}
                                     </button>
                                 </div>
@@ -277,7 +278,7 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                                         {lang === "es" ? "Rechazar" : "Reject"}
                                     </button>
                                     <button type="button" data-action="approve"
-                                        class="px-4 py-2 rounded-lg bg-brand-mint-deep text-white font-semibold text-sm shadow-[var(--shadow-card)] hover:opacity-90 transition-opacity">
+                                        class={buttonClass("mint", "sm")}>
                                         {lang === "es" ? "Aprobar" : "Approve"}
                                     </button>
                                 </div>

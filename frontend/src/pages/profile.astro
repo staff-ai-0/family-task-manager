@@ -5,6 +5,7 @@ import { apiFetch } from "../lib/api";
 import { fmtDate } from "../lib/datetime";
 import { t } from "../lib/i18n";
 import { headerToneClass } from "../lib/headerTone";
+import { buttonClass } from "../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -297,7 +298,7 @@ const ledgerDate = (iso: string) =>
                     <button
                         type="submit"
                         formnovalidate
-                        class="px-5 py-2.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition-colors shadow-[var(--shadow-card)]"
+                        class={buttonClass("secondary", "sm")}
                     >
                         {t(lang, "pt_save")}
                     </button>
@@ -322,7 +323,7 @@ const ledgerDate = (iso: string) =>
                         userKey={user.id}
                         label={`🧭 ${t(lang, "onboarding_replay_tour")}`}
                         wrapClass="block"
-                        class="w-full text-center px-4 py-2.5 rounded-lg bg-brand-sky-deep text-white text-sm font-semibold hover:bg-brand-ink transition-colors cursor-pointer"
+                        class={`w-full text-center ${buttonClass("secondary", "sm")}`}
                     />
                 </div>
             </section>
@@ -372,7 +373,7 @@ const ledgerDate = (iso: string) =>
                     </div>
                     <button
                         type="submit"
-                        class="w-full py-2.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition-colors shadow-[var(--shadow-card)]"
+                        class={`w-full ${buttonClass("secondary", "sm")}`}
                     >
                         {t(lang, "profile_update_password")}
                     </button>

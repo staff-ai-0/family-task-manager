@@ -146,7 +146,7 @@ const links = isParent ? parentLinks : kidLinks;
             {links.map((l) => (
                 <a href={l.href} class="relative flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-brand-cream-deep/60 hover:bg-brand-cream-deep p-3 text-center transition-colors">
                     {(l.badge ?? 0) > 0 && (
-                        <span class="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-brand-coral text-white text-[10px] font-bold rounded-full">
+                        <span class="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-brand-coral text-brand-ink text-[10px] font-bold rounded-full">
                             {l.badge! > 99 ? "99+" : l.badge}
                         </span>
                     )}

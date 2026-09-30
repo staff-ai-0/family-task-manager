@@ -150,6 +150,7 @@ const L = {
 <script>
     import { petHeart } from "../../lib/pet-fx";
     import { COLOR_AURA } from "../../lib/pet-art";
+    import { buttonClass } from "../../lib/buttonClasses";
 
     function initShop() {
         const es = document.documentElement.lang === "es";
@@ -221,8 +222,9 @@ const L = {
                 btn.type = "button";
                 btn.dataset.act = "buy";
                 btn.disabled = !affordable;
-                btn.className = "w-full py-1.5 rounded-lg font-bold text-xs border-2 border-brand-ink shadow-[2px_2px_0_var(--color-brand-ink)] active:scale-95 transition-all " +
-                    (affordable ? "bg-brand-sun-deep text-white" : "bg-brand-cream-deep text-brand-ink-soft opacity-60 shadow-none cursor-not-allowed");
+                btn.className = affordable
+                    ? `w-full active:scale-95 transition-all ${buttonClass("sun", "sm")}`
+                    : "w-full py-1.5 rounded-lg font-bold text-xs border-2 border-brand-ink bg-brand-cream-deep text-brand-ink-soft opacity-60 shadow-none cursor-not-allowed active:scale-95 transition-all";
                 btn.textContent = affordable ? T.buy : T.need(price - points);
                 actions.appendChild(btn);
                 return;
@@ -245,7 +247,7 @@ const L = {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.dataset.act = "equip";
-            btn.className = "w-full py-1.5 rounded-lg font-bold text-xs border-2 border-brand-ink bg-brand-mint-deep text-white shadow-[2px_2px_0_var(--color-brand-ink)] active:scale-95 transition-all";
+            btn.className = `w-full active:scale-95 transition-all ${buttonClass("mint", "sm")}`;
             btn.textContent = T.equip;
             actions.appendChild(btn);
         }
