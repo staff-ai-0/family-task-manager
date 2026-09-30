@@ -32,6 +32,7 @@ from app.schemas.oversight import (
     PendingApprovalItem,
     PendingCounts,
 )
+from app.services.progress_service import ProgressService, compute_streak, rank_for_xp
 from app.services.reward_goal_service import RewardGoalService
 from app.services.task_assignment_service import TaskAssignmentService
 
@@ -205,11 +206,17 @@ class OversightService:
 
         goals = await RewardGoalService.get_family_goals(family_id, db)
 
+        today, tz = await ProgressService.family_today(db, family_id)
+
         threshold = max(1, settings.GIG_AUTO_APPROVE_STREAK)
         members: list[KidSummary] = []
         for kid in kids:
             gp = goals.get(kid.id)
             streak = int(kid.gig_trust_streak or 0)
+            xp = await ProgressService.xp_for(db, family_id, kid.id)
+            progress_streak = compute_streak(
+                await ProgressService.day_states(db, family_id, kid.id, today, tz), today,
+            )
             members.append(
                 KidSummary(
                     user_id=kid.id,
@@ -236,6 +243,8 @@ class OversightService:
                     required_open_today=required_today.get(kid.id, (0, 0, 0))[2],
                     overdue_count=int(overdue_counts.get(kid.id, 0)),
                     last_nudged_at=last_nudges.get(kid.id),
+                    streak_days=int(progress_streak.days),
+                    rank=int(rank_for_xp(xp)),
                 )
             )
 
