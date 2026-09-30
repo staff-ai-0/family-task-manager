@@ -42,6 +42,10 @@ describe("scanVisual — light-text-in-header", () => {
         ].join("\n");
         expect(rules(src, "light-text-in-header")).toEqual([]);
     });
+    it("treats bg-brand-ink-soft as a light fill, not a dark hero", () => {
+        const src = '<header class="bg-brand-ink-soft"><p class="text-white">x</p></header>';
+        expect(rules(src, "light-text-in-header")).toHaveLength(1);
+    });
     it("flags light text on a header-extra / actions slot element", () => {
         const src = [
             '<p slot="header-extra" class="text-amber-100 text-sm">sub</p>',
@@ -70,6 +74,32 @@ describe("scanVisual — white-on-brand-fill", () => {
             '<button class="bg-brand-ink text-white">ok</button>',
             '<p class="bg-red-600 text-white">danger</p>',
         ].join("\n");
+        expect(rules(src, "white-on-brand-fill")).toEqual([]);
+    });
+    it("pairs a multi-line template literal as ONE class string", () => {
+        const src = ["`inline-flex text-white ${", '    ok ? "bg-brand-mint-deep" : "bg-red-600"', "} px-3`"].join(
+            "\n",
+        );
+        expect(rules(src, "white-on-brand-fill").map((h) => h.line)).toEqual([1]);
+    });
+    it("does not double-count a single-line backtick literal", () => {
+        const src = "el.className = `inline-flex text-white bg-brand-mint-deep px-3`;";
+        expect(rules(src, "white-on-brand-fill")).toHaveLength(1);
+    });
+    it("flags every text-white when the file toggles a brand fill via classList", () => {
+        const src = ['btn.classList.toggle("bg-brand-sky-deep", on);', 'btn.classList.toggle("text-white", on);'].join(
+            "\n",
+        );
+        expect(rules(src, "white-on-brand-fill").map((h) => h.line)).toEqual([2]);
+    });
+    it("flags a static text-white class when a brand fill is toggled elsewhere in the file", () => {
+        const src = ['<button class="px-4 text-white">Go</button>', 'ok.classList.toggle("bg-brand-sky-deep", x);'].join(
+            "\n",
+        );
+        expect(rules(src, "white-on-brand-fill").map((h) => h.line)).toEqual([1]);
+    });
+    it("does not flag classList coupling to a non-brand fill", () => {
+        const src = ['el.classList.toggle("bg-red-600", x);', '<span class="text-white">y</span>'].join("\n");
         expect(rules(src, "white-on-brand-fill")).toEqual([]);
     });
 });

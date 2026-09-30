@@ -38,7 +38,7 @@ const GLOBAL_RULES: RuleId[] = ["dark-theme", "header-class-prop"];
 const ALLOWANCE: Record<RuleId, number> = {
     "header-gradient": 6,
     "light-text-in-header": 46,
-    "white-on-brand-fill": 94,
+    "white-on-brand-fill": 104,
     "deep-text": 308,
     "faint-text": 1,
     "h1-emoji": 7,

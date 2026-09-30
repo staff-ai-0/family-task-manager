@@ -138,7 +138,7 @@ export function buttonClass(variant?: ButtonVariant, size?: ButtonSize): string;
 **`frontend/test/visual-consistency.test.ts`** (vitest, node env; scans `src/**/*.{astro,ts,css}`; reuses the quote/comment-aware reading from `test/support/native-dialog-scan.ts` where it applies). Each rule reports `file:line` offenders; the test fails on any:
 
 1. `bg-gradient-to-*` in the class of a `<header>` element (pages + components).
-2. `text-white` in the same class attribute / class string as `bg-brand-{sky,mint,coral,sun}` or its `-deep` (with or without variant prefixes).
+2. `text-white` in the same class attribute / class string as `bg-brand-{sky,mint,coral,sun}` or its `-deep` (with or without variant prefixes). A backtick template literal counts as one class string even across lines; in a file that adds or toggles a brand fill at runtime via `classList`, every `text-white` counts.
 3. `text-brand-{sky,mint,coral,sun}-deep` anywhere (with or without variant prefix).
 4. `text-slate-400|500`, `text-gray-400|500`.
 5. An emoji inside an `<h1>` element's text.
