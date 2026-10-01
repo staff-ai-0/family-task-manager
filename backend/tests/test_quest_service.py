@@ -13,6 +13,7 @@ from app.models.gig import GigClaim, GigClaimStatus, GigOffering
 from app.models.point_transaction import PointTransaction, TransactionType as PT
 from app.models.task_assignment import ApprovalStatus, AssignmentStatus, TaskAssignment
 from app.models.task_template import AssignmentType, TaskTemplate
+from app.models.user import User
 from app.models.weekly_quest import WeeklyQuest
 from app.services.progress_service import ProgressService
 from app.services.quest_service import QuestService, rotation, week_monday
@@ -202,6 +203,26 @@ class TestProgressAndPayment:
         assert len(await _bonus_rows(db_session, kid)) == 1
         await db_session.refresh(kid)
         assert kid.points == points_before + 20
+
+    async def test_the_bonus_is_added_to_the_current_balance_not_a_stale_one(self, db_session, test_child_user):
+        kid = test_child_user
+        today, _tz, week = await _ctx(db_session, kid)
+        await _quest(db_session, kid, week, "on_time", 1)
+        await _assign(db_session, kid, await _template(db_session, kid.family_id), today)
+        # Simulate a balance change committed by someone else (another tab, a
+        # parent approval) while `kid` stays loaded in this session's identity
+        # map — `expire_on_commit=False` means nothing refreshes it for us.
+        await db_session.execute(
+            update(User).where(User.id == kid.id).values(points=175).execution_options(synchronize_session=False)
+        )
+        await db_session.commit()
+        assert kid.points == 100                                    # proves the in-memory copy is stale
+        await QuestService.sync(db_session, kid)
+        rows = await _bonus_rows(db_session, kid)
+        assert len(rows) == 1
+        assert rows[0].balance_before == 175 and rows[0].balance_after == 195
+        await db_session.refresh(kid)
+        assert kid.points == 195
 
     async def test_settle_twice_pays_once(self, db_session, test_child_user):
         kid = test_child_user

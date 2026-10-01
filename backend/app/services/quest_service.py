@@ -274,6 +274,13 @@ class QuestService:
         bonus = int(quest.bonus_points or 0)
         if paid is not None and bonus > 0:
             kid = await PointsService._get_user_locked(db, quest.user_id, quest.family_id)
+            # The row is now locked, but `kid` may be the SAME object the
+            # request's `get_current_user` already loaded into this session
+            # earlier (identity map, `expire_on_commit=False`) — the locked
+            # SELECT resolves to it without refreshing its attributes, so
+            # `.points` can still read as of auth time. Refresh explicitly so
+            # the award lands on the current balance.
+            await db.refresh(kid)
             before = int(kid.points or 0)
             kid.points = before + bonus
             db.add(PointTransaction(
