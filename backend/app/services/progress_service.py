@@ -47,6 +47,9 @@ class StreakResult:
     days: int
     week: list[tuple[date, DayState]]
     shield_used: bool
+    # UX-D2 badges read these two; D1 surfaces ignore them.
+    best: int = 0           # peak of the running counter anywhere in the walk
+    perfect_weeks: int = 0  # finished Mon–Sun weeks inside the walk: ≥1 done day, no missed/shield
 
 
 def _monday(d: date) -> date:
@@ -59,9 +62,12 @@ def compute_streak(states: dict[date, DayState], today: date) -> StreakResult:
 
     done → +1 · none/today → no change · missed → shield if the week's pass is
     unused, else reset to 0. Today only counts once it is done.
+
+    Also reports `best` (the counter's peak) and `perfect_weeks` for UX-D2 badges.
     """
     start = today - timedelta(days=STREAK_LOOKBACK_DAYS)
     days = 0
+    best = 0
     shield_weeks: set[date] = set()
     resolved: dict[date, DayState] = {}
     cur = start
@@ -71,6 +77,7 @@ def compute_streak(states: dict[date, DayState], today: date) -> StreakResult:
             state = DayState.today
         if state == DayState.done:
             days += 1
+            best = max(best, days)
         elif state == DayState.missed:
             week = _monday(cur)
             if week not in shield_weeks:
@@ -82,13 +89,34 @@ def compute_streak(states: dict[date, DayState], today: date) -> StreakResult:
         cur += timedelta(days=1)
     # The walk covers at most STREAK_LOOKBACK_DAYS + 1 days (incl. today).
     days = min(days, STREAK_LOOKBACK_DAYS)
+    best = min(best, STREAK_LOOKBACK_DAYS)
+
+    # Perfect weeks: only weeks that ended before today's week and whose
+    # Monday is inside the walk (a week cut by the lookback start is skipped).
+    perfect_weeks = 0
+    week_start = _monday(start)
+    if week_start < start:
+        week_start += timedelta(days=7)
+    this_monday = _monday(today)
+    while week_start < this_monday:
+        days_of_week = [resolved.get(week_start + timedelta(days=i), DayState.none) for i in range(7)]
+        if (
+            DayState.done in days_of_week
+            and DayState.missed not in days_of_week
+            and DayState.shield not in days_of_week
+        ):
+            perfect_weeks += 1
+        week_start += timedelta(days=7)
 
     monday = _monday(today)
     week = []
     for i in range(7):
         day = monday + timedelta(days=i)
         week.append((day, resolved.get(day, DayState.future if day > today else DayState.none)))
-    return StreakResult(days=days, week=week, shield_used=monday in shield_weeks)
+    return StreakResult(
+        days=days, week=week, shield_used=monday in shield_weeks,
+        best=best, perfect_weeks=perfect_weeks,
+    )
 
 
 # ── Queries (family-scoped) ──────────────────────────────────────────────
