@@ -2141,7 +2141,7 @@ Hay 8 insignias, cada una con tres niveles — bronce, plata y oro:
 | Bien merecido | Canjear recompensas | 1 / 5 / 20 |
 | Copa familiar | Ganar la Copa Familiar de la semana | 1 / 3 / 10 |
 
-Las tareas y tareas extra que requieren revision de un papa cuentan cuando se aprueban.
+Para Manos a la obra y Milla extra, las tareas y tareas extra que requieren revision de un papa cuentan cuando se aprueban.
 
 La hoja de progreso muestra las tres insignias que tienes mas cerca. Tu perfil muestra el estante completo con tu avance hacia cada siguiente nivel. Una insignia ganada es tuya para siempre, aunque despues un papa corrija una tarea.
 

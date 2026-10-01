@@ -2163,7 +2163,7 @@ There are 8 badges, each with three levels — bronze, silver and gold:
 | Well Earned | Redeem rewards | 1 / 5 / 20 |
 | Cup Champion | Win the weekly Family Cup | 1 / 3 / 10 |
 
-Chores and bonus tasks that need a parent's review count once they are approved.
+For Hard Worker and Extra Mile, chores and bonus tasks that need a parent's review count once they are approved.
 
 The progress sheet shows the three badges you are closest to. Your profile shows the full shelf with your progress toward each next level. A badge you have earned is yours for good, even if a parent later corrects a chore.
 
