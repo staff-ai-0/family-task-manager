@@ -14,17 +14,30 @@ describe("family settings — weekly quest bonus (UX-D3)", () => {
         expect(input).toMatch(/value=\{family\?\.quest_bonus_points \?\? ""\}/);
         expect(input).toMatch(/placeholder="20"/);
     });
-    it("says quests are off when the bonus is not above zero (undecided or 0), in both languages", () => {
-        const guard = src.search(/\{\s*!\(Number\(family\?\.quest_bonus_points\) > 0\)\s*&&/);
-        expect(guard).toBeGreaterThan(-1);
-        const line = src.slice(guard).match(/<p class="text-xs font-bold text-brand-ink" data-quest-off>[\s\S]*?<\/p>/)?.[0] ?? "";
-        expect(line).not.toBe("");
+    it("has a line saying quests are off, in both languages, under the field's hint", () => {
+        const start = src.search(/<p\b[^>]*\bdata-quest-off\b/);
+        expect(start).toBeGreaterThan(-1);
+        const line = src.slice(start).match(/^<p\b[^>]*>[\s\S]*?<\/p>/)?.[0] ?? "";
+        expect(line).toMatch(/class="text-xs font-bold text-brand-ink"/);
         expect(line).toContain("Las misiones semanales están apagadas.");
         expect(line).toContain("Weekly quests are off.");
         // Directly under the field's hint, still inside the quest section.
         const hint = src.indexOf("A change applies from the next quest.");
-        expect(guard).toBeGreaterThan(hint);
-        expect(guard).toBeLessThan(src.indexOf('id="quest-save"'));
+        expect(start).toBeGreaterThan(hint);
+        expect(start).toBeLessThan(src.indexOf('id="quest-save"'));
+    });
+    it("always renders the off line, hidden by ATTRIBUTE while quests are on, and re-syncs it after a save", () => {
+        // The whole opening-tag line: `[^>]*` would stop at the `>` inside `> 0}`.
+        const tag = src.match(/<p\b[^\n]*\bdata-quest-off\b[^\n]*/)?.[0] ?? "";
+        expect(tag).toMatch(/hidden=\{Number\(family\?\.quest_bonus_points\) > 0\}/);
+        expect(tag).not.toMatch(/class="[^"]*(?<![\w-])hidden(?![\w-])/);
+        // Not conditionally rendered any more: the save handler needs it in the DOM.
+        expect(src).not.toMatch(/\{\s*!\(Number\(family\?\.quest_bonus_points\) > 0\)\s*&&/);
+        const toggle = src.search(
+            /if \(r\.ok\) document\.querySelector\("\[data-quest-off\]"\)\?\.toggleAttribute\("hidden", value > 0\);/,
+        );
+        expect(toggle).toBeGreaterThan(src.indexOf("quest_bonus_points: value"));
+        expect(src.match(/toggleAttribute\(/g) ?? []).toHaveLength(1);
     });
     it("explains that zero switches quests off, in both languages", () => {
         expect(src).toContain("0 desactiva las misiones semanales");

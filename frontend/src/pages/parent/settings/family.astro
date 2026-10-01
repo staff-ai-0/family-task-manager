@@ -200,11 +200,9 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
                     ? "Cada niño recibe una misión personal por semana y gana este bono al lograrla. 0 desactiva las misiones semanales. El cambio aplica desde la siguiente misión."
                     : "Each kid gets one personal quest per week and earns this bonus for reaching it. 0 turns weekly quests off. A change applies from the next quest."}
             </p>
-            {!(Number(family?.quest_bonus_points) > 0) && (
-                <p class="text-xs font-bold text-brand-ink" data-quest-off>
-                    {lang === "es" ? "Las misiones semanales están apagadas." : "Weekly quests are off."}
-                </p>
-            )}
+            <p class="text-xs font-bold text-brand-ink" data-quest-off hidden={Number(family?.quest_bonus_points) > 0}>
+                {lang === "es" ? "Las misiones semanales están apagadas." : "Weekly quests are off."}
+            </p>
         </div>
         <div class="flex items-center gap-3">
             <button type="button" id="quest-save" class={`disabled:opacity-60 ${buttonClass("secondary", "sm")}`}>
@@ -599,6 +597,7 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
             });
             status.textContent = r.ok ? (section.dataset.saved ?? "") : (section.dataset.error ?? "");
             status.className = r.ok ? "text-sm text-green-700" : "text-sm text-red-700";
+            if (r.ok) document.querySelector("[data-quest-off]")?.toggleAttribute("hidden", value > 0);
         } catch {
             status.textContent = section.dataset.error ?? "";
             status.className = "text-sm text-red-700";
