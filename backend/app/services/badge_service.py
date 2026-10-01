@@ -9,7 +9,7 @@ frontend/src/lib/badges.ts.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Iterable, Optional
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
@@ -29,6 +29,7 @@ from app.models.task_template import TaskTemplate
 from app.models.user import User
 from app.models.user_badge import UserBadge
 from app.schemas.progress import BadgeProgress, BadgesResponse, UnseenBadge
+from app.services.family_cup_service import FamilyCupService
 from app.services.progress_service import KID_ROLES, ProgressService, compute_streak
 
 
@@ -196,15 +197,33 @@ class BadgeService:
         )
 
     @staticmethod
+    async def _ensure_last_cup_season(db: AsyncSession, family_id: UUID, today: date) -> None:
+        """Family Cup seasons are only persisted when someone closes the week.
+        Record LAST week's winner if nobody did, so a kid's win counts without
+        a parent tapping "close the week". Insert-if-missing only: an already
+        recorded season is never touched, and older weeks are not backfilled."""
+        last_monday = today - timedelta(days=today.weekday() + 7)
+        recorded = (await db.execute(
+            select(FamilyCupSeason.id).where(
+                FamilyCupSeason.family_id == family_id,
+                FamilyCupSeason.week_start == last_monday,
+            )
+        )).first()
+        if recorded is None:
+            await FamilyCupService.close_previous_season(db, family_id)
+
+    @staticmethod
     async def sync(db: AsyncSession, user: User) -> BadgesResponse:
         """Evaluate the kid's badges, record any newly earned tier, and return
         progress + what has not been celebrated yet. Read-only once nothing
-        new was earned. Stored tiers are never removed: `tier` in the response
+        new was earned and last week's Family Cup season is on record (see
+        `_ensure_last_cup_season`). Stored tiers are never removed: `tier` in the response
         comes from the stored rows, `count` from history."""
         if user.role not in KID_ROLES:
             return BadgesResponse(applies=False)
         family_id, user_id = user.family_id, user.id
         today, tz = await ProgressService.family_today(db, family_id)
+        await BadgeService._ensure_last_cup_season(db, family_id, today)
         visible = await BadgeService.visible_for(db, family_id)
         counts = await BadgeService.counts_for(db, family_id, user_id, today, tz, visible)
         rows = await BadgeService._rows(db, family_id, user_id)

@@ -1,5 +1,5 @@
 """UX-D2 badge counts, awarding and acks against the test DB (family-scoped)."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from uuid import uuid4
 
 from sqlalchemy import func, select, update
@@ -226,6 +226,50 @@ class TestAwarding:
         await BadgeService.ack(db_session, test_child_user, [mine[0].id, theirs[0].id])
         assert (await BadgeService.sync(db_session, test_child_user)).unseen == []
         assert len((await BadgeService.sync(db_session, test_teen_user)).unseen) == 1
+
+
+class TestCupSeasonRecordedOnRead:
+    """Seasons are only persisted when a week is closed; reading badges
+    records LAST week's season if nobody closed it (insert-if-missing)."""
+
+    async def _points_last_week(self, db, kid, points=30):
+        today = await _today(db, kid)
+        last_monday = today - timedelta(days=today.weekday() + 7)
+        wednesday_noon = datetime.combine(last_monday + timedelta(days=2), time(12), tzinfo=timezone.utc)
+        db.add(PointTransaction(type=PT.TASK_COMPLETED, points=points, user_id=kid.id, family_id=kid.family_id,
+                                balance_before=0, balance_after=points, created_at=wednesday_noon))
+        await db.commit()
+        return last_monday
+
+    async def _seasons(self, db, family_id):
+        # Columns, not entities: an ORM select would hand back the identity-
+        # mapped object (expire_on_commit=False) and hide an overwrite.
+        return (await db.execute(
+            select(FamilyCupSeason.week_start, FamilyCupSeason.winner_user_id)
+            .where(FamilyCupSeason.family_id == family_id)
+        )).all()
+
+    async def test_last_weeks_unclosed_season_is_recorded_and_counts(self, db_session, test_child_user):
+        kid = test_child_user
+        last_monday = await self._points_last_week(db_session, kid)
+        resp = await BadgeService.sync(db_session, kid)
+        assert [tuple(r) for r in await self._seasons(db_session, kid.family_id)] == [(last_monday, kid.id)]
+        assert _b(resp, "cup").count == 1 and _b(resp, "cup").tier == 1
+
+    async def test_a_second_read_does_not_add_another_season(self, db_session, test_child_user):
+        kid = test_child_user
+        await self._points_last_week(db_session, kid)
+        await BadgeService.sync(db_session, kid)
+        await BadgeService.sync(db_session, kid)
+        assert len(await self._seasons(db_session, kid.family_id)) == 1
+
+    async def test_an_already_recorded_season_is_not_overwritten(self, db_session, test_child_user, test_teen_user):
+        kid = test_child_user
+        await _cup(db_session, test_teen_user, 1)          # last week, closed with the teen as winner
+        await self._points_last_week(db_session, kid)      # the ledger alone would now say the kid
+        resp = await BadgeService.sync(db_session, kid)
+        assert _b(resp, "cup").count == 0 and _b(resp, "cup").tier == 0
+        assert [r.winner_user_id for r in await self._seasons(db_session, kid.family_id)] == [test_teen_user.id]
 
 
 class TestModuleGating:
