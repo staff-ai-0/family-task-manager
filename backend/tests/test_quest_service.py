@@ -406,3 +406,48 @@ class TestAckAndHub:
         test_family.quest_bonus_points = 0
         await db_session.commit()
         assert await QuestService.hub_progress(db_session, test_family.id, ids) == {}
+
+
+class TestIsolation:
+    """The filters that stand between one kid's quest and someone else's work
+    or row. The bonus is real points, so each one is pinned here."""
+
+    async def test_a_siblings_gig_claim_never_counts(self, db_session, test_child_user, test_teen_user):
+        kid = test_child_user
+        _today, _tz, week = await _ctx(db_session, kid)
+        await _quest(db_session, kid, week, "go_getter", 1)
+        gig = GigOffering(family_id=kid.family_id, title="Gig", points=30)
+        db_session.add(gig)
+        await db_session.commit()
+        db_session.add(GigClaim(gig_id=gig.id, family_id=kid.family_id, claimed_by=test_teen_user.id,
+                                status=GigClaimStatus.APPROVED, approved_at=datetime.now(timezone.utc)))
+        await db_session.commit()
+        resp = await QuestService.sync(db_session, kid)
+        assert resp.quest.quest == "go_getter" and resp.quest.progress == 0 and resp.quest.completed is False
+        assert await _bonus_rows(db_session, kid) == []
+
+    async def test_another_familys_quest_row_for_the_same_kid_is_invisible(
+        self, db_session, test_family, test_child_user,
+    ):
+        kid = test_child_user
+        today, _tz, week = await _ctx(db_session, kid)
+        other = Family(name="Other")
+        db_session.add(other)
+        await db_session.commit()
+        foreign = WeeklyQuest(family_id=other.id, user_id=kid.id, week_start=week, quest="on_time", target=1,
+                              bonus_points=20, created_at=datetime.now(timezone.utc))
+        db_session.add(foreign)
+        await db_session.commit()
+        await _assign(db_session, kid, await _template(db_session, kid.family_id), today)   # would reach it
+        resp = await QuestService.sync(db_session, kid)
+        assert resp.quest is None or resp.quest.id != foreign.id
+        assert resp.celebrate is None
+        await db_session.refresh(foreign)
+        assert foreign.rewarded_at is None and await _bonus_rows(db_session, kid) == []
+        assert kid.id not in await QuestService.hub_progress(db_session, test_family.id, [kid.id])
+        # Even once paid (elsewhere), the kid's ack cannot reach a row outside their family.
+        foreign.rewarded_at = datetime.now(timezone.utc)
+        await db_session.commit()
+        await QuestService.ack(db_session, kid, foreign.id)
+        await db_session.refresh(foreign)
+        assert foreign.seen_at is None
