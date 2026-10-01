@@ -9,14 +9,14 @@ from uuid import uuid4
 from sqlalchemy import func, select, update
 
 from app.models.family import Family
-from app.models.gig import GigClaim, GigClaimStatus, GigOffering
+from app.models.gig import GigClaim, GigClaimStatus, GigOffering, GigOfferingStatus
 from app.models.point_transaction import PointTransaction, TransactionType as PT
 from app.models.task_assignment import ApprovalStatus, AssignmentStatus, TaskAssignment
 from app.models.task_template import AssignmentType, TaskTemplate
 from app.models.user import User
 from app.models.weekly_quest import WeeklyQuest
 from app.services.progress_service import ProgressService
-from app.services.quest_service import QuestService, rotation, week_monday
+from app.services.quest_service import QuestService, pick_quest, rotation, week_monday
 
 
 async def _ctx(db, kid):
@@ -143,24 +143,57 @@ class TestCreation:
         history = await QuestService._history(db_session, kid.family_id, kid.id, week, tz, today)
         assert history["on_time"] == 5 and history["perfect_days"] == 5
 
-    async def test_offered_types(self, db_session, test_family, test_child_user, test_teen_user):
-        fid = test_family.id
-        off = await QuestService._offered(db_session, fid, test_child_user.role, False, None)
-        assert off == {"on_time": True, "perfect_days": True, "extra_mile": False, "go_getter": False}
-        await _template(db_session, fid, bonus=True, active=False)
-        assert (await QuestService._offered(db_session, fid, test_child_user.role, False, None))["extra_mile"] is False
-        await _template(db_session, fid, bonus=True)
-        assert (await QuestService._offered(db_session, fid, test_child_user.role, False, None))["extra_mile"] is True
+    async def test_open_gigs_counts_what_the_kid_could_still_get_approved(
+        self, db_session, test_family, test_child_user, test_teen_user,
+    ):
+        fid, child, teen = test_family.id, test_child_user, test_teen_user
+
+        async def open_for(kid, *, star=False, modules=None):
+            return await QuestService._open_gigs(db_session, fid, kid.id, kid.role, star, modules)
+
+        assert await open_for(child) == 0                                          # no offerings
         db_session.add(GigOffering(family_id=fid, title="Teens only", points=50, allowed_roles=["teen"]))
         await db_session.commit()
-        assert (await QuestService._offered(db_session, fid, test_child_user.role, False, None))["go_getter"] is False
-        assert (await QuestService._offered(db_session, fid, test_teen_user.role, False, None))["go_getter"] is True
-        db_session.add(GigOffering(family_id=fid, title="Anyone", points=20))
+        assert await open_for(child) == 0 and await open_for(teen) == 1
+        anyone = GigOffering(family_id=fid, title="Anyone", points=20)
+        other = Family(name="Other")
+        db_session.add_all([
+            anyone, other,
+            GigOffering(family_id=fid, title="Closed", points=20, is_active=False),
+            GigOffering(family_id=fid, title="Proposal", points=20, status=GigOfferingStatus.PENDING.value),
+        ])
         await db_session.commit()
-        assert (await QuestService._offered(db_session, fid, test_child_user.role, False, None))["go_getter"] is True
+        db_session.add(GigOffering(family_id=other.id, title="Not ours", points=20))
+        await db_session.commit()
+        assert await open_for(child) == 1 and await open_for(teen) == 2            # open to all: counted
+        # the kid already holds an approved claim on a multi-slot gig: nothing left to get there
+        done = GigOffering(family_id=fid, title="Done", points=20, allow_multiple=True)
+        db_session.add(done)
+        await db_session.commit()
+        db_session.add(GigClaim(gig_id=done.id, family_id=fid, claimed_by=child.id,
+                                status=GigClaimStatus.APPROVED, approved_at=datetime.now(timezone.utc)))
+        # a claim still awaiting approval can still be approved: counted
+        db_session.add(GigClaim(gig_id=anyone.id, family_id=fid, claimed_by=child.id,
+                                status=GigClaimStatus.COMPLETED))
+        await db_session.commit()
+        assert await open_for(child) == 1
+        assert await open_for(teen) == 3                                           # the child's claim is not the teen's
         # star-mode kids have no gig board; a family with gigs off has none either
-        assert (await QuestService._offered(db_session, fid, test_child_user.role, True, None))["go_getter"] is False
-        assert (await QuestService._offered(db_session, fid, test_child_user.role, False, ["chat"]))["go_getter"] is False
+        assert await open_for(child, star=True) == 0
+        assert await open_for(child, modules=["chat"]) == 0
+
+    async def test_extra_mile_is_sized_from_the_bonus_tasks_on_the_board(self, db_session, test_child_user):
+        kid = test_child_user
+        today, tz, week = await _ctx(db_session, kid)
+        bonus = await _template(db_session, kid.family_id, bonus=True)
+        for weeks_back in range(1, 5):                                             # one a week: avg 1, stretch 2
+            await _assign(db_session, kid, bonus, week - timedelta(weeks=weeks_back),
+                          approval=ApprovalStatus.APPROVED)
+        await _assign(db_session, kid, bonus, today, status=AssignmentStatus.PENDING)   # ONE open this week
+        stats = await QuestService.stats_for(db_session, kid.family_id, kid.id, week, tz, today)
+        history = await QuestService._history(db_session, kid.family_id, kid.id, week, tz, today)
+        assert history["extra_mile"] == 4
+        assert pick_quest(["extra_mile", "on_time", "perfect_days", "go_getter"], stats, history, 0) == ("extra_mile", 1)
 
 
 class TestProgressAndPayment:

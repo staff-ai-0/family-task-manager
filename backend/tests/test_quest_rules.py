@@ -182,36 +182,47 @@ class TestWeekStats:
 
 class TestPickQuest:
     ORDER = ["on_time", "extra_mile", "perfect_days", "go_getter"]
-    ALL = {"on_time": True, "extra_mile": True, "perfect_days": True, "go_getter": True}
 
     def stats(self, done=None, possible=None):
         zero = dict.fromkeys(QUESTS, 0)
         return WeekStats(done={**zero, **(done or {})}, possible={**zero, **(possible or {})})
 
     def test_first_achievable_type_in_order_wins(self):
-        assert pick_quest(self.ORDER, self.stats(possible={"on_time": 6}), {}, self.ALL) == ("on_time", 3)
+        assert pick_quest(self.ORDER, self.stats(possible={"on_time": 6}), {}, 5) == ("on_time", 3)
 
     def test_skips_a_type_that_cannot_be_achieved(self):
-        # no chores left -> on_time impossible -> extra_mile (open-ended, default 1)
-        assert pick_quest(self.ORDER, self.stats(), {}, self.ALL) == ("extra_mile", 1)
+        # no chores left -> on_time impossible -> extra_mile (one bonus task open, default 1)
+        assert pick_quest(self.ORDER, self.stats(possible={"extra_mile": 1}), {}, 5) == ("extra_mile", 1)
 
-    def test_skips_a_type_that_is_not_offered(self):
-        offered = {**self.ALL, "extra_mile": False, "go_getter": False}
-        got = pick_quest(self.ORDER, self.stats(possible={"perfect_days": 4}), {}, offered)
+    def test_skips_types_with_nothing_on_the_board(self):
+        # no bonus task and no open gig -> neither is achievable
+        got = pick_quest(self.ORDER, self.stats(possible={"perfect_days": 4}), {}, 0)
         assert got == ("perfect_days", 2)
 
     def test_none_when_nothing_qualifies(self):
-        offered = {"on_time": True, "perfect_days": True, "extra_mile": False, "go_getter": False}
-        assert pick_quest(self.ORDER, self.stats(), {}, offered) is None
+        assert pick_quest(self.ORDER, self.stats(), {}, 0) is None
 
-    def test_open_ended_goal_uses_history_and_is_capped(self):
-        offered = {**self.ALL, "on_time": False}
+    def test_extra_mile_is_sized_from_the_bonus_tasks_the_kid_has(self):
         order = ["extra_mile", "on_time", "perfect_days", "go_getter"]
-        assert pick_quest(order, self.stats(), {"extra_mile": 400}, offered) == ("extra_mile", OPEN_ENDED_CAP)
-        # already at the cap -> nothing more to ask for -> the next offered type is used
-        assert pick_quest(order, self.stats(done={"extra_mile": 7}), {}, offered) == ("go_getter", 1)
+        # avg 1 a week -> stretch 2, but only one bonus task is on the board
+        assert pick_quest(order, self.stats(possible={"extra_mile": 1}), {"extra_mile": 4}, 0) == ("extra_mile", 1)
+        # no bonus rows -> not achievable, whatever the history -> next type
+        assert pick_quest(order, self.stats(), {"extra_mile": 4}, 1) == ("go_getter", 1)
+
+    def test_go_getter_never_asks_for_more_gigs_than_are_open(self):
+        order = ["go_getter", "on_time", "extra_mile", "perfect_days"]
+        assert pick_quest(order, self.stats(), {"go_getter": 4}, 1) == ("go_getter", 1)       # stretch 2 -> 1
+        assert pick_quest(order, self.stats(possible={"on_time": 3}), {"go_getter": 4}, 0) == ("on_time", 3)
+
+    def test_go_getter_goal_uses_history_and_is_capped(self):
+        order = ["go_getter", "on_time", "extra_mile", "perfect_days"]
+        assert pick_quest(order, self.stats(), {"go_getter": 400}, 20) == ("go_getter", OPEN_ENDED_CAP)
+        # already at the cap -> nothing more to ask for -> the next achievable type is used
+        got = pick_quest(order, self.stats(done={"go_getter": 7}, possible={"extra_mile": 1}), {}, 20)
+        assert got == ("extra_mile", 1)
 
     def test_a_type_already_past_its_goal_is_skipped(self):
         # 2 gigs already approved, default goal 1 -> the goal is already met -> not this week's quest
         order = ["go_getter", "on_time", "extra_mile", "perfect_days"]
-        assert pick_quest(order, self.stats(done={"go_getter": 2}), {}, self.ALL) == ("extra_mile", 1)
+        got = pick_quest(order, self.stats(done={"go_getter": 2}, possible={"extra_mile": 1}), {}, 3)
+        assert got == ("extra_mile", 1)

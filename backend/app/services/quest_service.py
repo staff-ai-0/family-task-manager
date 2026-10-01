@@ -33,8 +33,8 @@ from app.services.progress_service import KID_ROLES, ProgressService
 
 # Rotation order -> default goal (also the goal for a kid with no history).
 QUESTS: dict[str, int] = {"on_time": 3, "extra_mile": 1, "perfect_days": 2, "go_getter": 1}
-# Open-ended work has no "chores left this week" ceiling; cap the goal instead.
-OPEN_ENDED = ("extra_mile", "go_getter")
+# go_getter has no "left this week" count of its own (a gig board, not dated
+# rows): its goal is capped here AND by the gigs the kid could still get approved.
 OPEN_ENDED_CAP = 7
 HISTORY_WEEKS = 4
 # Work awaiting a parent's review does not count until approved: the bonus is
@@ -141,14 +141,17 @@ def week_stats(rows: list[ChoreRow], gigs_approved: int, today: date, tz: ZoneIn
 
 
 def pick_quest(
-    order: list[str], stats: WeekStats, history: dict[str, int], offered: dict[str, bool],
+    order: list[str], stats: WeekStats, history: dict[str, int], gigs_open: int,
 ) -> Optional[tuple[str, int]]:
-    """First type in `order` that is offered and achievable, with its goal."""
+    """First type in `order` that is achievable, with its goal. A type with
+    nothing possible (no chores, no bonus tasks, no open gigs) is skipped."""
     for key in order:
-        if not offered.get(key, False):
-            continue
         done = stats.done.get(key, 0)
-        possible = max(0, OPEN_ENDED_CAP - done) if key in OPEN_ENDED else stats.possible.get(key, 0)
+        if key == "go_getter":
+            # Open-ended in principle, but never more than the gigs on the board.
+            possible = max(0, min(OPEN_ENDED_CAP - done, gigs_open))
+        else:
+            possible = stats.possible.get(key, 0)
         target = size_target(QUESTS[key], history.get(key, 0), done, possible)
         if target is not None:
             return key, target
@@ -225,35 +228,38 @@ class QuestService:
         ).done
 
     @staticmethod
-    async def _offered(
-        db: AsyncSession, family_id: UUID, role: UserRole, star_mode: bool,
+    async def _open_gigs(
+        db: AsyncSession, family_id: UUID, user_id: UUID, role: UserRole, star_mode: bool,
         enabled_modules: Optional[Iterable[str]],
-    ) -> dict[str, bool]:
-        """Which quest types this kid can be given at all this week. The chore
-        types are always offered — whether one is achievable is size_target's call."""
-        has_bonus = (await db.execute(
-            select(TaskTemplate.id).where(
-                TaskTemplate.family_id == family_id,
-                TaskTemplate.is_bonus.is_(True),
-                TaskTemplate.is_active.is_(True),
-            ).limit(1)
-        )).first() is not None
-        gig_open = False
-        # Star-mode kids have no gig board; neither does a family with gigs off.
-        if not star_mode and "gigs" in effective_modules(enabled_modules):
-            role_name = role.value if hasattr(role, "value") else str(role)
-            offerings = (await db.execute(
-                select(GigOffering.allowed_roles).where(
-                    GigOffering.family_id == family_id,
-                    GigOffering.is_active.is_(True),
-                    GigOffering.status == GigOfferingStatus.APPROVED.value,
-                )
-            )).all()
-            gig_open = any(
-                not allowed or role_name in {str(r).lower() for r in allowed}
-                for (allowed,) in offerings
+    ) -> int:
+        """How many gig offerings this kid could still get approved: active,
+        approved offerings open to their role, minus the ones where they
+        already hold an approved claim. 0 for star-mode kids and for families
+        with the gigs module off (neither has a gig board)."""
+        if star_mode or "gigs" not in effective_modules(enabled_modules):
+            return 0
+        role_name = role.value if hasattr(role, "value") else str(role)
+        offerings = (await db.execute(
+            select(GigOffering.id, GigOffering.allowed_roles).where(
+                GigOffering.family_id == family_id,
+                GigOffering.is_active.is_(True),
+                GigOffering.status == GigOfferingStatus.APPROVED.value,
             )
-        return {"on_time": True, "perfect_days": True, "extra_mile": has_bonus, "go_getter": gig_open}
+        )).all()
+        open_ids = {
+            gig_id for gig_id, allowed in offerings
+            if not allowed or role_name in {str(r).lower() for r in allowed}
+        }
+        if not open_ids:
+            return 0
+        already = set((await db.execute(
+            select(GigClaim.gig_id).where(
+                GigClaim.family_id == family_id,
+                GigClaim.claimed_by == user_id,
+                GigClaim.status == GigClaimStatus.APPROVED,
+            )
+        )).scalars().all())
+        return len(open_ids - already)
 
     @staticmethod
     async def _rows(
@@ -366,7 +372,7 @@ class QuestService:
                 rotation(week_start, user_id),
                 stats,
                 await QuestService._history(db, family_id, user_id, week_start, tz, today),
-                await QuestService._offered(db, family_id, role, star_mode, fam.enabled_modules),
+                await QuestService._open_gigs(db, family_id, user_id, role, star_mode, fam.enabled_modules),
             )
             if picked is not None:
                 key, target = picked
