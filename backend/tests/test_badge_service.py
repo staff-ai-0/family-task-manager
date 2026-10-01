@@ -156,11 +156,49 @@ class TestCounts:
         for i in range(10):
             await _assign(db_session, kid, chore, today - timedelta(days=400 + i), family_id=other.id)
         await _cup(db_session, kid, 1, family_id=other.id)
-        db_session.add(PointTransaction(type=PT.REWARD_REDEEMED, points=-100, user_id=kid.id, family_id=other.id,
-                                        reward_id=test_reward.id, balance_before=100, balance_after=0))
+        gig = GigOffering(family_id=other.id, title="Wash the car", points=50)
+        db_session.add(gig)
+        await db_session.commit()
+        db_session.add_all([
+            PointTransaction(type=PT.REWARD_REDEEMED, points=-100, user_id=kid.id, family_id=other.id,
+                             reward_id=test_reward.id, balance_before=100, balance_after=0),
+            GigClaim(gig_id=gig.id, family_id=other.id, claimed_by=kid.id, status=GigClaimStatus.APPROVED),
+            KidSavingsGoal(family_id=other.id, user_id=kid.id, name="Bici", target_cents=50000,
+                           status=GOAL_CANCELLED, reached_at=datetime.now(timezone.utc)),
+        ])
         await db_session.commit()
         resp = await BadgeService.sync(db_session, kid)
+        assert [b.badge for b in resp.badges] == list(BADGES)
         assert all(b.count == 0 and b.tier == 0 for b in resp.badges)
+
+    async def test_a_siblings_rows_never_count(self, db_session, test_child_user, test_teen_user, test_reward):
+        kid, teen = test_child_user, test_teen_user
+        today = await _today(db_session, kid)
+        chore = await _template(db_session, kid.family_id)
+        bonus = await _template(db_session, kid.family_id, bonus=True)
+        last_monday = today - timedelta(days=today.weekday() + 7)
+        for i in range(-3, 7):                          # 10 days ending last Sunday: a streak + a perfect week
+            await _assign(db_session, teen, chore, last_monday + timedelta(days=i))
+        await _assign(db_session, teen, bonus, last_monday)
+        gig = GigOffering(family_id=kid.family_id, title="Wash the car", points=50)
+        db_session.add(gig)
+        await db_session.commit()
+        db_session.add_all([
+            PointTransaction(type=PT.REWARD_REDEEMED, points=-100, user_id=teen.id, family_id=kid.family_id,
+                             reward_id=test_reward.id, balance_before=100, balance_after=0),
+            KidSavingsGoal(family_id=kid.family_id, user_id=teen.id, name="Bici", target_cents=50000,
+                           status=GOAL_CANCELLED, reached_at=datetime.now(timezone.utc)),
+            GigClaim(gig_id=gig.id, family_id=kid.family_id, claimed_by=teen.id, status=GigClaimStatus.APPROVED),
+        ])
+        await db_session.commit()
+        await _cup(db_session, teen, 1)
+        resp = await BadgeService.sync(db_session, kid)
+        assert [b.badge for b in resp.badges] == list(BADGES)
+        assert {b.badge: b.count for b in resp.badges} == {key: 0 for key in BADGES}
+        assert await _stored(db_session, kid) == 0
+        # The same rows DO count for their owner, so the zeros above are not vacuous.
+        theirs = {b.badge: b.count for b in (await BadgeService.sync(db_session, teen)).badges}
+        assert all(theirs[key] >= 1 for key in BADGES), theirs
 
 
 class TestAwarding:
