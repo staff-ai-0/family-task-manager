@@ -175,6 +175,16 @@ describe("kidRowView progress line (UX-D1)", () => {
         const v = kidRowView({ user_id: "k1", name: "Sofía", role: "child", streak_days: 5, rank: 4, badge_count: 3 }, null, new Date(), "es");
         expect(v.progressLine).toBe("🔥 5 · Estrella · 🏅 3");
     });
+    it("adds the weekly quest chip to the row (UX-D3)", () => {
+        const kid = { user_id: "k1", name: "Sofía", role: "child", streak_days: 5, rank: 4, badge_count: 3,
+            quest_progress: 3, quest_target: 5, quest_done: false };
+        expect(kidRowView(kid, null, new Date(), "es").progressLine).toBe("🔥 5 · Estrella · 🏅 3 · 🏁 3/5");
+        expect(kidRowView({ ...kid, quest_done: true }, null, new Date(), "es").progressLine).toBe("🔥 5 · Estrella · 🏅 3 · 🏁 ✓");
+    });
+    it("shows the quest chip alone when there is no streak/rank data", () => {
+        const v = kidRowView({ user_id: "k1", name: "Sofía", role: "child", quest_progress: 1, quest_target: 2, quest_done: false }, null, new Date(), "es");
+        expect(v.progressLine).toBe("🏁 1/2");
+    });
 });
 
 describe("monthSummaryView", () => {
