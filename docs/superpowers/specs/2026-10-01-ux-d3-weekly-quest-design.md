@@ -33,11 +33,11 @@ Kids and teens only (roles CHILD, TEEN — `KID_ROLES`). One quest per kid per *
 | Key | Emoji | Goal text ES / EN | Progress = this week's count of | Offered when |
 |---|---|---|---|---|
 | `on_time` | ⏰ | "Termina {n} tareas a tiempo" / "Finish {n} chores on time" | non-bonus assignments with `week_of` = this week that are done on time and count (see below) | the kid has at least one open chore dated today or later this week |
-| `perfect_days` | ✨ | "Logra {n} días perfectos" / "Have {n} perfect days" | days of this week, up to today, that have ≥ 1 due chore and whose every due chore is done on time and counts | at least one day from today to Sunday has a due chore that is not already failed |
+| `perfect_days` | ✨ | "Logra {n} días perfectos" / "Have {n} perfect days" | days of this week that have ≥ 1 due chore and whose every due chore is done on time and counts | at least one day of this week can still become perfect (no failed chore, at least one chore still open or awaiting review) |
 | `extra_mile` | 🚀 | "Haz {n} tareas extra" / "Do {n} bonus tasks" | bonus assignments (`is_bonus = true`) with `week_of` = this week that are completed and count | the family has at least one active bonus template |
-| `go_getter` | 💼 | "Logra {n} gigs aprobadas" / "Get {n} gigs approved" | `gig_claims` of the kid with `status = approved` and `approved_at` inside this week | the `gigs` module is on and at least one active, approved offering is open to the kid's role |
+| `go_getter` | 💼 | "Logra {n} gigs aprobadas" / "Get {n} gigs approved" | `gig_claims` of the kid with `status = approved` and `approved_at` inside this week | the `gigs` module is on, the kid is not in star mode (star-mode kids have no gig board), and at least one active, approved offering is open to the kid's role |
 
-"n" uses the singular form at 1 ("1 tarea", "1 chore", "1 día perfecto", "1 perfect day", …).
+"n" uses the singular form at 1 ("1 tarea", "1 chore", "1 día perfecto", "1 perfect day", …). The `go_getter` text uses the family's own word for a gig (`families.gig_term`: "gig" or "chamba").
 
 **Counts** (the strict rule D2 adopted at its final review): an assignment counts when `status = completed`, it is not graded `missed`, and `approval_status` is `none` or `approved`. Work awaiting a parent's review does not count until approved; rejected work never counts. The bonus is real points, so the quest must not pay on work a parent may still reject.
 
@@ -51,10 +51,10 @@ Rotation order: `on_time`, `extra_mile`, `perfect_days`, `go_getter`. The starti
 
 For the chosen type:
 
-1. `stretch = max(default, ceil(1.1 × average of the kid's count for that type over the previous 4 full weeks))`. Defaults (also the starting goal for a kid with no history): `on_time` 3, `perfect_days` 2, `extra_mile` 1, `go_getter` 1.
+1. `stretch = max(default, ceil(1.1 × average of the kid's count for that type over the previous 4 full weeks))` — computed in integers as `ceil(11 × four-week total ÷ 40)`. Defaults (also the starting goal for a kid with no history): `on_time` 3, `perfect_days` 2, `extra_mile` 1, `go_getter` 1.
 2. `ceiling` = what is still achievable this week = already done + still possible:
-   - `on_time`: done so far + open chores dated today or later;
-   - `perfect_days`: perfect days so far + days from today to Sunday with a due chore not already failed;
+   - `on_time`: done so far + chores that can still count (open chores dated today or later, plus on-time work awaiting review);
+   - `perfect_days`: perfect days so far + days that can still become perfect;
    - `extra_mile` and `go_getter`: unbounded (open-ended work), capped at 7.
 3. `target = min(stretch, ceiling)`.
 4. The quest is **achievable** only if `target ≥ done so far + 1`. A quest never starts finished: if the type's target would already be met, that type is skipped.
@@ -71,7 +71,7 @@ The target and the type are fixed when the quest row is created and never change
 
 ### The "done" moment
 
-A paid quest starts **unseen**. The kid home's quest card shows it as done with a one-time confetti and marks it seen. This is not a modal, so it does not take part in the "one modal per load" rule and cannot deadlock with the welcome tour. If last week's quest was paid and is still unseen, the card shows that result first ("La misión de la semana pasada: ¡lograda! +20 puntos"), then this week's quest on the next load.
+A paid quest starts **unseen**. The kid home's quest card shows it as done with a one-time confetti and marks it seen. This is not a modal, so it does not take part in the "one modal per load" rule and cannot deadlock with the welcome tour. If last week's quest was paid and is still unseen, the card shows that result first ("La misión de la semana pasada: ¡lograda! +20 puntos"), then this week's quest on the next load. For a child in star mode the prize reads "+20 ⭐", like every other points label on that kid's home.
 
 ## Backend
 
@@ -116,12 +116,12 @@ Same layout as `progress_service.py` and `badge_service.py`: pure rules on top, 
 
 - `GET /api/progress/quest` → `QuestResponse`:
   ```
-  { applies: bool,
+  { applies: bool, gig_term: str,
     quest: { id: UUID, quest: str, target: int, progress: int, bonus_points: int,
              week_start: date, days_left: int, completed: bool } | null,
     celebrate: { id: UUID, quest: str, target: int, bonus_points: int, last_week: bool } | null }
   ```
-  `quest` is this week's quest (null when none qualifies). `progress` is capped at `target`. `days_left` counts today (Sunday = 1). `completed` = paid. `celebrate` is the most recent paid-and-unseen quest among this week's and last week's. Non-kids, and families with the bonus at 0, get `{ applies: false }`.
+  `quest` is this week's quest (null when none qualifies). `progress` is capped at `target`. `days_left` counts today (Sunday = 1). `completed` = paid. `celebrate` is the oldest paid-and-unseen quest among last week's and this week's (last week's first). `gig_term` is the family's word for a gig. Non-kids, and families with the bonus at 0, get `{ applies: false }`.
 
   This GET writes (creates the quest, pays the bonus); both writes are idempotent.
 - `POST /api/progress/quest/ack` `{ id: UUID }` → 204. Non-kids get 404.
@@ -135,7 +135,7 @@ Same layout as `progress_service.py` and `badge_service.py`: pure rules on top, 
 
 - **`lib/quest.ts`** (pure, vitest): `QUEST_META` (emoji + ES/EN goal templates, singular/plural), and
   - `questView(resp, lang)` → `{ emoji, title, progressLabel, barPct, daysLeftLabel, bonusLabel, done, celebrate: { id, title, bonusLabel, lastWeek } | null } | null` (null when the response is missing, `applies` is false, or there is neither a quest nor a celebrate; unknown quest keys → null);
-  - `questChip(kid, lang)` → `"🎯 3/5"`, `"🎯 ✓"` or null, for the parent hub.
+  - `questChip(kid, lang)` → `"🏁 3/5"`, `"🏁 ✓"` or null, for the parent hub (🏁, not 🎯: the hub row already uses 🎯 for the kid's reward goal).
 - **`components/home/QuestCard.astro`**, rendered by `KidHome.astro` directly under the task deck:
   - in progress: emoji + goal title, a progress bar with `3/5`, "Quedan {n} días" / "{n} days left" ("Último día" / "Last day" at 1), and the prize "+20 puntos" / "+20 points";
   - done: "¡Misión lograda! +20 puntos" / "Quest done! +20 points" on a mint fill with ink text;
