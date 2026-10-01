@@ -1,16 +1,18 @@
 ---
 /**
- * UX-D1 progress sheet: rank ladder, XP to next, this week's streak strip.
+ * UX-D1 progress sheet: rank ladder, XP to next, this week's streak strip, and (UX-D2) the next badges.
  * Opened by any [data-progress-open] on the page.
  */
 import type { ProgressView } from "../../lib/progress";
+import type { BadgesView } from "../../lib/badges";
 import { buttonClass } from "../../lib/buttonClasses";
 
 interface Props {
     progress: ProgressView;
+    badges?: BadgesView | null;
     lang: "es" | "en";
 }
-const { progress, lang } = Astro.props;
+const { progress, badges = null, lang } = Astro.props;
 const es = lang === "es";
 const dayCls: Record<string, string> = {
     done: "bg-brand-mint border-brand-ink text-brand-ink",
@@ -25,7 +27,7 @@ const dayMark: Record<string, string> = { done: "✓", shield: "🛡️", missed
 
 <dialog id="progress-sheet" aria-labelledby="progress-sheet-title"
         class="m-0 mt-auto w-full max-w-md mx-auto p-0 bg-transparent backdrop:bg-brand-ink/50 z-[60]">
-    <div class="rounded-t-[var(--radius-tile)] bg-brand-cream text-brand-ink p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] border-t-2 border-brand-ink">
+    <div class="rounded-t-[var(--radius-tile)] bg-brand-cream text-brand-ink p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] border-t-2 border-brand-ink max-h-[90dvh] overflow-y-auto">
         <h2 id="progress-sheet-title" class="font-display text-xl font-extrabold">{progress.rankLabel}</h2>
         <p class="text-sm text-brand-ink-soft">{progress.toNextLabel}</p>
 
@@ -42,6 +44,35 @@ const dayMark: Record<string, string> = { done: "✓", shield: "🛡️", missed
         <p class="mt-2 text-xs text-brand-ink-soft">
             {es ? "Termina todas tus tareas del día. Tienes 1 día de perdón por semana." : "Finish all your chores each day. You get 1 free miss per week."}
         </p>
+
+        {badges && (
+            <section data-badges-next>
+                <div class="mt-4 flex items-baseline justify-between gap-2">
+                    <h3 class="text-xs font-extrabold uppercase tracking-wide">{es ? "Próximas insignias" : "Next badges"}</h3>
+                    <a href="/profile#badges" class="text-xs font-bold underline text-brand-ink">{es ? "Ver todas" : "See all"}</a>
+                </div>
+                {badges.allMaxed ? (
+                    <p class="mt-2 text-sm font-bold">{es ? "¡Tienes todas las insignias!" : "You have every badge!"}</p>
+                ) : (
+                    <ul class="mt-2 space-y-2">
+                        {badges.next.map((b) => (
+                            <li class="flex items-center gap-3">
+                                <span class={`text-2xl ${b.tier === 0 ? "grayscale opacity-50" : ""}`} aria-hidden="true">{b.emoji}</span>
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-baseline justify-between gap-2 text-sm font-bold">
+                                        <span class="truncate">{b.name}</span>
+                                        <span class="text-xs text-brand-ink-soft">{b.progressLabel}</span>
+                                    </div>
+                                    <div class="mt-1 h-2 overflow-hidden rounded-full bg-brand-ink/10">
+                                        <div class="h-full bg-brand-mint" style={`width:${b.barPct}%`}></div>
+                                    </div>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </section>
+        )}
 
         <h3 class="mt-4 text-xs font-extrabold uppercase tracking-wide">{es ? "Rangos" : "Ranks"}</h3>
         <ol class="mt-2 space-y-1">

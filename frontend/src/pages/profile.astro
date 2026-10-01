@@ -2,6 +2,7 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import TourReplayButton from "../components/TourReplayButton.astro";
 import { apiFetch } from "../lib/api";
+import { badgesView } from "../lib/badges";
 import { fmtDate } from "../lib/datetime";
 import { t } from "../lib/i18n";
 import { headerToneClass } from "../lib/headerTone";
@@ -50,6 +51,7 @@ const [
     { data: consequencesRaw },
     { data: pointsHistoryRaw },
     { data: cashHistoryRaw },
+    { data: badgesResp },
 ] = await Promise.all([
     apiFetch<any>("/api/auth/me", { token }),
     apiFetch<any>("/api/users/me/points", { token }),
@@ -58,6 +60,8 @@ const [
     // from one source get dropped in favor of older rows from the other.
     apiFetch<any[]>("/api/users/me/points/history?limit=30", { token }),
     apiFetch<any[]>("/api/cash/history", { token }),
+    // UX-D2: {applies:false} for parents → no shelf. apiFetch never throws.
+    apiFetch<any>("/api/progress/badges", { token }),
 ]);
 if (!user) {
     Astro.cookies.delete("access_token", { path: "/" });
@@ -67,6 +71,7 @@ const consequences: any[] = Array.isArray(consequencesRaw)
     ? consequencesRaw
     : [];
 const tourRole = String(user.role).toLowerCase() === "parent" ? "parent" : "kid";
+const badges = badgesView(badgesResp, lang);
 
 // Combined points + cash ledger — the visible answer to "why did my
 // balance change?" (parent adjustment reasons live in `description`).
@@ -163,6 +168,30 @@ const ledgerDate = (iso: string) =>
                     <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
                         {errorMsg}
                     </div>
+                )
+            }
+
+            {
+                badges && (
+                    <section id="badges" class="scroll-mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
+                        <h2 class="text-lg font-bold text-brand-ink">
+                            {lang === "es" ? "Insignias" : "Badges"}
+                        </h2>
+                        <p class="mb-4 text-xs text-brand-ink-soft">{badges.totalLabel}</p>
+                        <ul class="grid grid-cols-2 gap-3">
+                            {badges.tiles.map((b) => (
+                                <li class="rounded-xl border-2 border-brand-ink/10 bg-white p-3 text-center" data-badge={b.key} data-tier={b.tier}>
+                                    <div class={`text-3xl ${b.tier === 0 ? "grayscale opacity-50" : ""}`} aria-hidden="true">{b.emoji}</div>
+                                    <p class="mt-1 text-sm font-bold text-brand-ink">{b.name}</p>
+                                    <p class="text-sm text-brand-sun-text" role="img" aria-label={b.tierLabel}>{b.stars}</p>
+                                    <div class="mt-2 h-2 overflow-hidden rounded-full bg-brand-ink/10">
+                                        <div class="h-full bg-brand-mint" style={`width:${b.barPct}%`}></div>
+                                    </div>
+                                    <p class="mt-1 text-xs text-brand-ink-soft">{b.progressLabel}</p>
+                                </li>
+                            ))}
+                        </ul>
+                    </section>
                 )
             }
 
