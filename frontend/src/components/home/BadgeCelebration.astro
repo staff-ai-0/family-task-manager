@@ -1,0 +1,78 @@
+---
+/**
+ * UX-D2 batched badge-unlock celebration. Rendered only when the dashboard's
+ * shouldCelebrateBadges() gate passes (welcome tour done, no rank-up modal on
+ * this load); dismissing POSTs the ack for every unseen tier id it was
+ * rendered with, so it never shows the same badges twice. Same modal contract
+ * as RankUpCelebration: a real <dialog>, showModal(), Escape via "cancel",
+ * one ack-once guard, confetti appended inside the top-layer dialog.
+ */
+import { buttonClass } from "../../lib/buttonClasses";
+import { CELEBRATION_MAX_TILES, type BadgesView } from "../../lib/badges";
+
+interface Props {
+    badges: BadgesView;
+    lang: "es" | "en";
+}
+const { badges, lang } = Astro.props;
+const es = lang === "es";
+const shown = badges.unseenTiles.slice(0, CELEBRATION_MAX_TILES);
+const more = badges.unseenTiles.length - shown.length;
+---
+
+<dialog id="badge-unlock" data-ids={JSON.stringify(badges.unseenIds)} aria-labelledby="badge-unlock-title"
+        class="m-auto rounded-[var(--radius-tile)] border-2 border-brand-ink bg-brand-cream p-6 text-center shadow-[var(--shadow-pop)] backdrop:bg-brand-ink/60">
+    <div class="w-full max-w-sm">
+        <p id="badge-unlock-title" class="font-display text-2xl font-extrabold text-brand-ink">{badges.headline}</p>
+        <ul class={`mt-4 grid gap-3 ${shown.length === 1 ? "grid-cols-1" : shown.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+            {shown.map((b) => (
+                <li class="rounded-xl border-2 border-brand-ink/10 bg-white p-2" data-badge={b.key}>
+                    <div class="text-3xl" aria-hidden="true">{b.emoji}</div>
+                    <p class="mt-1 text-xs font-bold text-brand-ink">{b.name}</p>
+                    <p class="text-xs text-brand-sun-text" role="img" aria-label={b.tierName}>{b.stars}</p>
+                    <p class="text-xs text-brand-ink-soft">{b.tierName}</p>
+                </li>
+            ))}
+        </ul>
+        {more > 0 && (
+            <p class="mt-2 text-sm font-bold text-brand-ink-soft">{es ? `+${more} más` : `+${more} more`}</p>
+        )}
+        <button type="button" data-badge-unlock-ok class={`${buttonClass("primary", "lg")} mt-5 w-full`}>
+            {es ? "¡Genial!" : "Awesome!"}
+        </button>
+    </div>
+</dialog>
+
+<script>
+    import { fireConfetti } from "../../lib/celebrate";
+
+    const dlg = document.getElementById("badge-unlock") as HTMLDialogElement | null;
+    if (dlg) {
+        dlg.showModal();
+        fireConfetti(dlg);
+        const okBtn = dlg.querySelector<HTMLButtonElement>("[data-badge-unlock-ok]");
+        okBtn?.focus();
+
+        let done = false;
+        const dismiss = () => {
+            if (done) return;
+            done = true;
+            let ids: string[] = [];
+            try { ids = JSON.parse(dlg.dataset.ids ?? "[]"); } catch { ids = []; }
+            dlg.close();
+            dlg.remove();
+            if (ids.length === 0) return;
+            fetch("/api/progress/badges/ack", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ids }),
+            }).catch(() => {});
+        };
+
+        okBtn?.addEventListener("click", dismiss);
+        // Escape fires "cancel" before "close" — let it close natively but
+        // still route through the same ack-once guard.
+        dlg.addEventListener("cancel", dismiss);
+    }
+</script>

@@ -5,10 +5,12 @@ import KidHeader from "../components/home/KidHeader.astro";
 import KidHome from "../components/home/KidHome.astro";
 import ProgressSheet from "../components/home/ProgressSheet.astro";
 import RankUpCelebration from "../components/home/RankUpCelebration.astro";
+import BadgeCelebration from "../components/home/BadgeCelebration.astro";
 import { apiFetch } from "../lib/api";
 import { t } from "../lib/i18n";
 import { buildDeck } from "../lib/deck";
 import { claimableGigs, payMeterView } from "../lib/kidHome";
+import { badgesView, shouldCelebrateBadges } from "../lib/badges";
 import { progressView, shouldCelebrate } from "../lib/progress";
 import { pickDashboardRoutines } from "../lib/routines";
 
@@ -50,7 +52,7 @@ const y = new Date(`${todayStr}T00:00:00`);
 y.setDate(y.getDate() - 1);
 const yesterdayStr = [y.getFullYear(), String(y.getMonth() + 1).padStart(2, "0"), String(y.getDate()).padStart(2, "0")].join("-");
 
-const [{ data: paycheck }, { data: bankGoal }, { data: rewardGoal }, { data: offerings }, { data: pet }, { data: weekDone }, { data: progressResp }] =
+const [{ data: paycheck }, { data: bankGoal }, { data: rewardGoal }, { data: offerings }, { data: pet }, { data: weekDone }, { data: progressResp }, { data: badgesResp }] =
     await Promise.all([
         apiFetch<any>(`/api/bank/chore-paycheck/${user.id}`, { token }),
         starMode ? none : apiFetch<any>("/api/bank/goals/me", { token }),
@@ -59,9 +61,14 @@ const [{ data: paycheck }, { data: bankGoal }, { data: rewardGoal }, { data: off
         isChild && modOn("pet") ? apiFetch<any>("/api/pet/", { token }) : none,
         apiFetch<any>(`/api/task-assignments/week?week_of=${yesterdayStr}&status=completed&user_id=${user.id}`, { token }),
         apiFetch<any>("/api/progress/me", { token }),
+        // UX-D2. apiFetch never throws; null → no strip, no celebration.
+        apiFetch<any>("/api/progress/badges", { token }),
     ]);
 
 const progress = progressView(progressResp, skin, lang);
+const badges = badgesView(badgesResp, lang);
+// One celebration modal per load: the rank-up goes first, badges wait a visit.
+const rankCelebrating = shouldCelebrate(progress, user.completed_welcome_tour);
 
 const deck = buildDeck(taskProgress, lang);
 // Star mode hides pesos everywhere — the meter shows a $ goal.
@@ -156,9 +163,12 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
         pet={pet ? { name: pet.name, species: pet.species, stage: pet.evolution_stage, status: pet.status_label } : null}
     />
 
-    {progress && <ProgressSheet progress={progress} lang={lang} />}
+    {progress && <ProgressSheet progress={progress} badges={badges} lang={lang} />}
     {shouldCelebrate(progress, user.completed_welcome_tour) && (
         <RankUpCelebration rank={progress!.celebrateRank!} name={progress!.celebrateName!} lang={lang} />
+    )}
+    {shouldCelebrateBadges(badges, rankCelebrating, user.completed_welcome_tour) && (
+        <BadgeCelebration badges={badges!} lang={lang} />
     )}
 
     <script>

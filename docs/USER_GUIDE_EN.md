@@ -124,6 +124,10 @@ Family Task Manager's objective is to help families build real habits of respons
     - [16.1 Available Plans](#161-available-plans)
     - [16.2 Subscription Page](#162-subscription-page)
 17. [Chapter 17: Gigs (Extra Earning)](#chapter-17-gigs-extra-earning)
+18. [Chapter 17.5: Streak, Rank and Badges](#chapter-175-streak-rank-and-badges)
+    - [17.5.1 Streak](#1751-streak)
+    - [17.5.2 Rank](#1752-rank)
+    - [17.5.3 Badges](#1753-badges)
 18. [Chapter 18: Virtual Pet](#chapter-18-virtual-pet)
 19. [Chapter 19: Meal Planning](#chapter-19-meal-planning)
 20. [Chapter 20: Shopping Lists](#chapter-20-shopping-lists)
@@ -2128,6 +2132,41 @@ To reward reliable kids and cut down on repetitive approvals, gigs use a **trust
 | Parent rejects a gig | None | Reset to 0 |
 
 > **Tip for parents:** The trust streak is designed to fade you out of low-stakes approvals over time. If you want tighter control, reject anything that doesn't meet the bar — that resets the streak and brings the gig back under manual review.
+
+---
+
+# Chapter 17.5: Streak, Rank and Badges
+
+Kids and teens see their progress at the top of their home screen. Tap the streak or the rank to open the progress sheet.
+
+## 17.5.1 Streak
+
+Finish every chore assigned for the day and the day counts toward your streak. Days with nothing assigned neither help nor hurt. Each week (Monday to Sunday) forgives your first missed day — it shows as a shield. A second miss in the same week resets the streak.
+
+## 17.5.2 Rank
+
+Everything you earn from chores, bonus tasks and gigs adds experience. There are 10 ranks; the bar under your name shows how close the next one is. Spending points on rewards never lowers your rank.
+
+## 17.5.3 Badges
+
+There are 8 badges, each with three levels — bronze, silver and gold:
+
+| Badge | How to earn it | Bronze / Silver / Gold |
+|---|---|---|
+| Hard Worker | Complete chores | 10 / 50 / 200 |
+| Unstoppable | Reach a streak of this many days | 7 / 30 / 100 |
+| Perfect Week | Finish every chore of a week, with no missed day | 1 / 4 / 12 |
+| Extra Mile | Complete bonus tasks | 1 / 10 / 50 |
+| Go-Getter | Get gigs approved | 1 / 10 / 50 |
+| Smart Saver | Reach savings goals | 1 / 3 / 10 |
+| Well Earned | Redeem rewards | 1 / 5 / 20 |
+| Cup Champion | Win the weekly Family Cup | 1 / 3 / 10 |
+
+The progress sheet shows the three badges you are closest to. Your profile shows the full shelf with your progress toward each next level. A badge you have earned is yours for good, even if a parent later corrects a chore.
+
+Go-Getter and Smart Saver only appear when the family uses gigs and the Family Bank.
+
+> **For parents:** each kid's row on your home screen shows how many badge levels they have earned (🏅).
 
 ---
 
