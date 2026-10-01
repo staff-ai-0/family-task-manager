@@ -31,9 +31,18 @@ describe("QuestCard (UX-D3)", () => {
     it("keeps its confetti out of the way of a celebration modal on the same load", () => {
         expect(src).toMatch(/dialog\[open\]/);
     });
-    it("refreshes when the deck is emptied", () => {
-        expect(src).toMatch(/addEventListener\(\s*["']ftm:deck-empty["']/);
+    it("refreshes after every completed task and when the deck is emptied", () => {
+        expect(src).toMatch(/addEventListener\(\s*["']ftm:deck-completed["']\s*,\s*refresh\s*\)/);
+        expect(src).toMatch(/addEventListener\(\s*["']ftm:deck-empty["']\s*,\s*refresh\s*\)/);
         expect(src).toMatch(/fetch\(\s*["']\/api\/progress\/quest["']/);
+    });
+    it("gives the progress bar an accessible name from the title and progress, kept live", () => {
+        const track = src.match(/<div[^>]*data-quest-bar-label[^>]*>/s)?.[0] ?? "";
+        expect(track).not.toBe("");
+        expect(track).toMatch(/role="img"/);
+        expect(track).toMatch(/aria-label=\{`\$\{u\.title\} \$\{u\.progressLabel\}`\}/);
+        expect(src).toMatch(/\[data-quest-bar-label\]/);
+        expect(src).toMatch(/setAttribute\(\s*["']aria-label["']\s*,\s*`\$\{u\.title\} \$\{u\.progressLabel\}`\s*\)/);
     });
     it("puts no emoji in a heading and uses no h1", () => {
         expect(src).not.toMatch(/<h1\b/);

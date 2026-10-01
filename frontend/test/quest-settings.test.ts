@@ -17,6 +17,10 @@ describe("family settings — weekly quest bonus (UX-D3)", () => {
         expect(src).toContain("0 desactiva las misiones semanales");
         expect(src).toContain("0 turns weekly quests off");
     });
+    it("says a change applies from the next quest, in both languages", () => {
+        expect(src).toContain("El cambio aplica desde la siguiente misión.");
+        expect(src).toContain("A change applies from the next quest.");
+    });
     it("saves through the existing family update with the right field", () => {
         expect(src).toMatch(/quest_bonus_points:\s*value/);
         expect(src).toMatch(/id="quest-save"/);

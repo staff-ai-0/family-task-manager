@@ -28,7 +28,8 @@ const u = questDomUpdate(quest, lang);
             <p class="min-w-0 flex-1 font-bold text-brand-ink" data-quest-title>{u.title}</p>
             <span class="text-sm font-extrabold tabular-nums text-brand-ink" data-quest-progress>{u.progressLabel}</span>
         </div>
-        <div class="mt-2 h-2 overflow-hidden rounded-full bg-brand-ink/10">
+        <div class="mt-2 h-2 overflow-hidden rounded-full bg-brand-ink/10" role="img" data-quest-bar-label
+             aria-label={`${u.title} ${u.progressLabel}`}>
             <div class="h-full bg-brand-mint" data-quest-bar style={`width:${u.barWidthPct}%`}></div>
         </div>
         <p class="mt-2 flex items-center justify-between gap-2 text-xs font-bold text-brand-ink-soft">
@@ -94,6 +95,7 @@ const u = questDomUpdate(quest, lang);
                 text("[data-quest-done-bonus]", u.doneBonusLabel);
                 const bar = card.querySelector<HTMLElement>("[data-quest-bar]");
                 if (bar) bar.style.width = `${u.barWidthPct}%`;
+                card.querySelector("[data-quest-bar-label]")?.setAttribute("aria-label", `${u.title} ${u.progressLabel}`);
                 card.querySelector<HTMLElement>("[data-quest-progress-block]")?.toggleAttribute("hidden", u.showDone);
                 card.querySelector<HTMLElement>("[data-quest-done-block]")?.toggleAttribute("hidden", !u.showDone);
                 celebrate(view.celebrate?.id ?? "");
@@ -101,8 +103,11 @@ const u = questDomUpdate(quest, lang);
                 // Best-effort refresh; the server-rendered card stays as it was.
             }
         };
-        // TaskDeck dispatches this when the day's deck is emptied — the same
-        // moment the streak pill refreshes.
+        // TaskDeck dispatches "ftm:deck-completed" after every completed task
+        // (a kid who reaches the goal mid-deck sees the card flip to done) and
+        // "ftm:deck-empty" when the day's deck is emptied — the same moment the
+        // streak pill refreshes.
+        window.addEventListener("ftm:deck-completed", refresh);
         window.addEventListener("ftm:deck-empty", refresh);
     }
 </script>
