@@ -5,6 +5,7 @@
  */
 import { parseUtcInstant } from "./datetime";
 import { payMeterView, type PayMeter } from "./kidHome";
+import { progressLine } from "./progress";
 
 /** Mirror of the backend's NUDGE_COOLDOWN (display only — the server decides). */
 export const NUDGE_COOLDOWN_MS = 3 * 3600 * 1000;
@@ -25,6 +26,7 @@ export interface KidRowView {
     progressPct: number;
     goalLine: string | null;
     nudge: NudgeState;
+    progressLine: string | null;
 }
 
 const n = (v: unknown) => {
@@ -67,6 +69,7 @@ export function kidRowView(kid: any, paycheck: any, now: Date, lang: "es" | "en"
             ? `🎯 ${goal.reward_title} · ${goal.affordable ? (es ? "¡lista!" : "ready!") : `${n(goal.progress_pct)}%`}`
             : null,
         nudge: nudgeState(kid, now),
+        progressLine: progressLine(kid, lang),
     };
 }
 

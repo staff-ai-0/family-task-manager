@@ -3,7 +3,7 @@
  * a member empties their deck (UX-C1). Both respect reduced-motion / missing
  * APIs and never throw.
  */
-export function fireConfetti(): void {
+export function fireConfetti(host?: HTMLElement): void {
     // Decoration only: it runs right after a successful save, so a canvas /
     // matchMedia failure must never surface as an error to the caller.
     try {
@@ -11,8 +11,12 @@ export function fireConfetti(): void {
         if (document.getElementById("confetti-canvas")) return;
         const canvas = document.createElement("canvas");
         canvas.id = "confetti-canvas";
+        // position:fixed + full-viewport keeps the burst covering the screen
+        // even when appended inside a <dialog> — a top-layer element, so a
+        // canvas parented there paints ABOVE its own ::backdrop and any
+        // non-modal content, where a document.body-appended canvas would not.
         canvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9999";
-        document.body.appendChild(canvas);
+        (host ?? document.body).appendChild(canvas);
         const ctx = canvas.getContext("2d");
         if (!ctx) { canvas.remove(); return; }
         canvas.width = window.innerWidth;

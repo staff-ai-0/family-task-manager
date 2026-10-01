@@ -1,0 +1,66 @@
+---
+/**
+ * UX-D1 one-time rank-up celebration. Rendered only when /api/progress/me
+ * returns celebrate_rank; dismissing POSTs the ack so it never shows again.
+ * A real <dialog> (T5-2): showModal() traps focus + makes the page behind
+ * inert, Escape fires the dialog's "cancel" event, and both dismiss paths
+ * (button click, Escape) route through one ack-once guard.
+ */
+import { buttonClass } from "../../lib/buttonClasses";
+
+interface Props {
+    rank: number;
+    name: string;
+    lang: "es" | "en";
+}
+const { rank, name, lang } = Astro.props;
+const es = lang === "es";
+---
+
+<dialog id="rank-up" data-rank={rank} aria-labelledby="rank-up-title"
+        class="m-auto rounded-[var(--radius-tile)] border-2 border-brand-ink bg-brand-cream p-6 text-center shadow-[var(--shadow-pop)] backdrop:bg-brand-ink/60">
+    <div class="w-full max-w-sm">
+        <p class="text-sm font-bold text-brand-ink-soft">{es ? "¡Subiste de rango!" : "You ranked up!"}</p>
+        <p id="rank-up-title" class="mt-1 font-display text-3xl font-extrabold text-brand-ink">
+            {es ? `¡Ahora eres ${name}!` : `You're now ${name}!`}
+        </p>
+        <p class="mt-1 text-sm text-brand-ink-soft">{es ? `Rango ${rank} de 10` : `Rank ${rank} of 10`}</p>
+        <button type="button" data-rank-up-ok class={`${buttonClass("primary", "lg")} mt-5 w-full`}>
+            {es ? "¡Genial!" : "Awesome!"}
+        </button>
+    </div>
+</dialog>
+
+<script>
+    import { fireConfetti } from "../../lib/celebrate";
+
+    const dlg = document.getElementById("rank-up") as HTMLDialogElement | null;
+    if (dlg) {
+        dlg.showModal();
+        fireConfetti(dlg);
+        const okBtn = dlg.querySelector<HTMLButtonElement>("[data-rank-up-ok]");
+        // showModal() usually focuses the first focusable element already;
+        // focus explicitly so the confirm button always gets it.
+        okBtn?.focus();
+
+        let done = false;
+        const dismiss = () => {
+            if (done) return;
+            done = true;
+            const rank = Number(dlg.dataset.rank);
+            dlg.close();
+            dlg.remove();
+            fetch("/api/progress/me/ack-rank", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ rank }),
+            }).catch(() => {});
+        };
+
+        okBtn?.addEventListener("click", dismiss);
+        // Escape fires "cancel" before "close" — let it close natively
+        // (no preventDefault) but still route through the same ack-once guard.
+        dlg.addEventListener("cancel", dismiss);
+    }
+</script>

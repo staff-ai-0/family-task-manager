@@ -3,10 +3,13 @@ import PageLayout from "@components/ui/PageLayout.astro";
 import VerifyEmailBanner from "../components/VerifyEmailBanner.astro";
 import KidHeader from "../components/home/KidHeader.astro";
 import KidHome from "../components/home/KidHome.astro";
+import ProgressSheet from "../components/home/ProgressSheet.astro";
+import RankUpCelebration from "../components/home/RankUpCelebration.astro";
 import { apiFetch } from "../lib/api";
 import { t } from "../lib/i18n";
 import { buildDeck } from "../lib/deck";
 import { claimableGigs, payMeterView } from "../lib/kidHome";
+import { progressView } from "../lib/progress";
 import { pickDashboardRoutines } from "../lib/routines";
 
 const token = Astro.cookies.get("access_token")?.value;
@@ -14,7 +17,7 @@ if (!token) return Astro.redirect("/login");
 const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
 const es = lang === "es";
 
-const [{ data: user, ok: userOk }, { data: progress }, { data: familyCup }, { data: routinesToday }] = await Promise.all([
+const [{ data: user, ok: userOk }, { data: taskProgress }, { data: familyCup }, { data: routinesToday }] = await Promise.all([
     apiFetch<any>("/api/auth/me", { token }),
     apiFetch<any>("/api/task-assignments/progress", { token }),
     apiFetch<any>("/api/family-cup/", { token }),
@@ -42,12 +45,12 @@ const none = Promise.resolve({ data: null as any });
 
 // Anchor the prior-day "in review" lookup on YESTERDAY so a gig submitted
 // yesterday is found even when today is Monday (yesterday = previous week).
-const todayStr = String(progress?.date ?? new Date().toISOString().slice(0, 10));
+const todayStr = String(taskProgress?.date ?? new Date().toISOString().slice(0, 10));
 const y = new Date(`${todayStr}T00:00:00`);
 y.setDate(y.getDate() - 1);
 const yesterdayStr = [y.getFullYear(), String(y.getMonth() + 1).padStart(2, "0"), String(y.getDate()).padStart(2, "0")].join("-");
 
-const [{ data: paycheck }, { data: bankGoal }, { data: rewardGoal }, { data: offerings }, { data: pet }, { data: weekDone }] =
+const [{ data: paycheck }, { data: bankGoal }, { data: rewardGoal }, { data: offerings }, { data: pet }, { data: weekDone }, { data: progressResp }] =
     await Promise.all([
         apiFetch<any>(`/api/bank/chore-paycheck/${user.id}`, { token }),
         starMode ? none : apiFetch<any>("/api/bank/goals/me", { token }),
@@ -55,9 +58,12 @@ const [{ data: paycheck }, { data: bankGoal }, { data: rewardGoal }, { data: off
         modOn("gigs") && !starMode ? apiFetch<any>("/api/gigs/offerings", { token }) : none,
         isChild && modOn("pet") ? apiFetch<any>("/api/pet/", { token }) : none,
         apiFetch<any>(`/api/task-assignments/week?week_of=${yesterdayStr}&status=completed&user_id=${user.id}`, { token }),
+        apiFetch<any>("/api/progress/me", { token }),
     ]);
 
-const deck = buildDeck(progress, lang);
+const progress = progressView(progressResp, skin, lang);
+
+const deck = buildDeck(taskProgress, lang);
 // Star mode hides pesos everywhere — the meter shows a $ goal.
 const meter = starMode ? ({ show: false } as const) : payMeterView(paycheck);
 const counter = { done: deck.doneToday, total: deck.totalToday, suffix: es ? "hoy" : "today" };
@@ -110,6 +116,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
         points={user.points ?? 0}
         meter={meter}
         counter={counter}
+        progress={progress}
     />
 
     <Fragment slot="banner">
@@ -148,6 +155,11 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
         cup={cup}
         pet={pet ? { name: pet.name, species: pet.species, stage: pet.evolution_stage, status: pet.status_label } : null}
     />
+
+    {progress && <ProgressSheet progress={progress} lang={lang} />}
+    {progress?.celebrateRank && progress.celebrateName && (
+        <RankUpCelebration rank={progress.celebrateRank} name={progress.celebrateName} lang={lang} />
+    )}
 
     <script>
         import { celebrate } from "../lib/celebrate";

@@ -15,7 +15,7 @@ from app.core.request_context import RequestIDLogFilter, RequestIDMiddleware
 from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, cash, invitations, subscriptions, coupons, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm, bank, family_cup, referrals, routines
 from app.api.routes.budget import router as budget_router
 from app.api.routes.gigs import router as gigs_router
-from app.api.routes import oversight, onboarding
+from app.api.routes import oversight, onboarding, progress
 from app.jobs.subscription_sweep import run_sweep
 from app.services.task_assignment_service import TaskAssignmentService
 from app.services.consequence_service import ConsequenceService
@@ -510,6 +510,7 @@ app.include_router(gigs_router, prefix="/api/gigs", tags=["Gigs"])
 from app.api.routes.admin import router as admin_router  # noqa: E402
 app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
 app.include_router(oversight.router, prefix="/api/oversight", tags=["Oversight"])
+app.include_router(progress.router, prefix="/api/progress", tags=["Progress"])
 app.include_router(cash.router, prefix="/api/cash", tags=["Cash"])
 app.include_router(bank.router, prefix="/api/bank", tags=["Family Bank"])
 app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Subscriptions"])

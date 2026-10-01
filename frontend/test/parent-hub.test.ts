@@ -162,6 +162,17 @@ describe("greetingDate / monthLabel / firstName", () => {
     });
 });
 
+describe("kidRowView progress line (UX-D1)", () => {
+    it("shows streak and rank name for the kid's role", () => {
+        const v = kidRowView({ user_id: "k1", name: "Sofía", role: "child", streak_days: 5, rank: 4 }, null, new Date(), "es");
+        expect(v.progressLine).toBe("🔥 5 · Estrella");
+    });
+    it("is null without progress fields", () => {
+        const v = kidRowView({ user_id: "k1", name: "Sofía", role: "child" }, null, new Date(), "es");
+        expect(v.progressLine).toBeNull();
+    });
+});
+
 describe("monthSummaryView", () => {
     const month = (groups: unknown[]) => ({ category_groups: groups });
     // total_available defaults to budgeted + activity (no carryover), as the backend computes per group.

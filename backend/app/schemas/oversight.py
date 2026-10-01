@@ -34,6 +34,9 @@ class KidSummary(BaseModel):
     required_open_today: int = 0  # status PENDING or OVERDUE
     overdue_count: int = 0
     last_nudged_at: Optional[datetime] = None
+    # UX-D1: same values as the kid's own /api/progress/me.
+    streak_days: int = 0
+    rank: int = 1
 
 
 class PendingCounts(BaseModel):
