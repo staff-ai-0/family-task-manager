@@ -124,10 +124,10 @@ El objetivo de Family Task Manager es ayudar a las familias a construir, desde t
     - [16.1 Planes Disponibles](#161-planes-disponibles)
     - [16.2 Pagina de Suscripcion](#162-pagina-de-suscripcion)
 17. [Capitulo 17: Gigs (Ganancias Extra)](#capitulo-17-gigs-ganancias-extra)
-18. [Capitulo 17.5: Racha, Rango e Insignias](#capitulo-175-racha-rango-e-insignias)
-    - [17.5.1 Racha](#1751-racha)
-    - [17.5.2 Rango](#1752-rango)
-    - [17.5.3 Insignias](#1753-insignias)
+    - [Capitulo 17.5: Racha, Rango e Insignias](#capitulo-175-racha-rango-e-insignias)
+        - [17.5.1 Racha](#1751-racha)
+        - [17.5.2 Rango](#1752-rango)
+        - [17.5.3 Insignias](#1753-insignias)
 18. [Capitulo 18: Mascota Virtual](#capitulo-18-mascota-virtual)
 19. [Capitulo 19: Plan de Comidas](#capitulo-19-plan-de-comidas)
 20. [Capitulo 20: Listas de Compras](#capitulo-20-listas-de-compras)
@@ -2139,6 +2139,8 @@ Hay 8 insignias, cada una con tres niveles — bronce, plata y oro:
 | Buen ahorro | Alcanzar metas de ahorro | 1 / 3 / 10 |
 | Bien merecido | Canjear recompensas | 1 / 5 / 20 |
 | Copa familiar | Ganar la Copa Familiar de la semana | 1 / 3 / 10 |
+
+Las tareas y tareas extra que requieren revision de un papa cuentan cuando se aprueban.
 
 La hoja de progreso muestra las tres insignias que tienes mas cerca. Tu perfil muestra el estante completo con tu avance hacia cada siguiente nivel. Una insignia ganada es tuya para siempre, aunque despues un papa corrija una tarea.
 

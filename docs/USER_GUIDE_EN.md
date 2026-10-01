@@ -124,10 +124,10 @@ Family Task Manager's objective is to help families build real habits of respons
     - [16.1 Available Plans](#161-available-plans)
     - [16.2 Subscription Page](#162-subscription-page)
 17. [Chapter 17: Gigs (Extra Earning)](#chapter-17-gigs-extra-earning)
-18. [Chapter 17.5: Streak, Rank and Badges](#chapter-175-streak-rank-and-badges)
-    - [17.5.1 Streak](#1751-streak)
-    - [17.5.2 Rank](#1752-rank)
-    - [17.5.3 Badges](#1753-badges)
+    - [Chapter 17.5: Streak, Rank and Badges](#chapter-175-streak-rank-and-badges)
+        - [17.5.1 Streak](#1751-streak)
+        - [17.5.2 Rank](#1752-rank)
+        - [17.5.3 Badges](#1753-badges)
 18. [Chapter 18: Virtual Pet](#chapter-18-virtual-pet)
 19. [Chapter 19: Meal Planning](#chapter-19-meal-planning)
 20. [Chapter 20: Shopping Lists](#chapter-20-shopping-lists)
@@ -2161,6 +2161,8 @@ There are 8 badges, each with three levels — bronze, silver and gold:
 | Smart Saver | Reach savings goals | 1 / 3 / 10 |
 | Well Earned | Redeem rewards | 1 / 5 / 20 |
 | Cup Champion | Win the weekly Family Cup | 1 / 3 / 10 |
+
+Chores and bonus tasks that need a parent's review count once they are approved.
 
 The progress sheet shows the three badges you are closest to. Your profile shows the full shelf with your progress toward each next level. A badge you have earned is yours for good, even if a parent later corrects a chore.
 

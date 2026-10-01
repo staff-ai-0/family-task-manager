@@ -41,11 +41,13 @@ Thresholds live only in the backend; names and emoji live only in the frontend (
 | `rewards` | 🎁 | Bien merecido / Well Earned | 1 / 5 / 20 | `point_transactions` of type `reward_redeemed` with `reward_id IS NOT NULL` and `points < 0` |
 | `cup` | 🏆 | Copa familiar / Cup Champion | 1 / 3 / 10 | `family_cup_seasons` with `winner_user_id = kid` |
 
+Family Cup seasons are only persisted when a week is closed. Reading badges records last week's season if it is missing (insert-if-missing, last week only, no backfill), so a win counts without a parent closing the week.
+
 Tier names: Bronce / Plata / Oro — Bronze / Silver / Gold. Tiers are numbered 1–3; tier 0 means none earned.
 
-**Done** (chores, extra mile) reuses D1's rule minus the on-time part: `status = completed`, `completion_grade` is not `missed`, `approval_status` is not `rejected`, status is not `cancelled`. It counts at submit time; approval is not required. All-time, no lookback.
+**Done** (chores, extra mile) starts from D1's rule minus the on-time part: `status = completed`, `completion_grade` is not `missed`, status is not `cancelled`. An assignment that needs a parent's review counts once it is approved (`approval_status` is `none` or `approved`); a pending review does not count yet. Decided at the final review: D1's streak can count at submit time because it is derived and self-corrects on a rejection — a badge is permanent and cannot. All-time, no lookback.
 
-**Rewards** deliberately requires `reward_id`: pet-shop purchases also write `reward_redeemed` rows, without a `reward_id`, and must not count. A parent-gated redemption writes its ledger row only when approved (`RewardService` deducts at approval; a rejection writes nothing), so there are no reversal rows to exclude. Known limit: if a reward is deleted, its past redemption rows lose their `reward_id` (`ON DELETE SET NULL`) and stop counting toward progress; tiers already earned are unaffected.
+**Rewards** deliberately requires `reward_id`: pet-shop purchases also write `reward_redeemed` rows, without a `reward_id`, and must not count. A parent-gated redemption writes its ledger row only when approved (`RewardService` deducts at approval; a rejection writes nothing), so there are no reversal rows to exclude. Known limit: if a reward is deleted, its past redemption rows lose their `reward_id` (`ON DELETE SET NULL`) and stop counting toward progress; tiers already earned are unaffected. The same applies to deleting a chore template or a gig offering (their assignments / claims cascade), and flipping a template's `is_bonus` moves its past completions between Hard Worker and Extra Mile. Earned tiers are unaffected in every case.
 
 **Best streak** = the highest value D1's running streak counter reaches anywhere in its 365-day forward walk.
 
@@ -100,7 +102,7 @@ New table `user_badges` (model `app/models/user_badge.py`, one Alembic migration
 | `earned_at` | timestamptz, NOT NULL | |
 | `seen_at` | timestamptz, NULL | NULL = not celebrated yet |
 
-`UNIQUE(user_id, badge, tier)`. Nothing else is stored; counts are derived on every read.
+`UNIQUE(family_id, user_id, badge, tier)` (constraint `uq_user_badges_family_user_badge_tier`) — `family_id` is part of the key because `invitation_service` can move an existing kid account into another family, and the old family's rows must not block earning the tier there. Nothing else is stored; counts are derived on every read.
 
 ### `app/services/badge_service.py`
 
@@ -110,7 +112,7 @@ Same layout as `progress_service.py`: pure rules on top, family-scoped queries b
 - `progress_service.compute_streak` gains two fields on `StreakResult`: `best: int` and `perfect_weeks: int`. Existing fields and behavior are unchanged.
 - queries (all filter on `family_id` and `user_id`):
   - `counts_for(db, family_id, user_id, today, tz, visible) -> dict[str, int]` — chores + extra mile in one conditional-aggregate query; gigs, saver, rewards, cup one count each; streak + perfect week from `ProgressService.day_states` + `compute_streak`. Skips families not in `visible`. All values `int(...)`.
-  - `sync(db, user) -> BadgesResponse` — computes counts, inserts every earned-but-missing tier with `INSERT … ON CONFLICT (user_id, badge, tier) DO NOTHING`, commits, and builds the response from the stored rows.
+  - `sync(db, user) -> BadgesResponse` — records last week's Family Cup season if it is missing (see Catalog), computes counts, inserts every earned-but-missing tier with `INSERT … ON CONFLICT (family_id, user_id, badge, tier) DO NOTHING`, commits, and builds the response from the stored rows.
   - `ack(db, user, ids) -> None` — one `UPDATE user_badges SET seen_at = now() WHERE id IN (:ids) AND user_id = :me AND family_id = :mine AND seen_at IS NULL`. Ids that are not the caller's are ignored silently.
   - `earned_counts(db, family_id, visible) -> dict[UUID, int]` — one grouped query for the parent hub.
 
