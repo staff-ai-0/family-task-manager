@@ -11,7 +11,20 @@ describe("family settings — weekly quest bonus (UX-D3)", () => {
         expect(input).toMatch(/type="number"/);
         expect(input).toMatch(/min="0"/);
         expect(input).toMatch(/max="500"/);
-        expect(input).toMatch(/value=\{family\?\.quest_bonus_points \?\? 20\}/);
+        expect(input).toMatch(/value=\{family\?\.quest_bonus_points \?\? ""\}/);
+        expect(input).toMatch(/placeholder="20"/);
+    });
+    it("says quests are off when the bonus is not above zero (undecided or 0), in both languages", () => {
+        const guard = src.search(/\{\s*!\(Number\(family\?\.quest_bonus_points\) > 0\)\s*&&/);
+        expect(guard).toBeGreaterThan(-1);
+        const line = src.slice(guard).match(/<p class="text-xs font-bold text-brand-ink" data-quest-off>[\s\S]*?<\/p>/)?.[0] ?? "";
+        expect(line).not.toBe("");
+        expect(line).toContain("Las misiones semanales están apagadas.");
+        expect(line).toContain("Weekly quests are off.");
+        // Directly under the field's hint, still inside the quest section.
+        const hint = src.indexOf("A change applies from the next quest.");
+        expect(guard).toBeGreaterThan(hint);
+        expect(guard).toBeLessThan(src.indexOf('id="quest-save"'));
     });
     it("explains that zero switches quests off, in both languages", () => {
         expect(src).toContain("0 desactiva las misiones semanales");

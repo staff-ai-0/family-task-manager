@@ -182,6 +182,36 @@ const hello = firstName(user.name);
         </div>
     )}
 
+    {family && family.quest_bonus_points == null && (
+        <div id="quest-intro-banner" class="max-w-md mx-auto w-full mb-6 bg-brand-sky/10 border border-brand-sky/30 rounded-2xl p-5 shadow-[var(--shadow-card)]">
+            <h2 class="font-bold text-brand-ink text-base mb-1">
+                {lang === "es" ? "Nuevo: misiones semanales" : "New: weekly quests"}
+            </h2>
+            <p class="text-sm text-brand-ink-soft mb-3">
+                {lang === "es"
+                    ? "Cada niño recibe una meta personal por semana y gana un bono de puntos al lograrla. Tú decides el bono, y puedes cambiarlo o apagarlo cuando quieras en Ajustes de la familia. "
+                    : "Each kid gets one personal goal per week and earns a points bonus for reaching it. You choose the bonus, and you can change it or turn it off anytime in Family settings. "}
+                <a href="/parent/settings/family#quest-section" class="text-brand-sky-text font-semibold hover:underline">
+                    {lang === "es" ? "Elegir otro bono" : "Choose another bonus"}
+                </a>
+            </p>
+            <div class="flex flex-wrap gap-2">
+                <button
+                    id="quest-intro-on"
+                    class={buttonClass("secondary", "sm")}
+                >
+                    {lang === "es" ? "Activar (+20 puntos)" : "Turn on (+20 points)"}
+                </button>
+                <button
+                    id="quest-intro-off"
+                    class="px-4 py-2 rounded-lg bg-brand-cream-deep text-brand-ink text-xs font-semibold hover:bg-brand-cream border border-brand-ink/15 transition-colors cursor-pointer"
+                >
+                    {lang === "es" ? "Ahora no" : "Not now"}
+                </button>
+            </div>
+        </div>
+    )}
+
     <ParentHub
         lang={lang}
         tz={tz}
@@ -214,6 +244,27 @@ const hello = firstName(user.name);
     };
     document.getElementById("ai-consent-allow")?.addEventListener("click", () => aiConsentDecide(true));
     document.getElementById("ai-consent-decline")?.addEventListener("click", () => aiConsentDecide(false));
+</script>
+
+<script>
+    // One-time weekly-quest opt-in for families that existed before UX-D3
+    // (quest_bonus_points is NULL until a parent decides). Either answer
+    // PATCHes the family row — 20 turns quests on, 0 is "not now" — so the
+    // card never shows again. On failure the card stays for a retry.
+    const questIntroDecide = async (points: number) => {
+        try {
+            const r = await fetch("/api/families/me", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ quest_bonus_points: points }),
+            });
+            if (r.ok) document.getElementById("quest-intro-banner")?.remove();
+        } catch (e) {
+            console.error("quest opt-in decision failed:", e);
+        }
+    };
+    document.getElementById("quest-intro-on")?.addEventListener("click", () => questIntroDecide(20));
+    document.getElementById("quest-intro-off")?.addEventListener("click", () => questIntroDecide(0));
 </script>
 
 <script>
