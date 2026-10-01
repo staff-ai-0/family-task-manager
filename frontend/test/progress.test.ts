@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { progressDomUpdate, progressLine, progressView, rankName, RANK_NAMES } from "../src/lib/progress";
+import { progressDomUpdate, progressLine, progressView, rankName, RANK_NAMES, shouldCelebrate } from "../src/lib/progress";
 
 const read = (p: string) => readFileSync(fileURLToPath(new URL(`../src/${p}`, import.meta.url)), "utf8");
 
@@ -147,5 +147,27 @@ describe("progressLine (parent hub)", () => {
     });
     it("null when the fields are missing", () => {
         expect(progressLine({ role: "child" }, "es")).toBeNull();
+    });
+});
+
+describe("shouldCelebrate (welcome tour gate)", () => {
+    const view = progressView(resp({ celebrate_rank: 2 }), "teen", "en");
+    it("celebrates when the welcome tour is done or unknown", () => {
+        expect(shouldCelebrate(view, true)).toBe(true);
+        expect(shouldCelebrate(view, undefined)).toBe(true);
+    });
+    it("waits while the welcome tour can still run (driver.js would block the tap)", () => {
+        expect(shouldCelebrate(view, false)).toBe(false);
+    });
+    it("never celebrates without a rank to celebrate", () => {
+        expect(shouldCelebrate(progressView(resp(), "teen", "en"), true)).toBe(false);
+        expect(shouldCelebrate(null, true)).toBe(false);
+    });
+});
+
+describe("dashboard wiring (welcome tour gate)", () => {
+    it("renders the rank-up celebration only through shouldCelebrate with the welcome-tour flag", () => {
+        const src = readFileSync(fileURLToPath(new URL("../src/pages/dashboard.astro", import.meta.url)), "utf8");
+        expect(src).toMatch(/shouldCelebrate\(\s*progress\s*,\s*user\.completed_welcome_tour\s*\)\s*&&\s*\(?\s*<RankUpCelebration/);
     });
 });

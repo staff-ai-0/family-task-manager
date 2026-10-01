@@ -9,7 +9,7 @@ import { apiFetch } from "../lib/api";
 import { t } from "../lib/i18n";
 import { buildDeck } from "../lib/deck";
 import { claimableGigs, payMeterView } from "../lib/kidHome";
-import { progressView } from "../lib/progress";
+import { progressView, shouldCelebrate } from "../lib/progress";
 import { pickDashboardRoutines } from "../lib/routines";
 
 const token = Astro.cookies.get("access_token")?.value;
@@ -157,8 +157,8 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
     />
 
     {progress && <ProgressSheet progress={progress} lang={lang} />}
-    {progress?.celebrateRank && progress.celebrateName && (
-        <RankUpCelebration rank={progress.celebrateRank} name={progress.celebrateName} lang={lang} />
+    {shouldCelebrate(progress, user.completed_welcome_tour) && (
+        <RankUpCelebration rank={progress!.celebrateRank!} name={progress!.celebrateName!} lang={lang} />
     )}
 
     <script>
