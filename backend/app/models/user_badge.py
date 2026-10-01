@@ -12,7 +12,9 @@ from app.core.database import Base
 class UserBadge(Base):
     __tablename__ = "user_badges"
     __table_args__ = (
-        UniqueConstraint("user_id", "badge", "tier", name="uq_user_badges_user_badge_tier"),
+        # family_id is part of the key: a kid moved to another family
+        # (invitation_service) must be able to earn the tier there too.
+        UniqueConstraint("family_id", "user_id", "badge", "tier", name="uq_user_badges_family_user_badge_tier"),
         CheckConstraint("tier BETWEEN 1 AND 3", name="ck_user_badges_tier"),
     )
 

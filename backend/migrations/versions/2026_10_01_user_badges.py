@@ -30,7 +30,9 @@ def upgrade() -> None:
         sa.Column("tier", sa.Integer(), nullable=False),
         sa.Column("earned_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("seen_at", sa.DateTime(timezone=True), nullable=True),
-        sa.UniqueConstraint("user_id", "badge", "tier", name="uq_user_badges_user_badge_tier"),
+        sa.UniqueConstraint(
+            "family_id", "user_id", "badge", "tier", name="uq_user_badges_family_user_badge_tier",
+        ),
         sa.CheckConstraint("tier BETWEEN 1 AND 3", name="ck_user_badges_tier"),
     )
     op.create_index("ix_user_badges_family_id", "user_badges", ["family_id"])

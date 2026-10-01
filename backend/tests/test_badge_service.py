@@ -192,6 +192,27 @@ class TestAwarding:
         assert chores.count == 9 and chores.tier == 1 and chores.next_target == 50
         assert chores.earned_at is not None and resp.earned_total == 1
 
+    async def test_a_moved_kid_earns_the_tier_again_in_the_new_family(self, db_session, test_child_user):
+        # invitation_service can move an existing kid account into another
+        # family; the old family's rows must not block the new family's tier.
+        kid = test_child_user
+        old_family_id = kid.family_id
+        await _cup(db_session, kid, 1)
+        assert _b(await BadgeService.sync(db_session, kid), "cup").tier == 1
+        other = Family(name="Other")
+        db_session.add(other)
+        await db_session.commit()
+        kid.family_id = other.id
+        await db_session.commit()
+        await _cup(db_session, kid, 1)                            # wins a season in the new family
+        resp = await BadgeService.sync(db_session, kid)
+        assert _b(resp, "cup").count == 1 and _b(resp, "cup").tier == 1
+        assert [(u.badge, u.tier) for u in resp.unseen] == [("cup", 1)]
+        held_in = (await db_session.execute(
+            select(UserBadge.family_id).where(UserBadge.user_id == kid.id)
+        )).scalars().all()
+        assert sorted(held_in, key=str) == sorted([old_family_id, other.id], key=str)
+
     async def test_ack_only_marks_the_callers_own_rows(self, db_session, test_child_user, test_teen_user):
         await _cup(db_session, test_child_user, 1)
         await _cup(db_session, test_teen_user, 2)

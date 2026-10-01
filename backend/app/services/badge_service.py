@@ -161,7 +161,7 @@ class BadgeService:
                  "badge": badge, "tier": tier, "earned_at": now}
                 for badge, tier in pairs
             ])
-            .on_conflict_do_nothing(constraint="uq_user_badges_user_badge_tier")
+            .on_conflict_do_nothing(constraint="uq_user_badges_family_user_badge_tier")
         )
         await db.commit()
 
