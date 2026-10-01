@@ -52,6 +52,8 @@ class FamilyUpdate(BaseModel):
     gig_term: Optional[Literal["gig", "chamba"]] = None
     # Value of one point in centavos for the points_rate paycheck (100 = $1 MXN).
     point_value_cents: Optional[int] = Field(None, ge=1, le=100_000)
+    # UX-D3 weekly quest bonus in points; 0 switches weekly quests off.
+    quest_bonus_points: Optional[int] = Field(None, ge=0, le=500)
     # Module registry: list of ENABLED togglable modules. None = leave as-is
     # on PATCH; stored NULL = all on. Must be a subset of TOGGLABLE_MODULES.
     enabled_modules: Optional[List[str]] = None
@@ -100,6 +102,7 @@ class FamilyResponse(EntityResponse):
     # User-visible term for the gig board, per family. DB/routes stay "gig".
     gig_term: str = "gig"
     point_value_cents: int = 100
+    quest_bonus_points: int = 20
     # Stored value: NULL = all modules on. Clients resolve via the same rule.
     enabled_modules: Optional[List[str]] = None
 

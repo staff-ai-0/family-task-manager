@@ -33,6 +33,9 @@ class Family(Base):
     point_value_cents = Column(
         Integer, nullable=False, default=100, server_default="100"
     )
+    # UX-D3: points paid when a kid completes their weekly quest. 0 switches
+    # weekly quests off for the family (no quest is created, nothing is paid).
+    quest_bonus_points = Column(Integer, nullable=False, default=20, server_default="20")
     # Optional per-family module registry: list of ENABLED togglable module
     # keys (see app.core.modules.TOGGLABLE_MODULES). NULL = all modules on
     # (the pre-feature default). Core surfaces (tasks/rewards/points/bank
