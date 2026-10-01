@@ -109,7 +109,7 @@ Same layout as `progress_service.py`: pure rules on top, family-scoped queries b
 - pure: `BADGES` (ordered catalog: key → thresholds tuple, required module or None), `tiers_for(count, thresholds) -> int` (0–3), `next_target(count_tier, thresholds) -> int | None`.
 - `progress_service.compute_streak` gains two fields on `StreakResult`: `best: int` and `perfect_weeks: int`. Existing fields and behavior are unchanged.
 - queries (all filter on `family_id` and `user_id`):
-  - `counts_for(db, user, today, tz, visible) -> dict[str, int]` — chores + extra mile in one conditional-aggregate query; gigs, saver, rewards, cup one count each; streak + perfect week from `ProgressService.day_states` + `compute_streak`. Skips families not in `visible`. All values `int(...)`.
+  - `counts_for(db, family_id, user_id, today, tz, visible) -> dict[str, int]` — chores + extra mile in one conditional-aggregate query; gigs, saver, rewards, cup one count each; streak + perfect week from `ProgressService.day_states` + `compute_streak`. Skips families not in `visible`. All values `int(...)`.
   - `sync(db, user) -> BadgesResponse` — computes counts, inserts every earned-but-missing tier with `INSERT … ON CONFLICT (user_id, badge, tier) DO NOTHING`, commits, and builds the response from the stored rows.
   - `ack(db, user, ids) -> None` — one `UPDATE user_badges SET seen_at = now() WHERE id IN (:ids) AND user_id = :me AND family_id = :mine AND seen_at IS NULL`. Ids that are not the caller's are ignored silently.
   - `earned_counts(db, family_id, visible) -> dict[UUID, int]` — one grouped query for the parent hub.
