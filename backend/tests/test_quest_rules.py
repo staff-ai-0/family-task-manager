@@ -9,6 +9,7 @@ from app.services.quest_service import (
     QUESTS,
     ChoreRow,
     WeekStats,
+    bonus_state,
     chore_state,
     pick_quest,
     rotation,
@@ -109,6 +110,39 @@ class TestChoreState:
         assert chore_state(row(MON, status=S.OVERDUE), WED, UTC) == "no"
 
 
+class TestBonusState:
+    """Bonus tasks are finite dated rows: like chores, minus the on-time rule."""
+
+    def b(self, day, **kw):
+        return row(day, bonus=True, **kw)
+
+    def test_completed_without_review_or_approved_counts(self):
+        assert bonus_state(self.b(WED), WED) == "yes"
+        assert bonus_state(self.b(WED, approval=A.APPROVED), WED) == "yes"
+
+    def test_awaiting_review_can_still_count(self):
+        assert bonus_state(self.b(WED, approval=A.PENDING), WED) == "maybe"
+
+    def test_rejected_or_graded_missed_never_counts(self):
+        assert bonus_state(self.b(WED, approval=A.REJECTED), WED) == "no"
+        assert bonus_state(self.b(WED, grade="missed"), WED) == "no"
+
+    def test_open_today_or_later_can_still_count(self):
+        assert bonus_state(self.b(WED, status=S.PENDING), WED) == "maybe"
+        assert bonus_state(self.b(WED, status=S.CLAIMED), WED) == "maybe"
+        assert bonus_state(self.b(WED + timedelta(days=1), status=S.PENDING), WED) == "maybe"
+
+    def test_open_from_an_earlier_day_or_overdue_cannot(self):
+        yesterday = WED - timedelta(days=1)
+        assert bonus_state(self.b(yesterday, status=S.PENDING), WED) == "no"
+        assert bonus_state(self.b(yesterday, status=S.CLAIMED), WED) == "no"
+        assert bonus_state(self.b(MON, status=S.OVERDUE), WED) == "no"
+        assert bonus_state(self.b(WED, status=S.OVERDUE), WED) == "no"
+
+    def test_a_bonus_finished_late_still_counts(self):
+        assert bonus_state(self.b(MON, completed_at=at(WED)), WED) == "yes"
+
+
 class TestWeekStats:
     def test_counts_each_type(self):
         rows = [
@@ -124,6 +158,16 @@ class TestWeekStats:
         assert s.done == {"on_time": 3, "perfect_days": 1, "extra_mile": 1, "go_getter": 2}
         assert s.possible["on_time"] == 3          # Wed pending + Wed awaiting review + Sun pending
         assert s.possible["perfect_days"] == 2     # Wednesday and Sunday can still become perfect
+        assert s.possible["extra_mile"] == 1       # the bonus task awaiting review
+
+    def test_open_bonus_tasks_are_what_extra_mile_can_still_reach(self):
+        rows = [
+            row(WED, bonus=True, status=S.PENDING), row(WED, bonus=True, status=S.CLAIMED),   # open today
+            row(MON, bonus=True, status=S.OVERDUE),                                           # gone
+            row(WED, bonus=True, status=S.CANCELLED),                                         # waived
+        ]
+        s = week_stats(rows, 0, WED, UTC)
+        assert s.done["extra_mile"] == 0 and s.possible["extra_mile"] == 2
 
     def test_a_day_with_nothing_due_is_neither_perfect_nor_open(self):
         s = week_stats([], 0, WED, UTC)

@@ -96,35 +96,45 @@ def chore_state(row: ChoreRow, today: date, tz: ZoneInfo) -> str:
     return "no"
 
 
+def bonus_state(row: ChoreRow, today: date) -> str:
+    """Like chore_state, for bonus tasks: no on-time requirement.
+    'yes' — counts now · 'maybe' — can still count · 'no' — cannot."""
+    if row.status == AssignmentStatus.COMPLETED:
+        if row.grade == "missed" or row.approval == ApprovalStatus.REJECTED:
+            return "no"
+        return "yes" if row.approval in _COUNTING else "maybe"
+    if row.status in (AssignmentStatus.PENDING, AssignmentStatus.CLAIMED) and row.assigned_date >= today:
+        return "maybe"
+    return "no"
+
+
 @dataclass(frozen=True)
 class WeekStats:
     done: dict[str, int]       # per quest key: achieved in the period
-    possible: dict[str, int]   # chore types: how many more can still count
+    possible: dict[str, int]   # chore and bonus types: how many more can still count
 
 
 def week_stats(rows: list[ChoreRow], gigs_approved: int, today: date, tz: ZoneInfo) -> WeekStats:
     """Counts for every quest type over the given rows (one week, or several
-    for history). `possible` is only meaningful for the chore types."""
-    due = [r for r in rows if not r.is_bonus and r.status != AssignmentStatus.CANCELLED]
-    states = [(r.assigned_date, chore_state(r, today, tz)) for r in due]
+    for history). `possible` is meaningful for every type but go_getter, whose
+    ceiling is the gig board (see pick_quest)."""
+    live = [r for r in rows if r.status != AssignmentStatus.CANCELLED]
+    states = [(r.assigned_date, chore_state(r, today, tz)) for r in live if not r.is_bonus]
     by_day: dict[date, list[str]] = {}
     for day, state in states:
         by_day.setdefault(day, []).append(state)
-    bonus_done = sum(
-        1 for r in rows
-        if r.is_bonus and r.status == AssignmentStatus.COMPLETED and r.grade != "missed" and r.approval in _COUNTING
-    )
+    bonus = [bonus_state(r, today) for r in live if r.is_bonus]
     return WeekStats(
         done={
             "on_time": sum(1 for _, s in states if s == "yes"),
             "perfect_days": sum(1 for ss in by_day.values() if all(s == "yes" for s in ss)),
-            "extra_mile": bonus_done,
+            "extra_mile": bonus.count("yes"),
             "go_getter": int(gigs_approved),
         },
         possible={
             "on_time": sum(1 for _, s in states if s == "maybe"),
             "perfect_days": sum(1 for ss in by_day.values() if "no" not in ss and "maybe" in ss),
-            "extra_mile": 0,
+            "extra_mile": bonus.count("maybe"),
             "go_getter": 0,
         },
     )
