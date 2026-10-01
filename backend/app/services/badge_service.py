@@ -217,8 +217,8 @@ class BadgeService:
         """Evaluate the kid's badges, record any newly earned tier, and return
         progress + what has not been celebrated yet. Read-only once nothing
         new was earned and last week's Family Cup season is on record (see
-        `_ensure_last_cup_season`). Stored tiers are never removed: `tier` in the response
-        comes from the stored rows, `count` from history."""
+        `_ensure_last_cup_season`). Stored tiers are never removed: `tier` in
+        the response comes from the stored rows, `count` from history."""
         if user.role not in KID_ROLES:
             return BadgesResponse(applies=False)
         family_id, user_id = user.family_id, user.id
