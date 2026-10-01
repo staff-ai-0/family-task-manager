@@ -1,0 +1,108 @@
+---
+/**
+ * UX-D3 weekly quest card on the kid home. One card, two states: in progress
+ * (goal, bar, days left, prize) and done. The done moment is celebrated HERE
+ * — confetti once + an ack — never in a modal, so it cannot clash with the
+ * welcome tour or the rank-up / badge celebrations. Rendered from
+ * questDomUpdate(), the same mapping the live refresh writes back.
+ */
+import { questDomUpdate, type QuestView } from "../../lib/quest";
+
+interface Props {
+    quest: QuestView;
+    lang: "es" | "en";
+    starMode: boolean;
+}
+const { quest, lang, starMode } = Astro.props;
+const es = lang === "es";
+const u = questDomUpdate(quest, lang);
+---
+
+<section data-quest-card data-lang={lang} data-star={starMode ? "1" : "0"} data-celebrate-id={quest.celebrate?.id ?? ""}
+         class="rounded-2xl border border-brand-ink/10 bg-white p-4 shadow-[var(--shadow-card)]">
+    <h2 class="text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft">{es ? "Misión de la semana" : "Quest of the week"}</h2>
+
+    <div data-quest-progress-block hidden={u.showDone} class="mt-2">
+        <div class="flex items-center gap-3">
+            <span class="text-2xl leading-none" aria-hidden="true" data-quest-emoji>{u.emoji}</span>
+            <p class="min-w-0 flex-1 font-bold text-brand-ink" data-quest-title>{u.title}</p>
+            <span class="text-sm font-extrabold tabular-nums text-brand-ink" data-quest-progress>{u.progressLabel}</span>
+        </div>
+        <div class="mt-2 h-2 overflow-hidden rounded-full bg-brand-ink/10">
+            <div class="h-full bg-brand-mint" data-quest-bar style={`width:${u.barWidthPct}%`}></div>
+        </div>
+        <p class="mt-2 flex items-center justify-between gap-2 text-xs font-bold text-brand-ink-soft">
+            <span data-quest-days>{u.daysLeftLabel}</span>
+            <span class="text-brand-mint-text" data-quest-bonus>{u.bonusLabel}</span>
+        </p>
+    </div>
+
+    <div data-quest-done-block hidden={!u.showDone} class="mt-2 rounded-xl bg-brand-mint px-3 py-3 text-brand-ink">
+        <p class="font-display text-lg font-extrabold">
+            <span aria-hidden="true">🏁 </span><span data-quest-done-heading>{u.doneHeading}</span>
+        </p>
+        <p class="text-sm font-bold" data-quest-done-bonus>{u.doneBonusLabel}</p>
+    </div>
+</section>
+
+<script>
+    import { fireConfetti } from "../../lib/celebrate";
+    import { questDomUpdate, questView } from "../../lib/quest";
+
+    const card = document.querySelector<HTMLElement>("[data-quest-card]");
+    if (card) {
+        const lang = card.dataset.lang === "en" ? "en" : "es";
+        const star = card.dataset.star === "1";
+
+        // One celebration per quest id, however many times it is reported.
+        const acked = new Set<string>();
+        const celebrate = (id: string) => {
+            if (!id || acked.has(id)) return;
+            acked.add(id);
+            fetch("/api/progress/quest/ack", {
+                method: "POST",
+                credentials: "same-origin",
+                keepalive: true,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id }),
+            }).catch(() => {});
+            // Let a rank-up / badge modal on this load open first: confetti on
+            // the page would paint under its backdrop and block the modal's own.
+            window.setTimeout(() => {
+                if (!document.querySelector("dialog[open]")) fireConfetti();
+            }, 600);
+        };
+        celebrate(card.dataset.celebrateId ?? "");
+
+        const text = (sel: string, value: string) => {
+            const el = card.querySelector(sel);
+            if (el) el.textContent = value;
+        };
+        const refresh = async () => {
+            try {
+                const res = await fetch("/api/progress/quest", { credentials: "same-origin" });
+                if (!res.ok) return;
+                const view = questView(await res.json(), lang, star);
+                if (!view) return;
+                const u = questDomUpdate(view, lang);
+                text("[data-quest-emoji]", u.emoji);
+                text("[data-quest-title]", u.title);
+                text("[data-quest-progress]", u.progressLabel);
+                text("[data-quest-days]", u.daysLeftLabel);
+                text("[data-quest-bonus]", u.bonusLabel);
+                text("[data-quest-done-heading]", u.doneHeading);
+                text("[data-quest-done-bonus]", u.doneBonusLabel);
+                const bar = card.querySelector<HTMLElement>("[data-quest-bar]");
+                if (bar) bar.style.width = `${u.barWidthPct}%`;
+                card.querySelector<HTMLElement>("[data-quest-progress-block]")?.toggleAttribute("hidden", u.showDone);
+                card.querySelector<HTMLElement>("[data-quest-done-block]")?.toggleAttribute("hidden", !u.showDone);
+                celebrate(view.celebrate?.id ?? "");
+            } catch {
+                // Best-effort refresh; the server-rendered card stays as it was.
+            }
+        };
+        // TaskDeck dispatches this when the day's deck is emptied — the same
+        // moment the streak pill refreshes.
+        window.addEventListener("ftm:deck-empty", refresh);
+    }
+</script>

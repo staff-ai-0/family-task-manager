@@ -1,16 +1,18 @@
 ---
 /**
- * Kid home body (UX-C1): routines strip, task deck, in-review chip, "Gana
- * extra" gigs row with push opt-in, and the goal / Family Cup / pet tiles.
- * The push opt-in (and its daily subscription heal) renders exactly once:
- * inside the gigs row, or below the tiles when there is no gigs row —
- * EnablePushButton uses fixed element ids.
+ * Kid home body (UX-C1): routines strip, task deck, weekly quest card,
+ * in-review chip, "Gana extra" gigs row with push opt-in, and the goal /
+ * Family Cup / pet tiles. The push opt-in (and its daily subscription heal)
+ * renders exactly once: inside the gigs row, or below the tiles when there
+ * is no gigs row — EnablePushButton uses fixed element ids.
  */
 import TaskDeck from "../deck/TaskDeck.astro";
+import QuestCard from "./QuestCard.astro";
 import EnablePushButton from "../EnablePushButton.astro";
 import PetAvatar from "../pet/PetAvatar.astro";
 import type { Deck } from "../../lib/deck";
 import type { GigChip } from "../../lib/kidHome";
+import type { QuestView } from "../../lib/quest";
 import { routineName, routineProgress, type DashboardRoutine } from "../../lib/routines";
 
 interface Props {
@@ -33,8 +35,10 @@ interface Props {
         | { kind: "none"; href: string };
     cup: { rank: number; bossName: string; bossHp: number; bossMaxHp: number; defeated: boolean } | null;
     pet: { name: string; species: string; stage: number; status: string } | null;
+    /** UX-D3 weekly quest; null = no quest this week (or the call failed). */
+    quest: QuestView | null;
 }
-const { lang, userId, starMode, deck, choreMode, deckCounter, inReview, routines, gigs, showGigs, goal, cup, pet } = Astro.props;
+const { lang, userId, starMode, deck, choreMode, deckCounter, inReview, routines, gigs, showGigs, goal, cup, pet, quest } = Astro.props;
 const es = lang === "es";
 const gigsRow = showGigs && gigs.length > 0;
 const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString(es ? "es-MX" : "en-US")}`;
@@ -62,6 +66,8 @@ const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString(es ?
         heading={es ? "Tus tareas" : "Your tasks"}
         counter={deckCounter}
     />
+
+    {quest && <QuestCard quest={quest} lang={lang} starMode={starMode} />}
 
     {inReview > 0 && (
         <a href="/notifications" class="inline-flex items-center gap-1.5 rounded-full bg-sky-100 text-sky-800 px-3 py-1 text-xs font-bold">
