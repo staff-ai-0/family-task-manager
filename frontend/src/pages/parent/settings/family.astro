@@ -183,6 +183,32 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
         </div>
     </form>
 
+    <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-3" id="quest-section"
+             data-saved={lang === "es" ? "Guardado." : "Saved."}
+             data-error={lang === "es" ? "No se pudo guardar. Intenta de nuevo." : "Could not save. Try again."}
+             data-range={lang === "es" ? "Usa un número entero de 0 a 500." : "Use a whole number from 0 to 500."}>
+        <h2 class="text-sm font-bold text-brand-ink">🏁 {lang === "es" ? "Misión semanal" : "Weekly quest"}</h2>
+        <div>
+            <label for="quest-bonus" class="block text-sm font-semibold text-brand-ink mb-1">
+                {lang === "es" ? "Bono de la misión semanal (puntos)" : "Weekly quest bonus (points)"}
+            </label>
+            <input type="number" id="quest-bonus" name="quest_bonus_points" inputmode="numeric" min="0" max="500" step="1"
+                   value={family?.quest_bonus_points ?? 20}
+                   class="w-32 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
+            <p class="text-xs text-brand-ink-soft mt-1">
+                {lang === "es"
+                    ? "Cada niño recibe una misión personal por semana y gana este bono al lograrla. 0 desactiva las misiones semanales."
+                    : "Each kid gets one personal quest per week and earns this bonus for reaching it. 0 turns weekly quests off."}
+            </p>
+        </div>
+        <div class="flex items-center gap-3">
+            <button type="button" id="quest-save" class={`disabled:opacity-60 ${buttonClass("secondary", "sm")}`}>
+                {lang === "es" ? "Guardar" : "Save"}
+            </button>
+            <span id="quest-status" class="text-sm" aria-live="polite"></span>
+        </div>
+    </section>
+
     <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-3" id="modules-section">
         <h2 class="text-sm font-bold text-brand-ink">📦 {lang === "es" ? "Módulos" : "Modules"}</h2>
         <p class="text-xs text-brand-ink-soft">
@@ -539,6 +565,39 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
             console.error(err);
         } finally {
             btn.removeAttribute("disabled");
+        }
+    });
+</script>
+
+<script>
+    const section = document.getElementById("quest-section");
+    const input = document.getElementById("quest-bonus") as HTMLInputElement | null;
+    const save = document.getElementById("quest-save") as HTMLButtonElement | null;
+    const status = document.getElementById("quest-status");
+    save?.addEventListener("click", async () => {
+        if (!section || !input || !status) return;
+        const value = Number(input.value);
+        status.className = "text-sm";
+        if (!Number.isInteger(value) || value < 0 || value > 500) {
+            status.textContent = section.dataset.range ?? "";
+            status.className = "text-sm text-red-700";
+            return;
+        }
+        save.setAttribute("disabled", "true");
+        status.textContent = "";
+        try {
+            const r = await fetch("/api/families/me", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ quest_bonus_points: value }),
+            });
+            status.textContent = r.ok ? (section.dataset.saved ?? "") : (section.dataset.error ?? "");
+            status.className = r.ok ? "text-sm text-green-700" : "text-sm text-red-700";
+        } catch {
+            status.textContent = section.dataset.error ?? "";
+            status.className = "text-sm text-red-700";
+        } finally {
+            save.removeAttribute("disabled");
         }
     });
 </script>

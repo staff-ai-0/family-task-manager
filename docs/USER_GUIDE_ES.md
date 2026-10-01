@@ -2148,6 +2148,23 @@ Espiritu emprendedor y Buen ahorro solo aparecen cuando la familia usa gigs y el
 
 > **Para papas:** la fila de cada hijo en su pantalla de inicio muestra cuantos niveles de insignia ha ganado (🏅).
 
+## 17.5.4 Mision Semanal
+
+Cada semana (lunes a domingo) cada nino y adolescente recibe una mision personal. Aparece como una tarjeta en su pantalla de inicio, debajo de sus tareas.
+
+| Mision | Meta |
+|---|---|
+| A tiempo | Terminar cierto numero de tareas el dia que tocan |
+| Dias perfectos | Lograr cierto numero de dias con todas las tareas hechas a tiempo |
+| Milla extra | Hacer cierto numero de tareas extra |
+| Emprendedor | Lograr cierto numero de gigs aprobadas |
+
+La mision cambia de una semana a otra, y la meta se ajusta a cada nino: un poco arriba de lo que hizo en las semanas recientes, y nunca mas de lo que todavia puede alcanzar. Una vez fijada la mision de la semana, su meta no cambia.
+
+Lograr la meta paga un bono de puntos una sola vez. Las tareas y tareas extra que requieren revision de un papa cuentan cuando se aprueban, asi que el bono puede llegar despues de que el papa apruebe — incluso al inicio de la semana siguiente.
+
+> **Para papas:** la fila de cada hijo en su pantalla de inicio muestra su mision (🏁 3/5, o 🏁 ✓ cuando esta lograda). El bono se configura en **Ajustes → Familia → Mision semanal** (20 puntos por defecto). Ponerlo en 0 desactiva las misiones semanales.
+
 ---
 
 # Capitulo 18: Mascota Virtual
