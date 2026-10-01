@@ -576,9 +576,10 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
     const status = document.getElementById("quest-status");
     save?.addEventListener("click", async () => {
         if (!section || !input || !status) return;
-        const value = Number(input.value);
+        const raw = input.value.trim();
+        const value = Number(raw);
         status.className = "text-sm";
-        if (!Number.isInteger(value) || value < 0 || value > 500) {
+        if (raw === "" || !Number.isInteger(value) || value < 0 || value > 500) {
             status.textContent = section.dataset.range ?? "";
             status.className = "text-sm text-red-700";
             return;

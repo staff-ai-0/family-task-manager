@@ -25,4 +25,11 @@ describe("family settings — weekly quest bonus (UX-D3)", () => {
         expect(src).toMatch(/value < 0 \|\| value > 500/);
         expect(src).toMatch(/Number\.isInteger\(value\)/);
     });
+    it("treats an empty field as invalid instead of saving zero", () => {
+        expect(src).toMatch(/const raw = input\.value\.trim\(\);/);
+        const blankCheckIndex = src.search(/raw === ""/);
+        expect(blankCheckIndex).toBeGreaterThan(-1);
+        const patchIndex = src.indexOf("quest_bonus_points: value");
+        expect(blankCheckIndex).toBeLessThan(patchIndex);
+    });
 });
