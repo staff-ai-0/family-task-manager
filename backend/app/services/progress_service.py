@@ -203,6 +203,7 @@ class ProgressService:
             ))
         )).all()
 
+        # Badge counts use a stricter variant of this rule — see BadgeService.counts_for.
         def done_in_time(row) -> bool:
             if row.completion_grade == "missed" or row.approval_status == ApprovalStatus.REJECTED:
                 return False

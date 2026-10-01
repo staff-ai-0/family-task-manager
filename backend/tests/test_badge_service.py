@@ -95,8 +95,13 @@ class TestCounts:
         await _assign(db_session, kid, chore, old - timedelta(days=22), status=AssignmentStatus.PENDING)
         await _assign(db_session, kid, chore, old - timedelta(days=23), status=AssignmentStatus.CANCELLED)
         await _assign(db_session, kid, bonus, old - timedelta(days=24))
+        # Awaiting parent review: not counted yet (a badge is permanent, a
+        # later rejection could not take it back). Approved: counted.
+        await _assign(db_session, kid, chore, old - timedelta(days=25), approval=ApprovalStatus.PENDING)
+        await _assign(db_session, kid, bonus, old - timedelta(days=26), approval=ApprovalStatus.PENDING)
+        await _assign(db_session, kid, chore, old - timedelta(days=27), approval=ApprovalStatus.APPROVED)
         resp = await BadgeService.sync(db_session, kid)
-        assert _b(resp, "chores").count == 10 and _b(resp, "chores").tier == 1
+        assert _b(resp, "chores").count == 11 and _b(resp, "chores").tier == 1
         assert _b(resp, "chores").next_target == 50
         assert _b(resp, "extra_mile").count == 1 and _b(resp, "extra_mile").tier == 1
         assert isinstance(_b(resp, "chores").count, int)

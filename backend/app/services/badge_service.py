@@ -86,8 +86,11 @@ class BadgeService:
     ) -> dict[str, int]:
         """Current count behind each visible badge family. A hidden family is
         not evaluated at all."""
-        # Chores + extra mile in one pass: completed, not graded missed, not
-        # rejected (UX-D1's done rule without the on-time part), all-time.
+        # Chores + extra mile in one pass, all-time: completed, not graded
+        # missed, and needing no review or approved — work awaiting review
+        # does not count yet (a badge is permanent; a later rejection could
+        # not take it back).
+        # D1's streak uses the on-time variant — see ProgressService.day_states.
         done_rows = (await db.execute(
             select(TaskTemplate.is_bonus, func.count())
             .select_from(TaskAssignment)
@@ -96,7 +99,7 @@ class BadgeService:
                 TaskAssignment.family_id == family_id,
                 TaskAssignment.assigned_to == user_id,
                 TaskAssignment.status == AssignmentStatus.COMPLETED,
-                TaskAssignment.approval_status != ApprovalStatus.REJECTED,
+                TaskAssignment.approval_status.in_([ApprovalStatus.NONE, ApprovalStatus.APPROVED]),
                 or_(TaskAssignment.completion_grade.is_(None), TaskAssignment.completion_grade != "missed"),
             )
             .group_by(TaskTemplate.is_bonus)
