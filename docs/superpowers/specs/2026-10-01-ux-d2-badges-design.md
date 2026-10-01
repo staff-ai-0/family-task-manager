@@ -112,7 +112,7 @@ Same layout as `progress_service.py`: pure rules on top, family-scoped queries b
   - `counts_for(db, user, today, tz, visible) -> dict[str, int]` — chores + extra mile in one conditional-aggregate query; gigs, saver, rewards, cup one count each; streak + perfect week from `ProgressService.day_states` + `compute_streak`. Skips families not in `visible`. All values `int(...)`.
   - `sync(db, user) -> BadgesResponse` — computes counts, inserts every earned-but-missing tier with `INSERT … ON CONFLICT (user_id, badge, tier) DO NOTHING`, commits, and builds the response from the stored rows.
   - `ack(db, user, ids) -> None` — one `UPDATE user_badges SET seen_at = now() WHERE id IN (:ids) AND user_id = :me AND family_id = :mine AND seen_at IS NULL`. Ids that are not the caller's are ignored silently.
-  - `earned_counts(db, family_id, user_ids, visible) -> dict[UUID, int]` — one grouped query for the parent hub.
+  - `earned_counts(db, family_id, visible) -> dict[UUID, int]` — one grouped query for the parent hub.
 
 ### API (in `app/api/routes/progress.py`, prefix `/api/progress`)
 
@@ -123,7 +123,7 @@ Same layout as `progress_service.py`: pure rules on top, family-scoped queries b
     unseen: [ { id: UUID, badge: str, tier: int } ],
     earned_total: int }
   ```
-  `badges` is in catalog order and holds visible families only; `earned_at` is that of the highest earned tier; `earned_total` counts earned tiers in visible families (max 24). Non-kids get 404, like `ack-rank`.
+  `badges` is in catalog order and holds visible families only; `earned_at` is that of the highest earned tier; `earned_total` counts earned tiers in visible families (max 24). Non-kids get `{ applies: false }` with empty lists (the same convention as `GET /api/progress/me`), so pages can fetch it without knowing the role first.
 
   This GET writes: it records newly earned tiers. The write is an idempotent insert-if-missing, and it keeps awarding in one place instead of hooks in every service that can move a count.
 - `POST /api/progress/badges/ack` `{ ids: [UUID] }` (1–24 ids, else 422) → 204. Non-kids get 404.
@@ -139,7 +139,7 @@ Same layout as `progress_service.py`: pure rules on top, family-scoped queries b
   - `next` = non-maxed families sorted by `count / next_target` descending, ties in catalog order, first 3.
   - `shouldCelebrateBadges(view, rankCelebrating, completedWelcomeTour)` — true only with unseen tiles, no rank-up modal on this load, and the tour complete.
 - **Tier look:** the family emoji with three stars under it (★★☆ = silver), stars in `text-brand-sun-text`. A family at tier 0 shows the emoji greyed (`grayscale opacity-50`). No new color tokens.
-- **`components/home/ProgressSheet.astro`:** new "Próximas insignias" / "Next badges" block — the `next` tiles, each with a progress bar and `37/50`, and a "Ver todas" / "See all" link to `/profile#badges`. When every family is maxed, one line: "¡Tienes todas las insignias!" / "You have every badge!". No badges response → no block.
+- **`components/home/ProgressSheet.astro`:** new "Próximas insignias" / "Next badges" block — the `next` tiles, each with a progress bar and `37/50`, and a "Ver todas" / "See all" link to `/profile#badges`. When every family is maxed, one line: "¡Tienes todas las insignias!" / "You have every badge!". No badges response → no block. The sheet's panel becomes scrollable (`max-h-[90dvh] overflow-y-auto`) so the extra block never pushes the Close button off a small phone.
 - **`pages/profile.astro`:** for kid roles, a "Insignias" / "Badges" section (`id="badges"`): a grid of the tiles (2 columns on a phone) with emoji, name, stars, progress bar and label (`60/200`, or "Máx" / "Max").
 - **`components/home/BadgeCelebration.astro`:** follows `RankUpCelebration.astro` — native `<dialog>` with `m-auto`, `showModal()`, focus on the button, `cancel` handled, `fireConfetti(dialog)`, once-guard, then `POST /api/progress/badges/ack` with `unseenIds`. No native `alert`/`confirm`.
 - **`pages/dashboard.astro`:** for kid roles, fetches `/api/progress/badges` in the existing parallel `apiFetch` calls and renders `BadgeCelebration` only when `shouldCelebrateBadges(...)`.
@@ -150,7 +150,7 @@ Same layout as `progress_service.py`: pure rules on top, family-scoped queries b
 ## Testing
 
 - **Pure (pytest):** `tiers_for` boundaries for every family (below, at, between, above gold); `next_target`; `compute_streak.best` (peak survives a later reset); `perfect_weeks` — shield week excluded, missed week excluded, current week excluded, week with nothing due excluded, week partly before the lookback start excluded; D1's existing streak tests still pass.
-- **Service + API (pytest, test DB):** each family's count from real rows (pet purchase not counted as a reward; rejected/missed chore not counted; bonus vs non-bonus split); earned tier survives a count dropping below the threshold; two syncs award once (unique constraint); gigs module off hides `gigs` + `saver` and keeps stored rows; another family's rows never count; `ack` only marks the caller's own ids and ignores foreign ids; 404 for parents on both routes; 422 on empty/oversized ack; `KidSummary.badge_count` is an int and respects module gating.
+- **Service + API (pytest, test DB):** each family's count from real rows (pet purchase not counted as a reward; rejected/missed chore not counted; bonus vs non-bonus split); earned tier survives a count dropping below the threshold; two syncs award once (unique constraint); gigs module off hides `gigs` + `saver` and keeps stored rows; another family's rows never count; `ack` only marks the caller's own ids and ignores foreign ids; `applies: false` for parents on GET and 404 on ack; 422 on empty/oversized ack; `KidSummary.badge_count` is an int and respects module gating.
 - **Migration:** covered by CI's upgrade → downgrade → upgrade round-trip.
 - **Frontend (vitest):** `badgesView` null cases, stars and labels per tier, maxed tile, `next` ordering and tie-break, unseen folding (bronze + silver → one silver tile, both ids kept), unknown key dropped; `shouldCelebrateBadges` — tour pending, rank-up pending, nothing unseen; structure tests for `BadgeCelebration` mirroring `rank-up-celebration.test.ts`; `progressLine` with and without badges; strict visual guard, `astro check`, build.
 - **After deploy (prod, demo family `b8312b5a-c9c0-469f-992f-8dbd412db4a7` only):** as `sofia.demo` (child) and `diego.demo` (teen) at 390 px — batched celebration once and not again, strip in the sheet, shelf on the profile; `mariana.demo` hub row shows the count.
