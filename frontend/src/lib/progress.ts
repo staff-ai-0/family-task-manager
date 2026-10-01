@@ -94,3 +94,13 @@ export function progressLine(kid: any, lang: "es" | "en"): string | null {
     const skin: Skin = kid.role === "teen" ? "teen" : "child";
     return `🔥 ${Number(kid.streak_days) || 0} · ${rankName(kid.rank, skin, lang)}`;
 }
+
+/**
+ * Whether the one-time rank-up celebration may open now. Never while the
+ * welcome tour can run on this load: driver.js disables pointer events
+ * page-wide and the celebration's modal makes the tour inert, so a touch user
+ * (no Escape key) would be stuck. It shows on the first visit after the tour.
+ */
+export function shouldCelebrate(view: ProgressView | null, completedWelcomeTour: boolean | null | undefined): boolean {
+    return !!view?.celebrateRank && !!view.celebrateName && completedWelcomeTour !== false;
+}
