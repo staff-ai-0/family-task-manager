@@ -1,6 +1,7 @@
-"""UX-D1 progress (streak + rank) API shapes. All numbers are plain ints."""
-from datetime import date
+"""UX-D1 progress (streak + rank) and UX-D2 badges API shapes. All numbers are plain ints."""
+from datetime import date, datetime
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -24,3 +25,28 @@ class ProgressResponse(BaseModel):
 
 class AckRankRequest(BaseModel):
     rank: int = Field(ge=1, le=10)
+
+
+class BadgeProgress(BaseModel):
+    badge: str                         # catalog key
+    count: int = 0                     # derived now; can drop after a parent correction
+    tier: int = 0                      # highest EARNED tier (0 = none); never drops
+    next_target: Optional[int] = None  # count needed for the next tier; None at gold
+    earned_at: Optional[datetime] = None  # when the highest earned tier was recorded
+
+
+class UnseenBadge(BaseModel):
+    id: UUID
+    badge: str
+    tier: int
+
+
+class BadgesResponse(BaseModel):
+    applies: bool
+    badges: list[BadgeProgress] = Field(default_factory=list)
+    unseen: list[UnseenBadge] = Field(default_factory=list)
+    earned_total: int = 0
+
+
+class AckBadgesRequest(BaseModel):
+    ids: list[UUID] = Field(min_length=1, max_length=24)

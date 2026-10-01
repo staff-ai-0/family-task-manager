@@ -9,9 +9,27 @@ frontend/src/lib/badges.ts.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime, timezone
 from typing import Iterable, Optional
+from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.modules import effective_modules
+from app.models.family import Family
+from app.models.family_cup import FamilyCupSeason
+from app.models.gig import GigClaim, GigClaimStatus
+from app.models.kid_savings_goal import KidSavingsGoal
+from app.models.point_transaction import PointTransaction, TransactionType
+from app.models.task_assignment import ApprovalStatus, AssignmentStatus, TaskAssignment
+from app.models.task_template import TaskTemplate
+from app.models.user import User
+from app.models.user_badge import UserBadge
+from app.schemas.progress import BadgeProgress, BadgesResponse, UnseenBadge
+from app.services.progress_service import KID_ROLES, ProgressService, compute_streak
 
 
 @dataclass(frozen=True)
@@ -49,3 +67,179 @@ def visible_badges(enabled_modules: Optional[Iterable[str]]) -> tuple[str, ...]:
     (not evaluated, not returned). Stored rows are kept regardless."""
     on = effective_modules(enabled_modules)
     return tuple(key for key, badge in BADGES.items() if badge.module is None or badge.module in on)
+
+
+# ── Queries (family-scoped) ──────────────────────────────────────────────
+class BadgeService:
+    @staticmethod
+    async def visible_for(db: AsyncSession, family_id: UUID) -> tuple[str, ...]:
+        enabled = (await db.execute(select(Family.enabled_modules).where(Family.id == family_id))).scalar()
+        return visible_badges(enabled)
+
+    @staticmethod
+    async def _count(db: AsyncSession, model, *where) -> int:
+        return int((await db.execute(select(func.count()).select_from(model).where(*where))).scalar() or 0)
+
+    @staticmethod
+    async def counts_for(
+        db: AsyncSession, family_id: UUID, user_id: UUID, today: date, tz: ZoneInfo, visible: tuple[str, ...],
+    ) -> dict[str, int]:
+        """Current count behind each visible badge family. A hidden family is
+        not evaluated at all."""
+        # Chores + extra mile in one pass: completed, not graded missed, not
+        # rejected (UX-D1's done rule without the on-time part), all-time.
+        done_rows = (await db.execute(
+            select(TaskTemplate.is_bonus, func.count())
+            .select_from(TaskAssignment)
+            .join(TaskTemplate, TaskTemplate.id == TaskAssignment.template_id)
+            .where(
+                TaskAssignment.family_id == family_id,
+                TaskAssignment.assigned_to == user_id,
+                TaskAssignment.status == AssignmentStatus.COMPLETED,
+                TaskAssignment.approval_status != ApprovalStatus.REJECTED,
+                or_(TaskAssignment.completion_grade.is_(None), TaskAssignment.completion_grade != "missed"),
+            )
+            .group_by(TaskTemplate.is_bonus)
+        )).all()
+        by_bonus = {bool(is_bonus): int(n) for is_bonus, n in done_rows}
+        streak = compute_streak(await ProgressService.day_states(db, family_id, user_id, today, tz), today)
+
+        counts: dict[str, int] = {
+            "chores": by_bonus.get(False, 0),
+            "streak": int(streak.best),
+            "perfect_week": int(streak.perfect_weeks),
+            "extra_mile": by_bonus.get(True, 0),
+            # reward_id IS NOT NULL: pet-shop purchases write the same
+            # transaction type without a reward and must not count.
+            "rewards": await BadgeService._count(
+                db, PointTransaction,
+                PointTransaction.family_id == family_id,
+                PointTransaction.user_id == user_id,
+                PointTransaction.type == TransactionType.REWARD_REDEEMED,
+                PointTransaction.reward_id.is_not(None),
+                PointTransaction.points < 0,
+            ),
+            "cup": await BadgeService._count(
+                db, FamilyCupSeason,
+                FamilyCupSeason.family_id == family_id,
+                FamilyCupSeason.winner_user_id == user_id,
+            ),
+        }
+        if "gigs" in visible:
+            counts["gigs"] = await BadgeService._count(
+                db, GigClaim,
+                GigClaim.family_id == family_id,
+                GigClaim.claimed_by == user_id,
+                GigClaim.status == GigClaimStatus.APPROVED,
+            )
+        if "saver" in visible:
+            counts["saver"] = await BadgeService._count(
+                db, KidSavingsGoal,
+                KidSavingsGoal.family_id == family_id,
+                KidSavingsGoal.user_id == user_id,
+                KidSavingsGoal.reached_at.is_not(None),
+            )
+        return {key: counts[key] for key in visible}
+
+    @staticmethod
+    async def _rows(db: AsyncSession, family_id: UUID, user_id: UUID) -> list[UserBadge]:
+        return list((await db.execute(
+            select(UserBadge).where(UserBadge.family_id == family_id, UserBadge.user_id == user_id)
+        )).scalars().all())
+
+    @staticmethod
+    async def _award(db: AsyncSession, family_id: UUID, user_id: UUID, pairs: list[tuple[str, int]]) -> None:
+        """Record earned tiers. ON CONFLICT DO NOTHING: two requests evaluating
+        at the same moment (two tabs) must both succeed and award once."""
+        if not pairs:
+            return
+        now = datetime.now(timezone.utc)
+        await db.execute(
+            pg_insert(UserBadge)
+            .values([
+                {"id": uuid4(), "family_id": family_id, "user_id": user_id,
+                 "badge": badge, "tier": tier, "earned_at": now}
+                for badge, tier in pairs
+            ])
+            .on_conflict_do_nothing(constraint="uq_user_badges_user_badge_tier")
+        )
+        await db.commit()
+
+    @staticmethod
+    def _response(visible: tuple[str, ...], counts: dict[str, int], rows: list[UserBadge]) -> BadgesResponse:
+        shown = sorted(
+            (r for r in rows if r.badge in visible),
+            key=lambda r: (visible.index(r.badge), r.tier),
+        )
+        top: dict[str, UserBadge] = {}
+        for row in shown:               # ascending tier, so the last one wins
+            top[row.badge] = row
+        badges = []
+        for key in visible:
+            best = top.get(key)
+            tier = int(best.tier) if best else 0
+            badges.append(BadgeProgress(
+                badge=key,
+                count=int(counts[key]),
+                tier=tier,
+                next_target=next_target(tier, BADGES[key].thresholds),
+                earned_at=best.earned_at if best else None,
+            ))
+        return BadgesResponse(
+            applies=True,
+            badges=badges,
+            unseen=[UnseenBadge(id=r.id, badge=r.badge, tier=int(r.tier)) for r in shown if r.seen_at is None],
+            earned_total=len(shown),
+        )
+
+    @staticmethod
+    async def sync(db: AsyncSession, user: User) -> BadgesResponse:
+        """Evaluate the kid's badges, record any newly earned tier, and return
+        progress + what has not been celebrated yet. Read-only once nothing
+        new was earned. Stored tiers are never removed: `tier` in the response
+        comes from the stored rows, `count` from history."""
+        if user.role not in KID_ROLES:
+            return BadgesResponse(applies=False)
+        family_id, user_id = user.family_id, user.id
+        today, tz = await ProgressService.family_today(db, family_id)
+        visible = await BadgeService.visible_for(db, family_id)
+        counts = await BadgeService.counts_for(db, family_id, user_id, today, tz, visible)
+        rows = await BadgeService._rows(db, family_id, user_id)
+        have = {(r.badge, r.tier) for r in rows}
+        missing = [
+            (key, tier)
+            for key in visible
+            for tier in range(1, tiers_for(counts[key], BADGES[key].thresholds) + 1)
+            if (key, tier) not in have
+        ]
+        if missing:
+            await BadgeService._award(db, family_id, user_id, missing)
+            rows = await BadgeService._rows(db, family_id, user_id)
+        return BadgeService._response(visible, counts, rows)
+
+    @staticmethod
+    async def ack(db: AsyncSession, user: User, ids: list[UUID]) -> None:
+        """Mark the given tiers as celebrated. Scoped to the caller's own rows;
+        ids that belong to anyone else are ignored without an error."""
+        await db.execute(
+            update(UserBadge)
+            .where(
+                UserBadge.id.in_(ids),
+                UserBadge.user_id == user.id,
+                UserBadge.family_id == user.family_id,
+                UserBadge.seen_at.is_(None),
+            )
+            .values(seen_at=datetime.now(timezone.utc))
+        )
+        await db.commit()
+
+    @staticmethod
+    async def earned_counts(db: AsyncSession, family_id: UUID, visible: tuple[str, ...]) -> dict[UUID, int]:
+        """Earned tiers per kid for the parent hub: one grouped query over
+        stored rows (no evaluation on the parent's request)."""
+        rows = (await db.execute(
+            select(UserBadge.user_id, func.count())
+            .where(UserBadge.family_id == family_id, UserBadge.badge.in_(visible))
+            .group_by(UserBadge.user_id)
+        )).all()
+        return {user_id: int(n) for user_id, n in rows}
