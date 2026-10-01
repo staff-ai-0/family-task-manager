@@ -16,7 +16,7 @@ It must not be a third "do your chores this week" surface. Two weekly things alr
 - Personal weekly quest, not a reworked boss battle and not parent-authored.
 - Reward = bonus points into the existing points ledger. No cash, no new currency.
 - One quest per kid per week, picked automatically. No choosing, no multiple quests.
-- Parents get one family setting: the bonus amount (default 20; 0 switches quests off).
+- Parents get one family setting: the bonus amount, `families.quest_bonus_points`, with three states: `NULL` = an existing family that has not decided (quests off; the parent hub shows a one-time opt-in card), `0` = off by a parent's choice (no card), `> 0` = on with that bonus. Decided by the user on 2026-10-01, before the first deploy: families that already exist start undecided (NULL — quests off) and see a one-time opt-in card on the parent hub ('Turn on (+20 points)' / 'Not now'); only families created afterwards default to 20.
 - A card on the kid home, celebrated in place (no modal); the parent hub shows each kid's quest.
 - Created and paid on read, like D2 badges: no scheduled job, no hooks in other services.
 
@@ -66,11 +66,12 @@ The target and the type are fixed when the quest row is created and never change
 
 ### Bonus
 
-- The amount is the family's `quest_bonus_points` at the moment the quest is created, copied onto the quest row. Default 20.
+- The amount is the family's `quest_bonus_points` at the moment the quest is created, copied onto the quest row. Default 20 for families created after the migration.
 - The bonus is paid **once**, the first time a read finds `progress ≥ target`, as a `point_transactions` row of type `bonus` (the same pattern as routine completion, `routine_service._award_completion`): it raises the kid's spendable points, and through D1's existing rule it counts toward XP and rank. It also counts toward that week's Family Cup standing; parents have no quests, so kids gain a small edge there.
 - Late settlement: every read also settles **last week's** quest, so a goal reached on Sunday night, or reached by a parent approving late, is still paid when the kid next opens the app. Quests older than last week are never settled.
 - Once paid, the bonus is never taken back, even if a later parent correction lowers the count.
-- `quest_bonus_points = 0` switches quests off for the family: no quest is created, no bonus is paid (including for a quest already in flight), and no card or hub chip shows.
+- `quest_bonus_points` has three states: `NULL` = an existing family that has not decided (quests off; the parent hub shows a one-time opt-in card), `0` = off by a parent's choice (no card), `> 0` = on with that bonus. Decided by the user on 2026-10-01, before the first deploy: families that already exist start undecided (NULL — quests off) and see a one-time opt-in card on the parent hub ('Turn on (+20 points)' / 'Not now'); only families created afterwards default to 20.
+- `NULL` and `0` both switch quests off for the family: no quest is created, no bonus is paid (including for a quest already in flight), and no card or hub chip shows.
 
 ### The "done" moment
 
@@ -98,7 +99,7 @@ One Alembic migration after `user_badges`:
   | `seen_at` | timestamptz, NULL | set when the kid saw the done moment |
 
   `UNIQUE(family_id, user_id, week_start)`.
-- New column `families.quest_bonus_points INTEGER NOT NULL DEFAULT 20`.
+- New column `families.quest_bonus_points INTEGER NULL DEFAULT 20`. Directly after adding it, the migration resets every existing row to NULL (`UPDATE families SET quest_bonus_points = NULL`), so families that already exist start undecided; only rows inserted later get the default.
 - `weekly_quests` is added to `EXPORTED_FAMILY_TABLES` in `family_export_service.py` with a ZIP member `progress/quests.json` (the registry test fails otherwise).
 
 ### `app/services/quest_service.py`
@@ -131,8 +132,8 @@ Same layout as `progress_service.py` and `badge_service.py`: pure rules on top, 
 
 ### Parents
 
-- `FamilyUpdate` / `FamilyResponse` (`schemas/family.py`) gain `quest_bonus_points` (`ge=0, le=500`); the existing parent-only family update route persists it.
-- `KidSummary` (`schemas/oversight.py`) gains `quest_progress: int | None`, `quest_target: int | None`, `quest_done: bool` — from this week's stored row plus that kid's computed progress. The hub only reads: it never creates or pays a quest, so a kid who has not opened the app this week shows no quest. With the bonus at 0 the three fields stay empty.
+- `FamilyUpdate` / `FamilyResponse` (`schemas/family.py`) gain `quest_bonus_points` (`ge=0, le=500` on update; nullable on the response, where `null` means undecided); the existing parent-only family update route persists it.
+- `KidSummary` (`schemas/oversight.py`) gains `quest_progress: int | None`, `quest_target: int | None`, `quest_done: bool` — from this week's stored row plus that kid's computed progress. The hub only reads: it never creates or pays a quest, so a kid who has not opened the app this week shows no quest. With the bonus at 0 or NULL the three fields stay empty.
 
 ## Frontend
 
@@ -146,7 +147,8 @@ Same layout as `progress_service.py` and `badge_service.py`: pure rules on top, 
   - it refetches `/api/progress/quest` on `ftm:deck-completed` (every completed task) and `ftm:deck-empty` (the event that already refreshes D1's pills) and re-renders bar, label and done state from `questView`.
 - **`pages/dashboard.astro`** fetches `/api/progress/quest` in the existing parallel `apiFetch` calls for kid roles and passes the view to `KidHome`.
 - **Parent hub:** each kid row shows the quest chip next to the progress line.
-- **Parent settings → Family:** a number field "Bono de la misión semanal" / "Weekly quest bonus" (points, 0–500) with the note "0 desactiva las misiones semanales" / "0 turns weekly quests off" and a hint that a change applies from the next quest ("El cambio aplica desde la siguiente misión." / "A change applies from the next quest."), saved through the existing family update.
+- **Parent hub opt-in card** (`pages/parent/index.astro`, `#quest-intro-banner`): rendered only while `family.quest_bonus_points == null`, directly after the AI-consent banner and before `<ParentHub>`, with the same pattern and styling. Heading "Nuevo: misiones semanales" / "New: weekly quests" (no emoji); a body that explains the quest and that the bonus can be changed or turned off in Family settings, with a link "Elegir otro bono" / "Choose another bonus" → `/parent/settings/family#quest-section`; two buttons — "Activar (+20 puntos)" / "Turn on (+20 points)" PATCHes `quest_bonus_points: 20`, "Ahora no" / "Not now" PATCHes `0`. The card is removed only when the PATCH succeeds; on failure it stays. One-time by data, like the AI-consent prompt: once the value is not NULL the card never renders again.
+- **Parent settings → Family:** a number field "Bono de la misión semanal" / "Weekly quest bonus" (points, 0–500) with the note "0 desactiva las misiones semanales" / "0 turns weekly quests off" and a hint that a change applies from the next quest ("El cambio aplica desde la siguiente misión." / "A change applies from the next quest."), saved through the existing family update. For an undecided family the field is blank (placeholder 20, so it never pretends quests are on), and the line "Las misiones semanales están apagadas." / "Weekly quests are off." shows whenever the bonus is not above 0.
 - Visual system: existing tokens only, ink text on brand fills, no emoji in an `<h1>`; the strict guard stays green. No native dialogs.
 - **Failure:** `apiFetch` returns null on error → no card; the rest of the kid home is unaffected.
 
@@ -156,7 +158,7 @@ Same layout as `progress_service.py` and `badge_service.py`: pure rules on top, 
 - **Service + API (pytest, test DB):** each type's count from real rows; pending-review and rejected work not counted, approved counted; late or missed chores not counted for `on_time` / `perfect_days`; the quest is created once per week and its target does not change when chores are added later; a type that is not offered is skipped and the next one is used; no quest when nothing qualifies; the bonus is paid exactly once across repeated reads and lands as a `bonus` transaction that raises `users.points`; last week's quest is paid on this week's read, the week before is not; setting at 0 → `applies: false`, nothing created or paid; a sibling's and another family's rows never count; `ack` only marks the caller's own row; parents get `applies: false` on GET and 404 on ack; `quest_bonus_points` validation (negative and > 500 rejected, parent-only); `KidSummary` quest fields; the family-export registry test passes.
 - **Migration:** covered by CI's upgrade → step-back → upgrade round-trip.
 - **Frontend (vitest):** `questView` null cases, titles in both languages with singular/plural, bar %, days-left labels, done and celebrate states, unknown key; `questChip`; structure tests for `QuestCard` (rendered only behind the view, ack once with keepalive, confetti only on celebrate) and for the settings field; strict visual guard, `astro check`, build.
-- **After deploy (prod, demo family `b8312b5a-c9c0-469f-992f-8dbd412db4a7` only):** as `sofia.demo` and `diego.demo` at 390 px — the card shows a quest with a sensible goal; `mariana.demo` hub rows show the chip; the settings field saves and 0 hides the card (then restore 20).
+- **After deploy (prod, demo family `b8312b5a-c9c0-469f-992f-8dbd412db4a7` only):** the demo family existed before the migration, so it starts undecided — first, as `mariana.demo`, the hub shows the opt-in card and "Turn on (+20 points)" removes it; then, as `sofia.demo` and `diego.demo` at 390 px, the card shows a quest with a sensible goal; `mariana.demo` hub rows show the chip; the settings field saves and 0 hides the card (then restore 20).
 
 ## Docs
 

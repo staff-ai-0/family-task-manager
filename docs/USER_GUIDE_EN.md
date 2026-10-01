@@ -2186,7 +2186,7 @@ The quest changes from week to week, and the goal is sized to each kid: a little
 
 Reaching the goal pays a points bonus once. Chores and bonus tasks that need a parent's review count once they are approved, so the bonus can arrive after the parent approves — even early the following week.
 
-> **For parents:** each kid's row on your home screen shows their quest (🏁 3/5, or 🏁 ✓ when done). You set the bonus in **Settings → Family → Weekly quest** (20 points by default). Setting it to 0 turns weekly quests off.
+> **For parents:** each kid's row on your home screen shows their quest (🏁 3/5, or 🏁 ✓ when done). You set the bonus in **Settings → Family → Weekly quest** (20 points by default). Setting it to 0 turns weekly quests off. Families that were already using the app start with weekly quests off: a card on your home screen offers to turn them on.
 
 ---
 

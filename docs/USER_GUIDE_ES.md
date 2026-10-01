@@ -2164,7 +2164,7 @@ La mision cambia de una semana a otra, y la meta se ajusta a cada nino: un poco 
 
 Lograr la meta paga un bono de puntos una sola vez. Las tareas y tareas extra que requieren revision de un papa cuentan cuando se aprueban, asi que el bono puede llegar despues de que el papa apruebe — incluso al inicio de la semana siguiente.
 
-> **Para papas:** la fila de cada hijo en su pantalla de inicio muestra su mision (🏁 3/5, o 🏁 ✓ cuando esta lograda). El bono se configura en **Ajustes → Familia → Mision semanal** (20 puntos por defecto). Ponerlo en 0 desactiva las misiones semanales.
+> **Para papas:** la fila de cada hijo en su pantalla de inicio muestra su mision (🏁 3/5, o 🏁 ✓ cuando esta lograda). El bono se configura en **Ajustes → Familia → Mision semanal** (20 puntos por defecto). Ponerlo en 0 desactiva las misiones semanales. Las familias que ya usaban la app empiezan con las misiones semanales apagadas: una tarjeta en su pantalla de inicio ofrece activarlas.
 
 ---
 
