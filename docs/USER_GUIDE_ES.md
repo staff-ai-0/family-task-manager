@@ -124,6 +124,10 @@ El objetivo de Family Task Manager es ayudar a las familias a construir, desde t
     - [16.1 Planes Disponibles](#161-planes-disponibles)
     - [16.2 Pagina de Suscripcion](#162-pagina-de-suscripcion)
 17. [Capitulo 17: Gigs (Ganancias Extra)](#capitulo-17-gigs-ganancias-extra)
+    - [Capitulo 17.5: Racha, Rango e Insignias](#capitulo-175-racha-rango-e-insignias)
+        - [17.5.1 Racha](#1751-racha)
+        - [17.5.2 Rango](#1752-rango)
+        - [17.5.3 Insignias](#1753-insignias)
 18. [Capitulo 18: Mascota Virtual](#capitulo-18-mascota-virtual)
 19. [Capitulo 19: Plan de Comidas](#capitulo-19-plan-de-comidas)
 20. [Capitulo 20: Listas de Compras](#capitulo-20-listas-de-compras)
@@ -2106,6 +2110,43 @@ Los padres gestionan el tablero desde **Gigs** en la barra de navegacion. (Si un
 | El padre rechaza un gig | Ninguno | Se reinicia a 0 |
 
 > **Tip para padres:** La racha de confianza los saca poco a poco de las aprobaciones de bajo riesgo. Si desea control mas estricto, rechace lo que no cumpla — eso reinicia la racha.
+
+---
+
+# Capitulo 17.5: Racha, Rango e Insignias
+
+Ninos y adolescentes ven su progreso en la parte superior de su pantalla de inicio. Toca la racha o el rango para abrir la hoja de progreso.
+
+## 17.5.1 Racha
+
+Termina todas las tareas asignadas del dia y ese dia cuenta para tu racha. Los dias sin tareas asignadas ni ayudan ni afectan. Cada semana (lunes a domingo) perdona tu primer dia fallado — aparece como un escudo. Un segundo fallo en la misma semana reinicia la racha.
+
+## 17.5.2 Rango
+
+Todo lo que ganas con tareas, tareas extra y gigs suma experiencia. Hay 10 rangos; la barra debajo de tu nombre muestra que tan cerca esta el siguiente. Gastar puntos en recompensas nunca baja tu rango.
+
+## 17.5.3 Insignias
+
+Hay 8 insignias, cada una con tres niveles — bronce, plata y oro:
+
+| Insignia | Como se gana | Bronce / Plata / Oro |
+|---|---|---|
+| Manos a la obra | Completar tareas | 10 / 50 / 200 |
+| Racha imparable | Alcanzar una racha de estos dias | 7 / 30 / 100 |
+| Semana perfecta | Terminar todas las tareas de una semana, sin dias fallados | 1 / 4 / 12 |
+| Milla extra | Completar tareas extra | 1 / 10 / 50 |
+| Espiritu emprendedor | Lograr gigs aprobadas | 1 / 10 / 50 |
+| Buen ahorro | Alcanzar metas de ahorro | 1 / 3 / 10 |
+| Bien merecido | Canjear recompensas | 1 / 5 / 20 |
+| Copa familiar | Ganar la Copa Familiar de la semana | 1 / 3 / 10 |
+
+Las tareas y tareas extra que requieren revision de un papa cuentan cuando se aprueban.
+
+La hoja de progreso muestra las tres insignias que tienes mas cerca. Tu perfil muestra el estante completo con tu avance hacia cada siguiente nivel. Una insignia ganada es tuya para siempre, aunque despues un papa corrija una tarea.
+
+Espiritu emprendedor y Buen ahorro solo aparecen cuando la familia usa gigs y el Banco Familiar.
+
+> **Para papas:** la fila de cada hijo en su pantalla de inicio muestra cuantos niveles de insignia ha ganado (🏅).
 
 ---
 

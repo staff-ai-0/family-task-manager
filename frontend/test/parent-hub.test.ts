@@ -171,6 +171,10 @@ describe("kidRowView progress line (UX-D1)", () => {
         const v = kidRowView({ user_id: "k1", name: "Sofía", role: "child" }, null, new Date(), "es");
         expect(v.progressLine).toBeNull();
     });
+    it("carries the badge count through to the row (UX-D2)", () => {
+        const v = kidRowView({ user_id: "k1", name: "Sofía", role: "child", streak_days: 5, rank: 4, badge_count: 3 }, null, new Date(), "es");
+        expect(v.progressLine).toBe("🔥 5 · Estrella · 🏅 3");
+    });
 });
 
 describe("monthSummaryView", () => {

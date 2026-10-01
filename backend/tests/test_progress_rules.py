@@ -87,3 +87,54 @@ class TestStreak:
         assert days[0] == date(2026, 9, 28) and days[-1] == date(2026, 10, 4) and len(days) == 7
         w = dict(r.week)
         assert w[d(-1)] == S.done and w[d(-3)] == S.none and w[TODAY] == S.today and w[d(1)] == S.future
+
+
+class TestBestAndPerfectWeeks:
+    """UX-D2: two extra outputs of the same walk."""
+
+    def test_best_is_the_peak_and_survives_a_reset(self):
+        # 10 done days (Fri 09-11 .. Sun 09-20), Mon 09-21 missed (shield),
+        # Tue 09-22 missed (reset), then two done days.
+        states = {d(-i): S.done for i in range(11, 21)}
+        states[d(-10)] = S.missed
+        states[d(-9)] = S.missed
+        states[d(-2)] = S.done
+        states[d(-1)] = S.done
+        r = compute_streak(states, TODAY)
+        assert r.days == 2
+        assert r.best == 10
+
+    def test_best_equals_days_when_never_reset(self):
+        r = compute_streak({d(-i): S.done for i in range(1, 6)}, TODAY)
+        assert r.days == 5 and r.best == 5
+
+    def test_best_is_capped_at_the_lookback(self):
+        assert compute_streak({d(-i): S.done for i in range(1, 500)}, TODAY).best == 365
+
+    def test_three_full_weeks_done_are_three_perfect_weeks(self):
+        # Mon 2026-09-07 .. Sun 2026-09-27, plus this week's Mon-Wed.
+        states = {d(-i): S.done for i in range(1, 25)}
+        assert compute_streak(states, TODAY).perfect_weeks == 3
+
+    def test_a_week_with_a_forgiven_miss_is_not_perfect(self):
+        # Week of Mon 09-21: all done except Wed 09-23 (missed -> shield).
+        states = {d(-i): S.done for i in range(4, 11)}
+        states[d(-8)] = S.missed
+        assert compute_streak(states, TODAY).perfect_weeks == 0
+
+    def test_a_week_with_nothing_due_is_not_perfect(self):
+        assert compute_streak({}, TODAY).perfect_weeks == 0
+
+    def test_one_done_day_and_the_rest_free_is_perfect(self):
+        assert compute_streak({d(-7): S.done}, TODAY).perfect_weeks == 1   # Thu 09-24
+
+    def test_the_current_week_never_counts(self):
+        states = {d(-3): S.done, d(-2): S.done, d(-1): S.done, TODAY: S.done}
+        assert compute_streak(states, TODAY).perfect_weeks == 0
+
+    def test_a_week_cut_by_the_lookback_start_is_not_perfect(self):
+        # The walk starts Wed 2025-10-01; that week's Monday (09-29) is outside it.
+        states = {d(-i): S.done for i in range(361, 366)}      # Wed 10-01 .. Sun 10-05
+        assert compute_streak(states, TODAY).perfect_weeks == 0
+        states[d(-360)] = S.done                               # Mon 2025-10-06
+        assert compute_streak(states, TODAY).perfect_weeks == 1

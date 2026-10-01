@@ -4,7 +4,7 @@ Whole-family data export (WS-DEL / compliance).
 Builds a ZIP of JSON dumps for every user-facing domain owned by ONE family:
 users (sans credentials), task templates/assignments, gigs, points/cash, rewards, consequences,
 budget (reusing the budget ExportService so that portion stays re-importable),
-calendar, meals, shopping, chat + DMs, pets, notifications, Jarvis (chat
+calendar, meals, shopping, chat + DMs, pets, earned badges, notifications, Jarvis (chat
 history, schedules, pending actions, MCP token metadata), kiosk devices,
 onboarding events, subscription/usage/credit grants, and A2A webhook config.
 
@@ -76,6 +76,7 @@ from app.models import (
     TaskTemplate,
     UsageTracking,
     User,
+    UserBadge,
     UserRewardGoal,
 )
 from app.models.budget import (
@@ -162,6 +163,9 @@ EXPORTED_FAMILY_TABLES: frozenset[str] = frozenset(
         CashTransaction,
         KidBankAccount,
         KidSavingsGoal,
+        # Earned badge tiers are permanent and cannot be rebuilt from history
+        # (counts can drop after a parent correction; the tier stays).
+        UserBadge,
         Routine,
         Reward,
         RewardRedemption,
@@ -341,6 +345,7 @@ class FamilyExportService:
         cash = await _rows(db, fam(CashTransaction))
         bank_accounts = await _rows(db, fam(KidBankAccount))
         savings_goals = await _rows(db, fam(KidSavingsGoal))
+        badges = await _rows(db, fam(UserBadge))
         routines = await _rows(db, fam(Routine))
         _routine_ids = [r.id for r in routines]
         routine_steps = (
@@ -500,6 +505,7 @@ class FamilyExportService:
             "points/cash_transactions.json": _dump(cash),
             "bank/kid_bank_accounts.json": _dump(bank_accounts),
             "bank/savings_goals.json": _dump(savings_goals),
+            "progress/badges.json": _dump(badges),
             "routines/routines.json": _dump(routines),
             "routines/steps.json": _dump(routine_steps),
             "routines/progress.json": _dump(routine_progress),

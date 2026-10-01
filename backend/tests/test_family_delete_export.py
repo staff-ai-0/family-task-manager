@@ -353,6 +353,7 @@ class TestFamilyExport:
             "chat/messages.json",
             "notifications.json",
             "invitations.json",
+            "progress/badges.json",
             "uploads_manifest.json",
             "budget/budget_data.json",
             "budget/metadata.json",

@@ -32,6 +32,7 @@ from app.schemas.oversight import (
     PendingApprovalItem,
     PendingCounts,
 )
+from app.services.badge_service import BadgeService
 from app.services.progress_service import ProgressService, compute_streak, rank_for_xp
 from app.services.reward_goal_service import RewardGoalService
 from app.services.task_assignment_service import TaskAssignmentService
@@ -131,7 +132,7 @@ class OversightService:
 
     @staticmethod
     async def get_summary(db: AsyncSession, family_id: UUID) -> OversightSummary:
-        """Per-kid cards + unified pending counts. Nine fixed queries, plus 3
+        """Per-kid cards + unified pending counts. Eleven fixed queries, plus 3
         small progress queries per kid (ProgressService.xp_for's two sums,
         day_states) for streak/rank — not row-count N+1, but not O(1) either.
         """
@@ -210,6 +211,9 @@ class OversightService:
         goals = await RewardGoalService.get_family_goals(family_id, db)
 
         today, tz = await ProgressService.family_today(db, family_id)
+        badge_counts = await BadgeService.earned_counts(
+            db, family_id, await BadgeService.visible_for(db, family_id)
+        )
 
         threshold = max(1, settings.GIG_AUTO_APPROVE_STREAK)
         members: list[KidSummary] = []
@@ -248,6 +252,7 @@ class OversightService:
                     last_nudged_at=last_nudges.get(kid.id),
                     streak_days=int(progress_streak.days),
                     rank=int(rank_for_xp(xp)),
+                    badge_count=int(badge_counts.get(kid.id, 0)),
                 )
             )
 

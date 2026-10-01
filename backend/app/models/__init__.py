@@ -60,6 +60,7 @@ from app.models.kid_savings_goal import KidSavingsGoal
 from app.models.referral import Referral
 from app.models.plan_credit import Coupon, PlanCreditGrant
 from app.models.routine import Routine, RoutineStep, RoutineProgress
+from app.models.user_badge import UserBadge
 from app.models.operator_audit import OperatorAuditLog  # noqa: F401
 
 __all__ = [
@@ -146,6 +147,7 @@ __all__ = [
     "JarvisMcpToken",
     # Operator audit log
     "OperatorAuditLog",
+    "UserBadge",
     # Enums
     "UserRole",
     "AssignmentStatus",

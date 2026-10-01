@@ -37,6 +37,9 @@ class KidSummary(BaseModel):
     # UX-D1: same values as the kid's own /api/progress/me.
     streak_days: int = 0
     rank: int = 1
+    # UX-D2: earned badge tiers already recorded for this kid (stored rows in
+    # the family's visible badge families) — it moves when the kid opens the app.
+    badge_count: int = 0
 
 
 class PendingCounts(BaseModel):
