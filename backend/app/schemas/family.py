@@ -102,7 +102,9 @@ class FamilyResponse(EntityResponse):
     # User-visible term for the gig board, per family. DB/routes stay "gig".
     gig_term: str = "gig"
     point_value_cents: int = 100
-    quest_bonus_points: int = 20
+    # UX-D3 weekly quest bonus: NULL = not decided yet (quests off, parent hub
+    # shows a one-time opt-in card), 0 = off by choice, > 0 = on.
+    quest_bonus_points: Optional[int] = None
     # Stored value: NULL = all modules on. Clients resolve via the same rule.
     enabled_modules: Optional[List[str]] = None
 

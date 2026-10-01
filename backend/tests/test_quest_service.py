@@ -125,6 +125,17 @@ class TestCreation:
         assert resp.applies is False and resp.quest is None
         assert await _quest_count(db_session, kid) == 0
 
+    async def test_an_undecided_family_gets_no_quest(self, db_session, test_family, test_child_user):
+        kid = test_child_user
+        today, _tz, _week = await _ctx(db_session, kid)
+        await _assign(db_session, kid, await _template(db_session, kid.family_id), today,
+                      status=AssignmentStatus.PENDING)
+        test_family.quest_bonus_points = None          # existing family that has not opted in
+        await db_session.commit()
+        resp = await QuestService.sync(db_session, kid)
+        assert resp.applies is False and resp.quest is None
+        assert await _quest_count(db_session, kid) == 0
+
     async def test_parent_does_not_apply(self, db_session, test_parent_user):
         resp = await QuestService.sync(db_session, test_parent_user)
         assert resp.applies is False and resp.quest is None and resp.celebrate is None
@@ -406,6 +417,15 @@ class TestAckAndHub:
         test_family.quest_bonus_points = 0
         await db_session.commit()
         assert await QuestService.hub_progress(db_session, test_family.id, ids) == {}
+
+    async def test_hub_progress_is_empty_for_an_undecided_family(self, db_session, test_family, test_child_user):
+        kid = test_child_user
+        today, _tz, week = await _ctx(db_session, kid)
+        await _quest(db_session, kid, week, "on_time", 2)
+        await _assign(db_session, kid, await _template(db_session, kid.family_id), today)
+        test_family.quest_bonus_points = None
+        await db_session.commit()
+        assert await QuestService.hub_progress(db_session, test_family.id, [kid.id]) == {}
 
 
 class TestIsolation:

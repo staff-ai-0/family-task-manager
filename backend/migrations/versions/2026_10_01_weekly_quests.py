@@ -17,8 +17,12 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         "families",
-        sa.Column("quest_bonus_points", sa.Integer(), nullable=False, server_default="20"),
+        sa.Column("quest_bonus_points", sa.Integer(), nullable=True, server_default="20"),
     )
+    # Families that already exist start UNDECIDED (NULL = quests off + a
+    # one-time opt-in card on the parent hub). Only families created after
+    # this migration get the default of 20.
+    op.execute("UPDATE families SET quest_bonus_points = NULL")
     op.create_table(
         "weekly_quests",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),

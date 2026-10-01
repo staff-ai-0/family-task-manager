@@ -59,6 +59,24 @@ class TestFamilySetting:
         assert (await client.patch("/api/families/me", json={"quest_bonus_points": -1}, headers=auth_headers)).status_code == 422
         assert (await client.patch("/api/families/me", json={"quest_bonus_points": 501}, headers=auth_headers)).status_code == 422
 
+    async def test_an_undecided_family_reads_null(self, client, auth_headers, db_session, test_family):
+        test_family.quest_bonus_points = None          # existed before UX-D3: has not decided yet
+        await db_session.commit()
+        r = await client.get("/api/families/me", headers=auth_headers)
+        assert r.status_code == 200 and r.json()["quest_bonus_points"] is None
+
+    async def test_an_undecided_family_can_turn_quests_on(self, client, auth_headers, db_session, test_family):
+        test_family.quest_bonus_points = None
+        await db_session.commit()
+        r = await client.patch("/api/families/me", json={"quest_bonus_points": 20}, headers=auth_headers)
+        assert r.status_code == 200 and r.json()["quest_bonus_points"] == 20
+
+    async def test_an_undecided_family_can_turn_quests_off(self, client, auth_headers, db_session, test_family):
+        test_family.quest_bonus_points = None
+        await db_session.commit()
+        r = await client.patch("/api/families/me", json={"quest_bonus_points": 0}, headers=auth_headers)
+        assert r.status_code == 200 and r.json()["quest_bonus_points"] == 0
+
     async def test_a_kid_cannot_change_it(self, client, test_child_user):
         login = await client.post("/api/auth/login", json={"email": "child@test.com", "password": "password123"})
         h = {"Authorization": f"Bearer {login.json()['access_token']}"}
