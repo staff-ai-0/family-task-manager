@@ -1,4 +1,5 @@
-"""UX-D1 progress (streak + rank) and UX-D2 badges API shapes. All numbers are plain ints."""
+"""UX-D1 progress (streak + rank), UX-D2 badges, and UX-D3 weekly quest API
+shapes. All numbers are plain ints."""
 from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
@@ -50,3 +51,33 @@ class BadgesResponse(BaseModel):
 
 class AckBadgesRequest(BaseModel):
     ids: list[UUID] = Field(min_length=1, max_length=24)
+
+
+class QuestProgress(BaseModel):
+    id: UUID
+    quest: str                 # catalog key
+    target: int
+    progress: int              # capped at target; equals target once paid
+    bonus_points: int
+    week_start: date
+    days_left: int             # counts today (Sunday = 1)
+    completed: bool            # the bonus was paid
+
+
+class QuestCelebrate(BaseModel):
+    id: UUID
+    quest: str
+    target: int
+    bonus_points: int
+    last_week: bool
+
+
+class QuestResponse(BaseModel):
+    applies: bool
+    gig_term: str = "gig"      # the family's word for a gig (go_getter copy)
+    quest: Optional[QuestProgress] = None
+    celebrate: Optional[QuestCelebrate] = None
+
+
+class AckQuestRequest(BaseModel):
+    id: UUID

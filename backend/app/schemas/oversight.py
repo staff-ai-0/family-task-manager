@@ -40,6 +40,11 @@ class KidSummary(BaseModel):
     # UX-D2: earned badge tiers already recorded for this kid (stored rows in
     # the family's visible badge families) — it moves when the kid opens the app.
     badge_count: int = 0
+    # UX-D3: this week's quest, when the kid has one (stored row + derived
+    # progress). The hub only reads — it never creates or pays a quest.
+    quest_progress: Optional[int] = None
+    quest_target: Optional[int] = None
+    quest_done: bool = False
 
 
 class PendingCounts(BaseModel):

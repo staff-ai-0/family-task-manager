@@ -34,6 +34,7 @@ from app.schemas.oversight import (
 )
 from app.services.badge_service import BadgeService
 from app.services.progress_service import ProgressService, compute_streak, rank_for_xp
+from app.services.quest_service import QuestService
 from app.services.reward_goal_service import RewardGoalService
 from app.services.task_assignment_service import TaskAssignmentService
 
@@ -214,6 +215,7 @@ class OversightService:
         badge_counts = await BadgeService.earned_counts(
             db, family_id, await BadgeService.visible_for(db, family_id)
         )
+        quest_rows = await QuestService.hub_progress(db, family_id, [kid.id for kid in kids])
 
         threshold = max(1, settings.GIG_AUTO_APPROVE_STREAK)
         members: list[KidSummary] = []
@@ -224,6 +226,7 @@ class OversightService:
             progress_streak = compute_streak(
                 await ProgressService.day_states(db, family_id, kid.id, today, tz), today,
             )
+            quest = quest_rows.get(kid.id)
             members.append(
                 KidSummary(
                     user_id=kid.id,
@@ -253,6 +256,9 @@ class OversightService:
                     streak_days=int(progress_streak.days),
                     rank=int(rank_for_xp(xp)),
                     badge_count=int(badge_counts.get(kid.id, 0)),
+                    quest_progress=int(quest[0]) if quest else None,
+                    quest_target=int(quest[1]) if quest else None,
+                    quest_done=bool(quest[2]) if quest else False,
                 )
             )
 

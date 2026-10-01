@@ -78,6 +78,7 @@ from app.models import (
     User,
     UserBadge,
     UserRewardGoal,
+    WeeklyQuest,
 )
 from app.models.budget import (
     BudgetAccount,
@@ -166,6 +167,7 @@ EXPORTED_FAMILY_TABLES: frozenset[str] = frozenset(
         # Earned badge tiers are permanent and cannot be rebuilt from history
         # (counts can drop after a parent correction; the tier stays).
         UserBadge,
+        WeeklyQuest,
         Routine,
         Reward,
         RewardRedemption,
@@ -346,6 +348,7 @@ class FamilyExportService:
         bank_accounts = await _rows(db, fam(KidBankAccount))
         savings_goals = await _rows(db, fam(KidSavingsGoal))
         badges = await _rows(db, fam(UserBadge))
+        quests = await _rows(db, fam(WeeklyQuest))
         routines = await _rows(db, fam(Routine))
         _routine_ids = [r.id for r in routines]
         routine_steps = (
@@ -506,6 +509,7 @@ class FamilyExportService:
             "bank/kid_bank_accounts.json": _dump(bank_accounts),
             "bank/savings_goals.json": _dump(savings_goals),
             "progress/badges.json": _dump(badges),
+            "progress/quests.json": _dump(quests),
             "routines/routines.json": _dump(routines),
             "routines/steps.json": _dump(routine_steps),
             "routines/progress.json": _dump(routine_progress),

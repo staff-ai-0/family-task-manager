@@ -128,6 +128,7 @@ Family Task Manager's objective is to help families build real habits of respons
         - [17.5.1 Streak](#1751-streak)
         - [17.5.2 Rank](#1752-rank)
         - [17.5.3 Badges](#1753-badges)
+        - [17.5.4 Weekly Quest](#1754-weekly-quest)
 18. [Chapter 18: Virtual Pet](#chapter-18-virtual-pet)
 19. [Chapter 19: Meal Planning](#chapter-19-meal-planning)
 20. [Chapter 20: Shopping Lists](#chapter-20-shopping-lists)
@@ -2162,13 +2163,30 @@ There are 8 badges, each with three levels — bronze, silver and gold:
 | Well Earned | Redeem rewards | 1 / 5 / 20 |
 | Cup Champion | Win the weekly Family Cup | 1 / 3 / 10 |
 
-Chores and bonus tasks that need a parent's review count once they are approved.
+For Hard Worker and Extra Mile, chores and bonus tasks that need a parent's review count once they are approved.
 
 The progress sheet shows the three badges you are closest to. Your profile shows the full shelf with your progress toward each next level. A badge you have earned is yours for good, even if a parent later corrects a chore.
 
 Go-Getter and Smart Saver only appear when the family uses gigs and the Family Bank.
 
 > **For parents:** each kid's row on your home screen shows how many badge levels they have earned (🏅).
+
+## 17.5.4 Weekly Quest
+
+Every week (Monday to Sunday) each kid and teen gets one personal quest. It appears as a card on their home screen, under their tasks.
+
+| Quest | Goal |
+|---|---|
+| On time | Finish a number of chores on the day they are due |
+| Perfect days | Have a number of days where every chore was done on time |
+| Extra mile | Do a number of bonus tasks |
+| Go-getter | Get a number of gigs approved |
+
+The quest changes from week to week, and the goal is sized to each kid: a little above what they did in recent weeks, and never more than they can still reach. Once the week's quest is set, its goal does not change.
+
+Reaching the goal pays a points bonus once. Chores and bonus tasks that need a parent's review count once they are approved, so the bonus can arrive after the parent approves — even early the following week.
+
+> **For parents:** each kid's row on your home screen shows their quest (🏁 3/5, or 🏁 ✓ when done). You set the bonus in **Settings → Family → Weekly quest** (20 points by default). Setting it to 0 turns weekly quests off. Families that were already using the app start with weekly quests off: a card on your home screen offers to turn them on.
 
 ---
 

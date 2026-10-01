@@ -6,6 +6,7 @@
 import { parseUtcInstant } from "./datetime";
 import { payMeterView, type PayMeter } from "./kidHome";
 import { progressLine } from "./progress";
+import { questChip } from "./quest";
 
 /** Mirror of the backend's NUDGE_COOLDOWN (display only — the server decides). */
 export const NUDGE_COOLDOWN_MS = 3 * 3600 * 1000;
@@ -69,7 +70,8 @@ export function kidRowView(kid: any, paycheck: any, now: Date, lang: "es" | "en"
             ? `🎯 ${goal.reward_title} · ${goal.affordable ? (es ? "¡lista!" : "ready!") : `${n(goal.progress_pct)}%`}`
             : null,
         nudge: nudgeState(kid, now),
-        progressLine: progressLine(kid, lang),
+        // Streak · rank · badges (UX-D1/D2), then the weekly quest (UX-D3).
+        progressLine: [progressLine(kid, lang), questChip(kid)].filter(Boolean).join(" · ") || null,
     };
 }
 

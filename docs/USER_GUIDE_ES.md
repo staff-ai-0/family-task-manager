@@ -128,6 +128,7 @@ El objetivo de Family Task Manager es ayudar a las familias a construir, desde t
         - [17.5.1 Racha](#1751-racha)
         - [17.5.2 Rango](#1752-rango)
         - [17.5.3 Insignias](#1753-insignias)
+        - [17.5.4 Mision Semanal](#1754-mision-semanal)
 18. [Capitulo 18: Mascota Virtual](#capitulo-18-mascota-virtual)
 19. [Capitulo 19: Plan de Comidas](#capitulo-19-plan-de-comidas)
 20. [Capitulo 20: Listas de Compras](#capitulo-20-listas-de-compras)
@@ -2140,13 +2141,30 @@ Hay 8 insignias, cada una con tres niveles — bronce, plata y oro:
 | Bien merecido | Canjear recompensas | 1 / 5 / 20 |
 | Copa familiar | Ganar la Copa Familiar de la semana | 1 / 3 / 10 |
 
-Las tareas y tareas extra que requieren revision de un papa cuentan cuando se aprueban.
+Para Manos a la obra y Milla extra, las tareas y tareas extra que requieren revision de un papa cuentan cuando se aprueban.
 
 La hoja de progreso muestra las tres insignias que tienes mas cerca. Tu perfil muestra el estante completo con tu avance hacia cada siguiente nivel. Una insignia ganada es tuya para siempre, aunque despues un papa corrija una tarea.
 
 Espiritu emprendedor y Buen ahorro solo aparecen cuando la familia usa gigs y el Banco Familiar.
 
 > **Para papas:** la fila de cada hijo en su pantalla de inicio muestra cuantos niveles de insignia ha ganado (🏅).
+
+## 17.5.4 Mision Semanal
+
+Cada semana (lunes a domingo) cada nino y adolescente recibe una mision personal. Aparece como una tarjeta en su pantalla de inicio, debajo de sus tareas.
+
+| Mision | Meta |
+|---|---|
+| A tiempo | Terminar cierto numero de tareas el dia que tocan |
+| Dias perfectos | Lograr cierto numero de dias con todas las tareas hechas a tiempo |
+| Milla extra | Hacer cierto numero de tareas extra |
+| Emprendedor | Lograr cierto numero de gigs aprobadas |
+
+La mision cambia de una semana a otra, y la meta se ajusta a cada nino: un poco arriba de lo que hizo en las semanas recientes, y nunca mas de lo que todavia puede alcanzar. Una vez fijada la mision de la semana, su meta no cambia.
+
+Lograr la meta paga un bono de puntos una sola vez. Las tareas y tareas extra que requieren revision de un papa cuentan cuando se aprueban, asi que el bono puede llegar despues de que el papa apruebe — incluso al inicio de la semana siguiente.
+
+> **Para papas:** la fila de cada hijo en su pantalla de inicio muestra su mision (🏁 3/5, o 🏁 ✓ cuando esta lograda). El bono se configura en **Ajustes → Familia → Mision semanal** (20 puntos por defecto). Ponerlo en 0 desactiva las misiones semanales. Las familias que ya usaban la app empiezan con las misiones semanales apagadas: una tarjeta en su pantalla de inicio ofrece activarlas.
 
 ---
 
