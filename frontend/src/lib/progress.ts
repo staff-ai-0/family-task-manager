@@ -92,7 +92,8 @@ export function progressDomUpdate(view: ProgressView): ProgressDomUpdate {
 export function progressLine(kid: any, lang: "es" | "en"): string | null {
     if (kid?.rank == null || kid?.streak_days == null) return null;
     const skin: Skin = kid.role === "teen" ? "teen" : "child";
-    return `🔥 ${Number(kid.streak_days) || 0} · ${rankName(kid.rank, skin, lang)}`;
+    const badges = Math.trunc(Number(kid.badge_count) || 0);   // UX-D2: earned badge tiers
+    return `🔥 ${Number(kid.streak_days) || 0} · ${rankName(kid.rank, skin, lang)}${badges > 0 ? ` · 🏅 ${badges}` : ""}`;
 }
 
 /**
