@@ -42,6 +42,19 @@ describe("BadgeCelebration is a real modal (same contract as RankUpCelebration)"
     it("never puts an emoji in a heading element", () => {
         expect(src).not.toMatch(/<h1\b/);
     });
+    it("sends the ack with keepalive, so a tap on a nav link right after dismissing does not lose it", () => {
+        expect(src).toMatch(/keepalive:\s*true/);
+    });
+    it("never lays tiles out in three columns, and wraps long badge names", () => {
+        expect(src).not.toMatch(/grid-cols-3/);
+        expect(src).toMatch(/<p class="[^"]*\bbreak-words\b[^"]*">\{b\.name\}<\/p>/);
+    });
+    it("hides the stars from screen readers (the tier name is printed right after)", () => {
+        const stars = src.match(/<p\b[^>]*>\{b\.stars\}<\/p>/)?.[0] ?? "";
+        expect(stars).not.toBe("");
+        expect(stars).toMatch(/aria-hidden="true"/);
+        expect(stars).not.toMatch(/role="img"|aria-label/);
+    });
 });
 
 describe("dashboard wiring (one modal per load, tour-gated)", () => {
