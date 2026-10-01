@@ -128,6 +128,7 @@ El objetivo de Family Task Manager es ayudar a las familias a construir, desde t
         - [17.5.1 Racha](#1751-racha)
         - [17.5.2 Rango](#1752-rango)
         - [17.5.3 Insignias](#1753-insignias)
+        - [17.5.4 Mision Semanal](#1754-mision-semanal)
 18. [Capitulo 18: Mascota Virtual](#capitulo-18-mascota-virtual)
 19. [Capitulo 19: Plan de Comidas](#capitulo-19-plan-de-comidas)
 20. [Capitulo 20: Listas de Compras](#capitulo-20-listas-de-compras)

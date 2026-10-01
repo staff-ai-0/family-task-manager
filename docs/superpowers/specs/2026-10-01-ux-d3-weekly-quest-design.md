@@ -34,8 +34,8 @@ Kids and teens only (roles CHILD, TEEN — `KID_ROLES`). One quest per kid per *
 |---|---|---|---|---|
 | `on_time` | ⏰ | "Termina {n} tareas a tiempo" / "Finish {n} chores on time" | non-bonus assignments with `week_of` = this week that are done on time and count (see below) | the kid has at least one open chore dated today or later this week |
 | `perfect_days` | ✨ | "Logra {n} días perfectos" / "Have {n} perfect days" | days of this week that have ≥ 1 due chore and whose every due chore is done on time and counts | at least one day of this week can still become perfect (no failed chore, at least one chore still open or awaiting review) |
-| `extra_mile` | 🚀 | "Haz {n} tareas extra" / "Do {n} bonus tasks" | bonus assignments (`is_bonus = true`) with `week_of` = this week that are completed and count | the family has at least one active bonus template |
-| `go_getter` | 💼 | "Logra {n} gigs aprobadas" / "Get {n} gigs approved" | `gig_claims` of the kid with `status = approved` and `approved_at` inside this week | the `gigs` module is on, the kid is not in star mode (star-mode kids have no gig board), and at least one active, approved offering is open to the kid's role |
+| `extra_mile` | 🚀 | "Haz {n} tareas extra" / "Do {n} bonus tasks" | bonus assignments (`is_bonus = true`) with `week_of` = this week that are completed and count | the kid has at least one bonus task this week that is still open (dated today or later) or awaiting review |
+| `go_getter` | 💼 | "Logra {n} gigs aprobadas" / "Get {n} gigs approved" | `gig_claims` of the kid with `status = approved` and `approved_at` inside this week | the `gigs` module is on, the kid is not in star mode (star-mode kids have no gig board), and at least one active, approved offering is open to the kid's role, and that the kid does not already hold an approved claim on |
 
 "n" uses the singular form at 1 ("1 tarea", "1 chore", "1 día perfecto", "1 perfect day", …). The `go_getter` text uses the family's own word for a gig (`families.gig_term`: "gig" or "chamba").
 
@@ -55,9 +55,12 @@ For the chosen type:
 2. `ceiling` = what is still achievable this week = already done + still possible:
    - `on_time`: done so far + chores that can still count (open chores dated today or later, plus on-time work awaiting review);
    - `perfect_days`: perfect days so far + days that can still become perfect;
-   - `extra_mile` and `go_getter`: unbounded (open-ended work), capped at 7.
+   - `extra_mile`: done so far + the kid's bonus tasks that can still count (open and dated today or later, or awaiting review);
+   - `go_getter`: done so far + the gig offerings the kid can still get approved, capped at 7 in total.
 3. `target = min(stretch, ceiling)`.
 4. The quest is **achievable** only if `target ≥ done so far + 1`. A quest never starts finished: if the type's target would already be met, that type is skipped.
+
+Decided at the final review: the first draft treated both as unbounded, which made the goal regularly unwinnable — bonus tasks are finite dated rows, and single-slot gigs close on their first approval.
 
 The target and the type are fixed when the quest row is created and never change afterwards, even if chores are added, cancelled or corrected.
 
@@ -140,10 +143,10 @@ Same layout as `progress_service.py` and `badge_service.py`: pure rules on top, 
   - in progress: emoji + goal title, a progress bar with `3/5`, "Quedan {n} días" / "{n} days left" ("Último día" / "Last day" at 1), and the prize "+20 puntos" / "+20 points";
   - done: "¡Misión lograda! +20 puntos" / "Quest done! +20 points" on a mint fill with ink text;
   - when `celebrate` is present the card shows that result, fires `fireConfetti()` once, and POSTs the ack (`keepalive: true`);
-  - it refetches `/api/progress/quest` on `ftm:deck-empty` (the event that already refreshes D1's pills) and re-renders bar, label and done state from `questView`.
+  - it refetches `/api/progress/quest` on `ftm:deck-completed` (every completed task) and `ftm:deck-empty` (the event that already refreshes D1's pills) and re-renders bar, label and done state from `questView`.
 - **`pages/dashboard.astro`** fetches `/api/progress/quest` in the existing parallel `apiFetch` calls for kid roles and passes the view to `KidHome`.
 - **Parent hub:** each kid row shows the quest chip next to the progress line.
-- **Parent settings → Family:** a number field "Bono de la misión semanal" / "Weekly quest bonus" (points, 0–500) with the note "0 desactiva las misiones semanales" / "0 turns weekly quests off", saved through the existing family update.
+- **Parent settings → Family:** a number field "Bono de la misión semanal" / "Weekly quest bonus" (points, 0–500) with the note "0 desactiva las misiones semanales" / "0 turns weekly quests off" and a hint that a change applies from the next quest ("El cambio aplica desde la siguiente misión." / "A change applies from the next quest."), saved through the existing family update.
 - Visual system: existing tokens only, ink text on brand fills, no emoji in an `<h1>`; the strict guard stays green. No native dialogs.
 - **Failure:** `apiFetch` returns null on error → no card; the rest of the kid home is unaffected.
 

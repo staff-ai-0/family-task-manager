@@ -128,6 +128,7 @@ Family Task Manager's objective is to help families build real habits of respons
         - [17.5.1 Streak](#1751-streak)
         - [17.5.2 Rank](#1752-rank)
         - [17.5.3 Badges](#1753-badges)
+        - [17.5.4 Weekly Quest](#1754-weekly-quest)
 18. [Chapter 18: Virtual Pet](#chapter-18-virtual-pet)
 19. [Chapter 19: Meal Planning](#chapter-19-meal-planning)
 20. [Chapter 20: Shopping Lists](#chapter-20-shopping-lists)
