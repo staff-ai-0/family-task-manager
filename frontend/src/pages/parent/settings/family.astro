@@ -212,6 +212,26 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
         </div>
     </section>
 
+    <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-3" id="smart-reminders-section"
+             data-saved={lang === "es" ? "Guardado." : "Saved."}
+             data-error={lang === "es" ? "No se pudo guardar. Intenta de nuevo." : "Could not save. Try again."}>
+        <h2 class="text-sm font-bold text-brand-ink">🔔 {lang === "es" ? "Recordatorios inteligentes" : "Smart reminders"}</h2>
+        <label class="flex items-start gap-3 cursor-pointer">
+            <input type="checkbox" id="smart-reminders" checked={family?.smart_reminders_enabled !== false}
+                   class="mt-0.5 h-5 w-5 rounded border-brand-ink/30 accent-brand-ink" />
+            <span>
+                <span class="block text-sm font-semibold text-brand-ink">
+                    {lang === "es" ? "Recordatorios inteligentes para los hijos" : "Smart reminders for kids"}
+                </span>
+                <span class="block text-xs text-brand-ink-soft mt-1">
+                    {lang === "es"
+                        ? "A las 6:00 pm avisamos a tus hijos solo si su racha está en riesgo o les falta un paso para su misión de la semana. Máximo un aviso al día."
+                        : "At 6:00 pm we tell your kids only when their streak is at risk or they are one step from their weekly quest. One reminder a day at most."}
+                </span>
+            </span>
+        </label>
+    </section>
+
     <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-3" id="modules-section">
         <h2 class="text-sm font-bold text-brand-ink">📦 {lang === "es" ? "Módulos" : "Modules"}</h2>
         <p class="text-xs text-brand-ink-soft">
@@ -604,5 +624,30 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
         } finally {
             save.removeAttribute("disabled");
         }
+    });
+</script>
+
+<script>
+    import { showToast } from "../../../lib/toast";
+
+    const section = document.getElementById("smart-reminders-section");
+    const input = document.getElementById("smart-reminders") as HTMLInputElement | null;
+    input?.addEventListener("change", async () => {
+        if (!section) return;
+        input.disabled = true;
+        let ok = false;
+        try {
+            const r = await fetch("/api/families/me", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ smart_reminders_enabled: input.checked }),
+            });
+            ok = r.ok;
+        } catch {
+            ok = false;
+        }
+        if (!ok) input.checked = !input.checked;
+        showToast(ok ? (section.dataset.saved ?? "") : (section.dataset.error ?? ""), ok ? "success" : "error");
+        input.disabled = false;
     });
 </script>
