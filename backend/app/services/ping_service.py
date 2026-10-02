@@ -7,11 +7,21 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import Optional
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.gig import GigClaim, GigClaimStatus
 from app.models.notification import NotificationType as NT
-from app.models.task_assignment import ApprovalStatus, AssignmentStatus
+from app.models.reward import RedemptionStatus, RewardRedemption
+from app.models.task_assignment import ApprovalStatus, AssignmentStatus, TaskAssignment
+from app.models.task_template import TaskTemplate
+from app.models.user import User, UserRole
+from app.services.progress_service import KID_ROLES
 from app.services.quest_service import ChoreRow, bonus_state, chore_state
+from app.services.task_assignment_service import TaskAssignmentService
 
 # The sweep acts while the family's local hour is 18, 19 or 20. With the server
 # up, the 18:00 run handles everyone; the later hours only recover a run that
@@ -78,3 +88,56 @@ def pick_ping(streak_key: Optional[str], quest_ok: bool) -> Optional[str]:
     if streak_key:
         return streak_key
     return "quest_nudge" if quest_ok else None
+
+
+# ── Queries (family-scoped) ──────────────────────────────────────────────
+class PingService:
+    @staticmethod
+    async def waiting_count(db: AsyncSession, user: User) -> int:
+        """The app-icon number: what is waiting for this user.
+
+        Kid/teen — the open mandatory chores their home lists (today's plus the
+        carried-over ones; bonus tasks are optional and never counted).
+        Parent — the review queue: the three lists /parent/approvals renders.
+        """
+        family_id = user.family_id
+        if user.role in KID_ROLES:
+            today = await TaskAssignmentService._user_local_today(db, user.id)
+            return int((await db.execute(
+                select(func.count()).select_from(TaskAssignment)
+                .join(TaskTemplate, TaskTemplate.id == TaskAssignment.template_id)
+                .where(
+                    TaskAssignment.family_id == family_id,
+                    TaskAssignment.assigned_to == user.id,
+                    TaskTemplate.is_bonus.is_(False),
+                    TaskAssignment.status.in_(_OPEN),
+                    TaskAssignment.assigned_date <= today,
+                )
+            )).scalar() or 0)
+        if user.role != UserRole.PARENT:
+            return 0
+        tasks = (await db.execute(
+            select(func.count()).select_from(TaskAssignment).where(
+                TaskAssignment.family_id == family_id,
+                TaskAssignment.approval_status == ApprovalStatus.PENDING,
+            )
+        )).scalar() or 0
+        gigs = (await db.execute(
+            select(func.count()).select_from(GigClaim).where(
+                GigClaim.family_id == family_id,
+                GigClaim.status == GigClaimStatus.COMPLETED,
+            )
+        )).scalar() or 0
+        rewards = (await db.execute(
+            select(func.count()).select_from(RewardRedemption).where(
+                RewardRedemption.family_id == family_id,
+                RewardRedemption.status == RedemptionStatus.PENDING.value,
+            )
+        )).scalar() or 0
+        return int(tasks) + int(gigs) + int(rewards)
+
+    @staticmethod
+    async def waiting_count_for_id(db: AsyncSession, user_id: UUID) -> int:
+        """Same count, for the push path (which only has the id)."""
+        user = await db.get(User, user_id)
+        return await PingService.waiting_count(db, user) if user is not None else 0
