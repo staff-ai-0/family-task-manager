@@ -11,6 +11,7 @@ from app.services.progress_service import (
     next_rank_xp,
     rank_floor,
     rank_for_xp,
+    shown_rank,
 )
 
 # A fixed Thursday so week maths is readable: week = Mon 2026-09-28 .. Sun 2026-10-04.
@@ -138,3 +139,22 @@ class TestBestAndPerfectWeeks:
         assert compute_streak(states, TODAY).perfect_weeks == 0
         states[d(-360)] = S.done                               # Mon 2025-10-06
         assert compute_streak(states, TODAY).perfect_weeks == 1
+
+
+class TestShownRank:
+    """A celebrated rank never drops; XP itself stays honest."""
+
+    def test_the_celebrated_rank_wins_when_xp_dropped(self):
+        assert shown_rank(550, 4) == 4       # XP says rank 3, the kid celebrated rank 4
+
+    def test_the_xp_rank_wins_when_it_is_higher(self):
+        assert shown_rank(1200, 4) == 5
+
+    def test_never_celebrated_is_rank_one(self):
+        assert shown_rank(0, None) == 1
+        assert shown_rank(50, 0) == 1
+        assert shown_rank(150, None) == 2    # still follows XP
+
+    def test_out_of_range_values_are_clamped(self):
+        assert shown_rank(0, 99) == 10
+        assert shown_rank(0, -3) == 1

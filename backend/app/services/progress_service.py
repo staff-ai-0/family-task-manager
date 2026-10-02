@@ -25,6 +25,15 @@ def rank_for_xp(xp: int) -> int:
     return rank
 
 
+def shown_rank(xp: int, last_seen_rank: int | None) -> int:
+    """The rank a kid is SHOWN: never lower than the highest rank they have
+    already celebrated (`users.last_seen_rank`), even when a parent correction
+    has pulled XP back under that rank's threshold. XP itself stays honest —
+    only the rank name is held, so recognition already given is not taken back."""
+    celebrated = min(max(int(last_seen_rank or 1), 1), MAX_RANK)
+    return max(rank_for_xp(xp), celebrated)
+
+
 def rank_floor(rank: int) -> int:
     return RANK_THRESHOLDS[max(1, min(rank, MAX_RANK)) - 1]
 
@@ -254,7 +263,8 @@ class ProgressService:
             return ProgressResponse(applies=False)
         today, tz = await ProgressService.family_today(db, user.family_id)
         xp = await ProgressService.xp_for(db, user.family_id, user.id)
-        rank = rank_for_xp(xp)
+        # Shown rank: XP can sit below this rank's floor after a correction.
+        rank = shown_rank(xp, user.last_seen_rank)
         streak = compute_streak(
             await ProgressService.day_states(db, user.family_id, user.id, today, tz), today,
         )
