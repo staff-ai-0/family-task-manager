@@ -45,7 +45,7 @@ Teens already have Jarvis: a private per-teen thread, advice only (no tools), sc
 - `families.teen_checkin_enabled` is `true`;
 - the teen has no check-in row created today (family-local date) — **one a day**;
 - the teen has fewer than 3 check-in rows in the current Monday–Sunday week (family-local) — **three a week**;
-- the teen's latest row with outcome `dismissed` is more than 7 days old (or there is none) — **"Not now" pauses a week**;
+- the teen has no `dismissed` row from the last 7 days — a "Not now" on day D blocks offers on D through D+6 — **"Not now" pauses a week**;
 - there is a **candidate chore**.
 
 A candidate chore is one of the teen's own non-bonus assignments, in the caller's family, dated within the last 14 days (today included), with no check-in row yet, that is either:
@@ -108,7 +108,7 @@ One row per check-in the teen acted on — table `teen_checkins`:
 | `trigger` | `late` / `sent_back` |
 | `outcome` | `answered` / `dismissed` |
 | `reason` | one of the seven keys; NULL when dismissed |
-| `note` | ≤ 200 characters; only ever set when `reason` is `app_problem` or `other` |
+| `note` | text, ≤ 200 characters (CHECK); only ever set when `reason` is `app_problem` or `other` |
 | `days_late` | whole days between the chore's date and today (0 for a same-day `sent_back`) |
 | `points` | the chore's points — a non-identifying size signal |
 | `lang` | `es` / `en` — the teen's language, for reading notes |
