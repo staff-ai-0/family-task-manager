@@ -72,10 +72,12 @@ Sent when all of these hold at sweep time:
 
   | Quest | Can be done today when |
   |---|---|
-  | `on_time` | the kid has at least one open chore today (as defined above) |
-  | `perfect_days` | the kid has at least one open chore today and today is not already lost |
-  | `extra_mile` | the kid has at least one bonus assignment dated today with status `PENDING` |
-  | `go_getter` | the gigs module is on and `QuestService._open_gigs` reports at least one gig open to the kid |
+  | `on_time` | a non-bonus assignment dated today is still `PENDING` (the quest's own rule: an `OVERDUE` chore can no longer count as on time) |
+  | `perfect_days` | the same, and no non-bonus assignment dated today has already failed for the quest (`chore_state` = "no") |
+  | `extra_mile` | a bonus assignment dated today is still open (`PENDING` or `CLAIMED`) |
+  | `go_getter` | `QuestService._open_gigs` reports at least one gig open to the kid (0 when the gigs module is off or the kid is in star mode) |
+
+  These reuse `chore_state` / `bonus_state` from `quest_service.py`, so the nudge can never promise a step the quest would not count. The quest's own bonus must be above 0 (the copy names it).
 
 - no `quest_nudge` notification exists for the kid since Monday 00:00 family-local (once per quest).
 
@@ -131,7 +133,7 @@ Pure functions (no DB, unit-tested directly):
 
 - **Kid / teen:** the open mandatory chores the kid home already shows — today's non-bonus assignments with status `PENDING` or `OVERDUE`, plus the carried-over ones from earlier days (`TaskAssignmentService.list_open_mandatory_before(today)`, the "Atrasadas" list). Bonus tasks are optional and never counted.
   - *Changed from the conversation, where older overdue chores were going to be cut off at the current week:* the number must equal what the screen shows. The home lists every carried-over chore, so a number that left some out would disagree with the app the moment the kid opens it.
-- **Parent:** items awaiting review — task approvals (`TaskAssignmentService.list_pending_approvals`) + gig claims (`GigClaimService.get_pending_approvals`, skipped while the gigs module is off) + reward requests (`RewardService.list_pending_redemptions`). The same three lists `/parent/approvals` renders, so the number equals the length of that page.
+- **Parent:** items awaiting review — task approvals (`TaskAssignmentService.list_pending_approvals`) + gig claims (`GigClaimService.get_pending_approvals`) + reward requests (`RewardService.list_pending_redemptions`). The same three lists `/parent/approvals` renders — with no module filter, exactly like that page — so the number equals its length.
 
 The count is an `int` built from row counts (never a SQL `SUM`), so it serializes as a JSON number.
 
@@ -153,15 +155,14 @@ No new table, so the family export registry is unchanged.
 
 - `badgeAction(count: unknown) -> { op: "set"; n: number } | { op: "clear" }` — pure: a positive integer sets, anything else clears.
 - `applyAppBadge(count)` — feature-detects `navigator.setAppBadge` / `clearAppBadge`; a browser without them does nothing; rejections are swallowed.
-- `refreshAppBadge()` — `GET /api/notifications/waiting-count`, then `applyAppBadge`. A failed request leaves the current number alone.
+- `refreshAppBadge()` — `GET /api/notifications/waiting-count`, then `applyAppBadge`. A 401/403 clears the number (the session is gone); any other failure leaves the current number alone.
 
 ### Wiring
 
-- `Layout.astro`: on page load for a logged-in user, `refreshAppBadge()`; also on `visibilitychange` → visible (the app returning from the background without a reload). On a page rendered without a session, `applyAppBadge(0)` — a shared phone never keeps the last user's number.
-- The logout form (`MoreSheet.astro`, `[data-logout-form]`) clears the number on submit.
-- Kids: `refreshAppBadge()` on the existing `ftm:deck-completed` and `ftm:deck-empty` events.
-- Parents: `lib/approvalActions.ts` calls `refreshAppBadge()` after a successful approve / reject.
-- `BottomNav.astro`: the parent "Approve" badge reads `waiting-count` instead of fetching the two approval lists (one request instead of two; it now includes reward requests, which the approvals page already lists).
+- `BottomNav.astro` (on every logged-in app page) fetches `waiting-count` during server render and puts it on the nav as `data-waiting-count`. Its script applies that number on page load — no extra request — and calls `refreshAppBadge()` on `visibilitychange` → visible (the app returning from the background), on the existing `ftm:deck-completed` / `ftm:deck-empty` events (a kid finished a chore), and on a new `ftm:waiting-changed` event.
+- The parent "Approve" badge reads the same count instead of fetching the two approval lists (one request instead of two; it now includes reward requests, which the approvals page already lists).
+- `lib/approvalActions.ts` dispatches `ftm:waiting-changed` after a successful approve / reject.
+- `Layout.astro`: a page rendered without a session cookie clears the number — a shared phone never keeps the last user's count. Logout redirects to `/login`, which is such a page, so no separate logout handler is needed.
 
 ### Service worker
 
@@ -169,7 +170,7 @@ No new table, so the family export registry is unchanged.
 
 ### Settings
 
-`parent/settings/family.astro`, a new section `#smart-reminders-section` directly under `#quest-section`: one switch, "Recordatorios inteligentes para los hijos" / "Smart reminders for kids", with one line: "A las 6:00 pm avisamos a tus hijos solo si su racha está en riesgo o les falta un paso para su misión de la semana. Máximo un aviso al día." / "At 6:00 pm we tell your kids only when their streak is at risk or they are one step from their weekly quest. One reminder a day at most." Saves immediately through the family update route; `showToast` confirms or reports failure (and the switch reverts on failure). Kit classes only; no native dialogs.
+`parent/settings/family.astro`, a new section `#smart-reminders-section` directly under `#quest-section`: one checkbox switch, "Recordatorios inteligentes para los hijos" / "Smart reminders for kids", with one line: "A las 6:00 pm avisamos a tus hijos solo si su racha está en riesgo o les falta un paso para su misión de la semana. Máximo un aviso al día." / "At 6:00 pm we tell your kids only when their streak is at risk or they are one step from their weekly quest. One reminder a day at most." Saves immediately through the family update route; `showToast` confirms or reports failure (and the switch reverts on failure). Kit classes only; no native dialogs.
 
 ## Platform limits (stated in the guide)
 
@@ -189,7 +190,7 @@ Backend (`tests/test_ping_service.py`, `tests/test_waiting_count.py`, `tests/tes
 
 - Pure rules: window edges (17:59, 18:00, 20:59, 21:00); streak 2 vs 3; both wordings and both plural forms; no open chore → none; day already lost → none; quest at `target − 2`, `target − 1`, `target`; rewarded; already nudged; streak wins over quest.
 - Sweep (with injected `now`): sends once and a second run in the same window sends nothing; outside the window sends nothing; a family in another timezone is evaluated by its own clock; switch off; kid without a subscription gets no notification row; parent never pinged; non-participating member skipped; quest nudged once per week, and again eligible the day after a streak push took priority; quest sweep creates no `weekly_quests` row and no point transaction; `expires_at` values; one kid raising does not stop the next; a second family's data never affects the first.
-- Count: kid = today open + carried over, bonus excluded, completed excluded; parent = three queues, gigs skipped when the module is off; equals the lengths of the lists the screens use; other family's rows never counted; unauthenticated → 401.
+- Count: kid = today open + carried over, bonus excluded, completed excluded; parent = three queues; equals the lengths of the lists the screens use; other family's rows never counted; unauthenticated → 401.
 - Push payload carries `badge`; a failing count still sends the push.
 - Migration: column exists, existing families read `true`.
 - No hard-coded calendar dates — all dates derive from the injected `now`.
@@ -197,7 +198,7 @@ Backend (`tests/test_ping_service.py`, `tests/test_waiting_count.py`, `tests/tes
 Frontend (vitest, node — pure and source-structure tests):
 
 - `badgeAction`: 0, negative, non-integer, `null`, string → clear; positive integer → set.
-- Source checks: `Layout.astro` calls `refreshAppBadge` and clears when logged out; the logout form clears; `sw.js` handles `payload.badge`; `BottomNav.astro` uses `waiting-count`; the settings section exists with the switch.
+- Source checks: `BottomNav.astro` renders and applies `waiting-count` and listens for the refresh events; `Layout.astro` clears when logged out; `sw.js` handles `payload.badge`; `approvalActions.ts` announces a decision; the settings section exists with the switch.
 - Existing guards stay green: `no-native-dialogs`, `visual-consistency`, `contrast`.
 
 ## Docs
