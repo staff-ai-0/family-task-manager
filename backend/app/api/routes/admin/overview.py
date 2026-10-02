@@ -64,3 +64,16 @@ async def audit_log(
     return await AdminReadService.audit_log(
         db, family_id=family_id, action=action, limit=limit, offset=offset
     )
+
+
+@router.get("/teen-checkins")
+async def teen_checkins(
+    days: int = Query(30, ge=1, le=365),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    _operator: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Jarvis teen check-ins across families: counts by reason + anonymous
+    notes. No family, teen or chore is identified."""
+    return await AdminReadService.teen_checkin_summary(db, days, limit, offset)
