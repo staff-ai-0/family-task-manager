@@ -30,6 +30,7 @@ EXPECTED_JOB_IDS = {
     "pup_snapshot_sweep",
     "jarvis_sched_sweep",
     "family_bank_payday",
+    "smart_ping_sweep",
     "family_purge_sweep",
     "auto_shuffle_sweep",
     "recurring_post_sweep",

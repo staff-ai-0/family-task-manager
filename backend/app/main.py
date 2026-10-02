@@ -170,6 +170,20 @@ def _register_cron_jobs(scheduler: AsyncIOScheduler) -> None:
             except Exception:
                 logger.exception("Family Bank payday sweep failed")
 
+    async def _smart_ping_sweep():
+        # UX-D4a evening smart reminders for kids (streak at risk / quest one
+        # step away). Hourly; the service acts only on families whose local
+        # hour is 18–20 and is idempotent per kid per local day (the
+        # notification row is the send record), so a restart never double-sends.
+        async with AsyncSessionLocal() as session:
+            try:
+                from app.services.ping_service import PingService
+                n = await PingService.run_evening_sweep(session)
+                if n:
+                    logger.info("Smart reminder sweep sent %d reminder(s)", n)
+            except Exception:
+                logger.exception("Smart reminder sweep failed")
+
     async def _family_purge_sweep():
         # Hard-delete families soft-deleted longer than the grace window
         # (FamilyDeletionService.PURGE_RETENTION_DAYS). Self-serve family
@@ -234,6 +248,7 @@ def _register_cron_jobs(scheduler: AsyncIOScheduler) -> None:
     scheduler.add_job(_pup_snapshot_sweep, "cron", hour=23, minute=30, id="pup_snapshot_sweep")
     scheduler.add_job(_jarvis_schedule_sweep, "cron", minute="*/5", id="jarvis_sched_sweep")
     scheduler.add_job(_family_bank_payday_sweep, "cron", minute=10, id="family_bank_payday")  # hourly
+    scheduler.add_job(_smart_ping_sweep, "cron", minute=0, id="smart_ping_sweep")  # hourly
     scheduler.add_job(_family_purge_sweep, "cron", hour=4, minute=0, id="family_purge_sweep")  # daily
     scheduler.add_job(_auto_shuffle_sweep, "cron", minute=25, id="auto_shuffle_sweep")  # hourly
     scheduler.add_job(_recurring_post_sweep, "cron", minute=40, id="recurring_post_sweep")  # hourly
