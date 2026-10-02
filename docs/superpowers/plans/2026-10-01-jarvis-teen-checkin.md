@@ -1561,7 +1561,8 @@ async def teen_checkins(
 import { describe, expect, it } from "vitest";
 
 import {
-    NOTE_MAX, NOTE_REASONS, REASONS, answerBody, chatHref, checkinView, dismissBody, reasonLabel, takesNote, tipFor,
+    CHECKIN_COPY, NOTE_MAX, NOTE_REASONS, REASONS, answerBody, chatHref, checkinView, dismissBody, reasonLabel,
+    takesNote, tipFor,
 } from "../src/lib/checkin";
 
 describe("reasons", () => {
@@ -1584,6 +1585,23 @@ describe("reasons", () => {
     });
     it("only the two open reasons take a note", () => {
         expect(REASONS.filter(takesNote)).toEqual(["app_problem", "other"]);
+    });
+});
+
+describe("card copy", () => {
+    it("asks, offers a way out, and says where a note goes — in both languages", () => {
+        expect(CHECKIN_COPY.question).toEqual({ es: "¿Atorado con", en: "Stuck on" });
+        expect(CHECKIN_COPY.yes).toEqual({ es: "Sí, ayúdame", en: "Yes, help me" });
+        expect(CHECKIN_COPY.notNow).toEqual({ es: "Ahora no", en: "Not now" });
+        expect(CHECKIN_COPY.noteHint).toEqual({
+            es: "Tu nota llega al equipo de la app, sin tu nombre.",
+            en: "Your note goes to the app's team, without your name.",
+        });
+        expect(CHECKIN_COPY.chat).toEqual({ es: "Hablarlo con Jarvis", en: "Talk it through with Jarvis" });
+    });
+    it("never promises that parents cannot see the answer", () => {
+        const all = JSON.stringify(CHECKIN_COPY);
+        expect(all).not.toMatch(/tus pap[aá]s no|your parents (won't|will not|can't|cannot)/i);
     });
 });
 
@@ -1656,21 +1674,20 @@ describe("CheckinCard", () => {
         expect(card).toMatch(/data-checkin-help hidden/);
         expect(card).not.toMatch(/class="[^"]*(?<![\w-])hidden(?![\w-])/);
     });
-    it("asks in both languages and offers a way out", () => {
-        expect(card).toContain("¿Atorado con");
-        expect(card).toContain("Stuck on");
-        expect(card).toContain("Sí, ayúdame");
-        expect(card).toContain("Yes, help me");
-        expect(card).toContain("Ahora no");
-        expect(card).toContain("Not now");
+    it("asks in the teen's language and offers a way out (copy from the shared list)", () => {
+        expect(card).toMatch(/const c = CHECKIN_COPY;/);
+        for (const key of ["question", "yes", "notNow", "pick", "send", "chat"]) {
+            expect(card).toContain(`{c.${key}[lang]}`);
+        }
+        expect(card).toMatch(/data-checkin-yes/);
+        expect(card).toMatch(/data-checkin-no\b/);
     });
     it("renders one chip per reason from the shared list", () => {
         expect(card).toMatch(/REASONS\.map\(/);
         expect(card).toMatch(/data-checkin-reason=\{r\}/);
     });
     it("tells the teen where a note goes, and caps it", () => {
-        expect(card).toContain("Tu nota llega al equipo de la app, sin tu nombre.");
-        expect(card).toContain("Your note goes to the app's team, without your name.");
+        expect(card).toContain("{c.noteHint[lang]}");
         expect(card).toMatch(/maxlength=\{NOTE_MAX\}/);
     });
     it("never promises that parents cannot see the answer", () => {

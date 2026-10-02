@@ -1,0 +1,136 @@
+---
+/**
+ * Jarvis teen check-in card on the teen home: offer → reason → help.
+ * One card, three states, no modal. The answer is one tap (that is what is
+ * stored); the help is a ready-made tip, plus the teen's own Jarvis chat on
+ * plans that have it. Never claims the answer is hidden from parents.
+ */
+import { buttonClass } from "../../lib/buttonClasses";
+import { CHECKIN_COPY, NOTE_MAX, REASONS, reasonLabel, type CheckinView } from "../../lib/checkin";
+
+interface Props {
+    checkin: CheckinView;
+    lang: "es" | "en";
+}
+const { checkin, lang } = Astro.props;
+const c = CHECKIN_COPY;
+---
+
+<section data-checkin-card data-lang={lang} data-assignment={checkin.assignmentId} data-title={checkin.title}
+         data-can-chat={checkin.canChat ? "1" : "0"}
+         class="rounded-2xl border border-brand-ink/10 bg-white p-4 shadow-[var(--shadow-card)]">
+    <h2 class="text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft">Jarvis</h2>
+
+    <div data-checkin-offer class="mt-2">
+        <p class="font-bold text-brand-ink">
+            <span aria-hidden="true">🤝 </span>{c.question[lang]} <span class="italic">{checkin.title}</span>?
+        </p>
+        <div class="mt-3 flex flex-wrap gap-2">
+            <button type="button" data-checkin-yes class={buttonClass("secondary", "sm")}>{c.yes[lang]}</button>
+            <button type="button" data-checkin-no
+                    class="px-4 py-2 rounded-lg bg-brand-cream-deep text-brand-ink text-xs font-semibold hover:bg-brand-cream border border-brand-ink/15 transition-colors">
+                {c.notNow[lang]}
+            </button>
+        </div>
+    </div>
+
+    <div data-checkin-reasons hidden class="mt-2">
+        <p class="font-bold text-brand-ink">{c.pick[lang]}</p>
+        <div class="mt-3 flex flex-wrap gap-2">
+            {REASONS.map((r) => (
+                <button type="button" data-checkin-reason={r}
+                        class="px-3 py-2 rounded-full bg-brand-cream-deep text-brand-ink text-sm font-semibold border border-brand-ink/15 hover:bg-brand-cream transition-colors">
+                    {reasonLabel(r, lang)}
+                </button>
+            ))}
+        </div>
+        <div data-checkin-note-block hidden class="mt-3">
+            <textarea data-checkin-note rows="2" maxlength={NOTE_MAX} placeholder={c.notePlaceholder[lang]}
+                      class="w-full rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-sky"></textarea>
+            <p class="mt-1 text-xs text-brand-ink-soft">{c.noteHint[lang]}</p>
+            <button type="button" data-checkin-send class={`mt-2 ${buttonClass("secondary", "sm")}`}>{c.send[lang]}</button>
+        </div>
+    </div>
+
+    <div data-checkin-help hidden class="mt-2">
+        <p class="font-bold text-brand-ink" data-checkin-tip></p>
+        <a data-checkin-chat hidden href="/parent/jarvis" class={`mt-3 inline-flex ${buttonClass("secondary", "sm")}`}>
+            {c.chat[lang]}
+        </a>
+    </div>
+</section>
+
+<script>
+    import { CHECKIN_COPY, answerBody, chatHref, dismissBody, takesNote, tipFor, type Reason } from "../../lib/checkin";
+    import { showToast } from "../../lib/toast";
+
+    const card = document.querySelector<HTMLElement>("[data-checkin-card]");
+    if (card) {
+        const lang = card.dataset.lang === "en" ? "en" : "es";
+        const assignmentId = card.dataset.assignment ?? "";
+        const title = card.dataset.title ?? "";
+        const canChat = card.dataset.canChat === "1";
+        const part = (name: string) => card.querySelector<HTMLElement>(`[data-checkin-${name}]`);
+        const offer = part("offer"), reasons = part("reasons"), help = part("help");
+        const noteBlock = part("note-block");
+        const note = card.querySelector<HTMLTextAreaElement>("[data-checkin-note]");
+        let busy = false;
+        let picked: Reason | null = null;
+
+        const save = async (body: unknown): Promise<boolean> => {
+            if (busy) return false;
+            busy = true;
+            try {
+                const r = await fetch("/api/jarvis/checkin", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                });
+                if (r.ok) return true;
+            } catch {
+                /* fall through to the toast */
+            } finally {
+                busy = false;
+            }
+            showToast(CHECKIN_COPY.failed[lang], "error");
+            return false;
+        };
+
+        const showHelp = (reason: Reason) => {
+            reasons?.setAttribute("hidden", "");
+            help?.removeAttribute("hidden");
+            const tip = part("tip");
+            if (tip) tip.textContent = tipFor(reason, lang);
+            const chat = card.querySelector<HTMLAnchorElement>("[data-checkin-chat]");
+            if (chat && canChat) {
+                chat.href = chatHref(title, reason, lang);
+                chat.removeAttribute("hidden");
+            }
+        };
+
+        part("yes")?.addEventListener("click", () => {
+            offer?.setAttribute("hidden", "");
+            reasons?.removeAttribute("hidden");
+        });
+        part("no")?.addEventListener("click", async () => {
+            if (await save(dismissBody(assignmentId))) card.remove();
+        });
+        card.querySelectorAll<HTMLButtonElement>("[data-checkin-reason]").forEach((chip) => {
+            chip.addEventListener("click", async () => {
+                const reason = chip.dataset.checkinReason as Reason;
+                if (takesNote(reason)) {
+                    // Saved on Send, so the note travels with the answer.
+                    picked = reason;
+                    noteBlock?.removeAttribute("hidden");
+                    note?.focus();
+                    return;
+                }
+                if (await save(answerBody(assignmentId, reason))) showHelp(reason);
+            });
+        });
+        part("send")?.addEventListener("click", async () => {
+            if (!picked) return;
+            if (await save(answerBody(assignmentId, picked, note?.value))) showHelp(picked);
+        });
+    }
+</script>
