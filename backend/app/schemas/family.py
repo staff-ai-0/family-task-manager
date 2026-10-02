@@ -56,6 +56,8 @@ class FamilyUpdate(BaseModel):
     quest_bonus_points: Optional[int] = Field(None, ge=0, le=500)
     # UX-D4a evening smart reminders for kids. None = leave as-is on PATCH.
     smart_reminders_enabled: Optional[bool] = None
+    # Jarvis teen check-in: true = on, false = off, null = back to undecided.
+    teen_checkin_enabled: Optional[bool] = None
     # Module registry: list of ENABLED togglable modules. None = leave as-is
     # on PATCH; stored NULL = all on. Must be a subset of TOGGLABLE_MODULES.
     enabled_modules: Optional[List[str]] = None
@@ -109,6 +111,8 @@ class FamilyResponse(EntityResponse):
     quest_bonus_points: Optional[int] = None
     # UX-D4a: evening smart reminders for kids (on by default).
     smart_reminders_enabled: bool = True
+    # Jarvis teen check-in: NULL = undecided (off + one-time parent-hub card).
+    teen_checkin_enabled: Optional[bool] = None
     # Stored value: NULL = all modules on. Clients resolve via the same rule.
     enabled_modules: Optional[List[str]] = None
 
