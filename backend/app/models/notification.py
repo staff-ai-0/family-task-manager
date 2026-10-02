@@ -23,6 +23,9 @@ class NotificationType:
     GIG_COMMENT = "gig_comment"
     GIG_PUBLISHED = "gig_published"
     PARENT_NUDGE = "parent_nudge"
+    # UX-D4a evening smart reminders (kids). The rows double as the send record.
+    STREAK_AT_RISK = "streak_at_risk"
+    QUEST_NUDGE = "quest_nudge"
     LATE_PENALTY_APPLIED = "late_penalty_applied"
     REWARDS_LOCKED = "rewards_locked"
     REWARD_REDEEMED = "reward_redeemed"
