@@ -16,6 +16,8 @@
 #   2. Archives the receipt_uploads volume (gig proof photos, receipt images)
 #      to backups/scheduled/uploads-<ts>.tar.gz via rootless
 #      `podman volume export` (audit 2026-07-07: uploads were never backed up)
+#      — but only when the volume changed since the last archive that reached
+#      offsite, or that archive is older than UPLOADS_MAX_AGE_DAYS
 #   3. Prunes local artifacts older than RETENTION_DAYS (default 14)
 #   4. If OFFSITE_RCLONE_REMOTE is set (e.g. "b2:family-backups"), pushes both
 #      artifacts there with rclone and prunes remote copies older than
@@ -32,6 +34,11 @@
 #   RETENTION_DAYS          local retention, default 14
 #   UPLOADS_VOLUME          override uploads-volume autodetection
 #   SKIP_UPLOADS=1          skip the uploads archive (e.g. docker-only host)
+#   UPLOADS_MAX_AGE_DAYS    re-archive an UNCHANGED uploads volume once its
+#                           last archive is this old (default 7). Keep it well
+#                           below RETENTION_DAYS and the bucket lifecycle (31d),
+#                           or both would expire the only copy. 0 = archive on
+#                           every run (use for a forced hand-run).
 #   OFFSITE_GCS_BUCKET      gs://bucket[/prefix] — offsite via gsutil + a
 #                           service-account key. Canonical on 10.1.0.91.
 #   GCS_KEY_FILE            SA key for the above, default
@@ -57,6 +64,11 @@ COMPOSE_CMD="${COMPOSE_CMD:-podman compose}"
 PG_SERVICE="${PG_SERVICE:-postgres}"
 BACKUP_DIR="${BACKUP_DIR:-backups/scheduled}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
+UPLOADS_MAX_AGE_DAYS="${UPLOADS_MAX_AGE_DAYS:-7}"
+if ! [[ "$UPLOADS_MAX_AGE_DAYS" =~ ^[0-9]+$ ]]; then
+    echo "[backup-db] ERROR: UPLOADS_MAX_AGE_DAYS must be a whole number of days, got '${UPLOADS_MAX_AGE_DAYS}'" >&2
+    exit 1
+fi
 OFFSITE_RCLONE_REMOTE="${OFFSITE_RCLONE_REMOTE:-}"
 OFFSITE_RETENTION_DAYS="${OFFSITE_RETENTION_DAYS:-30}"
 
@@ -152,7 +164,26 @@ resolve_uploads_volume() {
     return 1
 }
 
+# sha256 of stdin, hex only. shasum is the macOS fallback (scripts/tests/).
+sha256_stdin() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum | cut -d' ' -f1
+    else
+        shasum -a 256 | cut -d' ' -f1
+    fi
+}
+
+# "<sha256 of the tar stream> <archive basename> <offsite destination>" of the
+# last uploads archive that was written AND pushed offsite. Written at the
+# very end of the script. The destination is part of the record because
+# "already offsite" is only true for the bucket it was pushed to: after
+# pointing OFFSITE_* at a new bucket, the next run must archive again rather
+# than leave the new bucket without uploads until the volume happens to change.
+UPLOADS_STATE="${BACKUP_DIR}/.uploads-last-archived"
+OFFSITE_DEST_ID="${OFFSITE_GCS_BUCKET:-${OFFSITE_RCLONE_REMOTE:-none}}"
+
 UPLOADS_OUT=""
+UPLOADS_NEW_FP=""
 if [[ "${SKIP_UPLOADS:-0}" == "1" ]]; then
     echo "[backup-db] SKIP_UPLOADS=1 — not archiving the uploads volume"
 elif ! command -v podman >/dev/null 2>&1; then
@@ -167,10 +198,40 @@ else
         echo "            Set UPLOADS_VOLUME=<name> explicitly and re-run." >&2
         exit 1
     fi
-    UPLOADS_OUT="${BACKUP_DIR}/uploads-${TS}.tar.gz"
-    echo "[backup-db] archiving uploads volume ${VOL} -> ${UPLOADS_OUT}"
-    podman volume export "$VOL" | gzip > "$UPLOADS_OUT"
-    echo "[backup-db] wrote ${UPLOADS_OUT} ($(du -h "$UPLOADS_OUT" | cut -f1))"
+    # Skip the archive when nothing changed. The timer fires every 6h and
+    # every deploy runs this script too, while the volume changes about once a
+    # day: until 2026-10 that meant 4-8 byte-identical ~850 MB archives daily —
+    # 56 GB on the prod disk (93% full) and 96 GB offsite. The export stream
+    # is deterministic for an unchanged volume, so its hash is the test.
+    #
+    # The skip also requires the previous archive to still be on disk and
+    # younger than UPLOADS_MAX_AGE_DAYS. Without that an untouched volume
+    # would outlive local retention and the bucket lifecycle and end up with
+    # no copy anywhere.
+    UPLOADS_FP="$(podman volume export "$VOL" | sha256_stdin)"
+    LAST_FP=""
+    LAST_NAME=""
+    LAST_DEST=""
+    if [[ -f "$UPLOADS_STATE" ]]; then
+        read -r LAST_FP LAST_NAME LAST_DEST < "$UPLOADS_STATE" || true
+    fi
+    # The explicit `-gt 0` is not redundant with the find below: GNU find's
+    # `-mtime -0` MATCHES a file written a moment ago (BSD find's does not),
+    # so on Linux "0 = archive every run" would silently skip instead.
+    if [[ "$UPLOADS_MAX_AGE_DAYS" -gt 0 && -n "$LAST_NAME" \
+          && "$UPLOADS_FP" == "$LAST_FP" && "$OFFSITE_DEST_ID" == "$LAST_DEST" \
+          && -n "$(find "${BACKUP_DIR}/${LAST_NAME}" -type f -mtime "-${UPLOADS_MAX_AGE_DAYS}" 2>/dev/null)" ]]; then
+        echo "[backup-db] uploads volume ${VOL} unchanged since ${LAST_NAME} — not re-archiving"
+    else
+        UPLOADS_OUT="${BACKUP_DIR}/uploads-${TS}.tar.gz"
+        echo "[backup-db] archiving uploads volume ${VOL} -> ${UPLOADS_OUT}"
+        podman volume export "$VOL" | gzip > "$UPLOADS_OUT"
+        echo "[backup-db] wrote ${UPLOADS_OUT} ($(du -h "$UPLOADS_OUT" | cut -f1))"
+        # Hash what actually landed in the archive, not the pre-check stream:
+        # a file uploaded between the two exports must not be recorded as
+        # "already archived". Reading it back also proves the gzip is intact.
+        UPLOADS_NEW_FP="$(gunzip -c "$UPLOADS_OUT" | sha256_stdin)"
+    fi
 fi
 
 # ── 3. Local retention ──────────────────────────────────────────────────────
@@ -249,6 +310,15 @@ elif [[ -n "$OFFSITE_RCLONE_REMOTE" ]]; then
 else
     echo "[backup-db] WARNING: OFFSITE_RCLONE_REMOTE not set — backups exist ONLY on this host." >&2
     echo "            See scripts/systemd/README.md for the rclone offsite setup." >&2
+fi
+
+# Record the new uploads archive only now, after the offsite push: every
+# failure above exits first, so an archive that never left the host is retried
+# on the next run instead of being treated as done (2026-09-20: a DNS blip
+# failed the push and that run's archive stayed host-only).
+if [[ -n "$UPLOADS_NEW_FP" ]]; then
+    printf '%s %s %s\n' "$UPLOADS_NEW_FP" "$(basename "$UPLOADS_OUT")" "$OFFSITE_DEST_ID" > "${UPLOADS_STATE}.tmp"
+    mv "${UPLOADS_STATE}.tmp" "$UPLOADS_STATE"
 fi
 
 echo "[backup-db] done ($(find "$BACKUP_DIR" -name 'db-*.sql.gz' | wc -l | tr -d ' ') dumps, $(find "$BACKUP_DIR" -name 'uploads-*.tar.gz' | wc -l | tr -d ' ') uploads archives retained locally)"
