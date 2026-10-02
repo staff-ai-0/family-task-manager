@@ -20,7 +20,10 @@ const isParent = role === "parent";
 
 const token = Astro.cookies.get("access_token")?.value;
 let unreadCount = 0;
-let pendingApprovals = 0;
+// UX-D4a: one number for "waiting for you" — the parent's review queue or a
+// kid's open chores. Drives the parent "Approve" badge and the app-icon number.
+// null = unknown (the request failed): the icon keeps whatever it shows.
+let waitingCount: number | null = null;
 // Per-family module registry (families.enabled_modules via /auth/me).
 // null = all modules on — also the fail-open value on any fetch error.
 let enabledModules: string[] | null = null;
@@ -31,23 +34,18 @@ let enabledModules: string[] | null = null;
 let isSuperadmin = false;
 if (token) {
     try {
-        const [unread, taskPending, gigPending, me] = await Promise.all([
+        const [unread, waiting, me] = await Promise.all([
             apiFetch<{ unread: number }>("/api/notifications/unread-count", { token }),
-            isParent
-                ? apiFetch<any[]>("/api/task-assignments/pending-approvals", { token })
-                : Promise.resolve({ data: null as any[] | null }),
-            isParent
-                ? apiFetch<any[]>("/api/gigs/claims/pending-approvals", { token })
-                : Promise.resolve({ data: null as any[] | null }),
+            apiFetch<{ count: number }>("/api/notifications/waiting-count", { token }),
             apiFetch<any>("/api/auth/me", { token }),
         ]);
         unreadCount = unread.data?.unread ?? 0;
-        pendingApprovals = (taskPending.data?.length ?? 0) + (gigPending.data?.length ?? 0);
+        waitingCount = waiting.data?.count ?? null;
         enabledModules = me.data?.enabled_modules ?? null;
         isSuperadmin = me.data?.is_superadmin === true;
     } catch {
         unreadCount = 0;
-        pendingApprovals = 0;
+        waitingCount = null;
     }
 }
 
@@ -77,7 +75,7 @@ const kidItems: Item[] = [
 ];
 const parentItems: Item[] = [
     { key: "parent",    href: "/parent",            label: es ? "Inicio" : "Home",        icon: I.home },
-    { key: "approvals", href: "/parent/approvals",  label: es ? "Aprobar" : "Approve",    icon: I.approvals, badge: pendingApprovals },
+    { key: "approvals", href: "/parent/approvals",  label: es ? "Aprobar" : "Approve",    icon: I.approvals, badge: waitingCount ?? 0 },
     ...(mod("budget") ? [{ key: "budget", href: "/budget/month", label: t(lang, "nav_budget") as string, icon: I.budget }] : []),
     ...(mod("gigs") ? [{ key: "gigs", href: "/parent/gigs", label: gigsLabel, icon: I.gigs }] : []),
 ];
@@ -112,6 +110,7 @@ const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shad
 <nav
     class="fixed bottom-0 left-0 right-0 bg-brand-cream border-t-2 border-brand-ink safe-area-bottom z-50 [view-transition-name:bottom-nav]"
     data-role={role}
+    data-waiting-count={waitingCount}
 >
     <div class="nav-row mx-auto flex justify-around items-center px-1 py-2">
         {items.map((it) => (
@@ -145,6 +144,8 @@ const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shad
 <MoreSheet role={role} lang={lang} unread={unreadCount} modules={enabledModules} isSuperadmin={isSuperadmin} />
 
 <script>
+    import { applyAppBadge, refreshAppBadge } from "../lib/appBadge";
+
     const ACTIVE = "bg-brand-coral text-brand-ink border-2 border-brand-ink shadow-[2px_2px_0_var(--color-brand-ink)]";
     const IDLE   = "text-brand-ink-soft hover:text-brand-ink";
 
@@ -178,6 +179,20 @@ const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shad
     }
 
     document.addEventListener("astro:page-load", syncNav);
+
+    // UX-D4a: the app-icon number. The server already rendered the count, so
+    // page load costs no extra request; later changes re-ask the server.
+    document.addEventListener("astro:page-load", () => {
+        const nav = document.querySelector<HTMLElement>("nav[data-waiting-count]");
+        if (nav) void applyAppBadge(Number(nav.dataset.waitingCount));
+    });
+    const refresh = () => void refreshAppBadge();
+    window.addEventListener("ftm:deck-completed", refresh);
+    window.addEventListener("ftm:deck-empty", refresh);
+    window.addEventListener("ftm:waiting-changed", refresh);
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") refresh();
+    });
 </script>
 
 <style>

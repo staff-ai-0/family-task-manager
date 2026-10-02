@@ -88,7 +88,17 @@ self.addEventListener('push', (event) => {
         data: { url: payload.url },
         renotify: true,
     };
-    event.waitUntil(self.registration.showNotification(payload.title, opts));
+    // UX-D4a: every push carries the recipient's "waiting for you" count.
+    // Set the app-icon number alongside the notification; a failure here must
+    // never stop the notification from showing.
+    const work = [self.registration.showNotification(payload.title, opts)];
+    if (typeof payload.badge === 'number') {
+        const setBadge = payload.badge > 0
+            ? (navigator.setAppBadge ? navigator.setAppBadge(payload.badge) : Promise.resolve())
+            : (navigator.clearAppBadge ? navigator.clearAppBadge() : Promise.resolve());
+        work.push(Promise.resolve(setBadge).catch(() => {}));
+    }
+    event.waitUntil(Promise.all(work));
 });
 
 self.addEventListener('notificationclick', (event) => {

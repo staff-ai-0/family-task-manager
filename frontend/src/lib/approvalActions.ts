@@ -41,7 +41,11 @@ export async function submitDecision(d: Decision, fetchImpl: typeof fetch = fetc
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
         });
-        if (r.ok) return { ok: true };
+        if (r.ok) {
+            // UX-D4a: the review queue just shrank — let the app-icon number follow.
+            if (typeof window !== "undefined") window.dispatchEvent(new Event("ftm:waiting-changed"));
+            return { ok: true };
+        }
         const err = await r.json().catch(() => null);
         const reason = err && (err.detail || err.message);
         return { ok: false, error: typeof reason === "string" ? reason : null };
