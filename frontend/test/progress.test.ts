@@ -150,6 +150,27 @@ describe("progressLine (parent hub)", () => {
     });
 });
 
+describe("progressView when XP is below the shown rank's floor (a celebrated rank is held)", () => {
+    const held = { xp: 550, rank: 4, rank_floor_xp: 600, next_rank_xp: 1000 };
+    it("keeps the rank, empties the bar and gives the true distance", () => {
+        const v = progressView(resp(held), "child", "en")!;
+        expect(v.rankLabel).toBe("Star · 4/10");
+        expect(v.barPct).toBe(0);
+        expect(v.toNextLabel).toBe("450 XP to Super Helper");
+        expect(v.ladder[3].state).toBe("current");
+        expect(v.ladder[2].state).toBe("done");
+    });
+    it("reads the same in Spanish and for teens", () => {
+        expect(progressView(resp(held), "child", "es")!.toNextLabel).toBe("450 XP para Súper Ayudante");
+        expect(progressView(resp(held), "teen", "en")!.rankLabel).toBe("Pro · 4/10");
+    });
+    it("holds the top rank with a full bar", () => {
+        const v = progressView(resp({ xp: 0, rank: 10, rank_floor_xp: 8000, next_rank_xp: null }), "child", "en")!;
+        expect(v.barPct).toBe(100);
+        expect(v.toNextLabel).toBe("Top rank!");
+    });
+});
+
 describe("shouldCelebrate (welcome tour gate)", () => {
     const view = progressView(resp({ celebrate_rank: 2 }), "teen", "en");
     it("celebrates when the welcome tour is done or unknown", () => {

@@ -44,6 +44,8 @@ Excluded: `reward_redeemed`, `penalty`, `parent_adjustment`, `transfer` (points)
 
 `rank_for_xp(xp)` = highest rank whose threshold ≤ xp. Thresholds live only in the backend; names live only in the frontend (`lib/progress.ts`). Kids = role CHILD, teens = role TEEN (name set follows the role, same as the kid-home skin).
 
+**Shown rank (added 2026-10-01).** The rank a kid sees is `shown_rank(xp, last_seen_rank) = max(rank_for_xp(xp), last_seen_rank or 1)`: a rank the kid has already celebrated never drops, even when a parent correction pulls XP back under its threshold. XP itself keeps netting corrections, so the bar can be empty and "XP to next" is the true distance. A rank reached but not yet celebrated is not held. See `docs/superpowers/specs/2026-10-01-ux-d1-rank-never-drops-design.md`.
+
 ### Streak
 
 All dates are family-timezone dates (`families.timezone`). A kid's **due chores** for day D = their task assignments with `assigned_date = D`, template `is_bonus = false`, status ≠ `cancelled`.

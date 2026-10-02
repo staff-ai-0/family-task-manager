@@ -33,7 +33,7 @@ from app.schemas.oversight import (
     PendingCounts,
 )
 from app.services.badge_service import BadgeService
-from app.services.progress_service import ProgressService, compute_streak, rank_for_xp
+from app.services.progress_service import ProgressService, compute_streak, shown_rank
 from app.services.quest_service import QuestService
 from app.services.reward_goal_service import RewardGoalService
 from app.services.task_assignment_service import TaskAssignmentService
@@ -254,7 +254,7 @@ class OversightService:
                     overdue_count=int(overdue_counts.get(kid.id, 0)),
                     last_nudged_at=last_nudges.get(kid.id),
                     streak_days=int(progress_streak.days),
-                    rank=int(rank_for_xp(xp)),
+                    rank=int(shown_rank(xp, kid.last_seen_rank)),
                     badge_count=int(badge_counts.get(kid.id, 0)),
                     quest_progress=int(quest[0]) if quest else None,
                     quest_target=int(quest[1]) if quest else None,
