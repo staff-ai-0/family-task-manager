@@ -2528,7 +2528,7 @@ Los numeros por miembro se exportan a **CSV** via `/api/analytics/export.csv` (a
 
 **Rutas:** `/parent/jarvis` · `/parent/jarvis-schedules`
 
-> **Quien puede usarlo:** Solo Padres/Tutores. Los hijos y adolescentes son redirigidos a su tablero.
+> **Quien puede usarlo:** Padres/Tutores (el copiloto completo) y adolescentes (un chat privado, solo de consejos, sobre sus propias tareas; vea 25.5). Los ninos son redirigidos a su tablero.
 >
 > **Plan requerido:** Jarvis forma parte de las **funciones de IA** del plan **Plus**. El plan Gratuito no incluye el copiloto de IA.
 
@@ -2591,6 +2591,17 @@ Una **programacion** es un prompt recurrente que Jarvis ejecuta automaticamente 
 Use **▶** / **⏸** para activar/pausar y **🗑** para eliminar.
 
 > **Consejo:** Una programacion de resumen semanal "Domingo 6pm" es ideal para recibir un repaso sin tener que preguntar.
+
+## 25.5 Jarvis Acompana a los Adolescentes
+
+Cuando un adolescente tiene una tarea atrasada, o una que un papa le regreso, Jarvis le ofrece ayuda en su pantalla de inicio: "¿Atorado con *Saca la basura*?"
+
+- **Si, ayudame** — el adolescente elige con un toque que esta pasando (esta muy dificil, no se bien que hacer, no tengo tiempo, no me parece justo, se me olvido, la app no me deja, otra cosa) y recibe un consejo corto. En planes con IA, un boton abre su propio chat con Jarvis con el primer mensaje ya escrito.
+- **Ahora no** — la tarjeta desaparece y Jarvis no vuelve a preguntar en una semana.
+
+Jarvis pregunta como maximo una vez al dia y tres veces por semana, y nunca dos veces por la misma tarea.
+
+> **Para papas:** esta funcion esta apagada hasta que la actives: una tarjeta en tu pantalla de inicio pregunta una sola vez, y el interruptor vive en **Ajustes → Familia → Jarvis**. El motivo que elige tu adolescente (y una nota corta, solo para "la app no me deja" u "otra cosa") nos ayuda a mejorar la app. Vemos los conteos de todas las familias juntas, y leemos las notas sin nombres y sin el titulo de la tarea, y solo cuando participan al menos cinco familias. Apagar el interruptor detiene tanto las preguntas como nuestro uso de las respuestas ya dadas. Estos registros se incluyen en la exportacion de datos de tu familia.
 
 ---
 

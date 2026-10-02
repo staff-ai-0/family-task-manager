@@ -42,6 +42,14 @@ class Family(Base):
     # UX-D4a: the evening smart reminders for kids (streak at risk / quest one
     # step away). One switch per family; the app-icon number is not affected.
     smart_reminders_enabled = Column(Boolean, nullable=False, default=True, server_default="true")
+    # Jarvis teen check-in. NULL = undecided (off; the parent hub shows a
+    # one-time card in families that have a teen), False = off by choice,
+    # True = on. No default on purpose: it stores a minor's answers for the
+    # product team, so every family must say yes first.
+    teen_checkin_enabled = Column(Boolean, nullable=True)
+    # When a parent last answered (on, off, or back to undecided). The record
+    # of the consent itself: cheap to keep now, impossible to backfill later.
+    teen_checkin_decided_at = Column(DateTime(timezone=True), nullable=True)
     # Optional per-family module registry: list of ENABLED togglable module
     # keys (see app.core.modules.TOGGLABLE_MODULES). NULL = all modules on
     # (the pre-feature default). Core surfaces (tasks/rewards/points/bank

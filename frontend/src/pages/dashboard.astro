@@ -13,6 +13,7 @@ import { claimableGigs, payMeterView } from "../lib/kidHome";
 import { badgesView, shouldCelebrateBadges } from "../lib/badges";
 import { progressView, shouldCelebrate } from "../lib/progress";
 import { questView } from "../lib/quest";
+import { checkinView } from "../lib/checkin";
 import { pickDashboardRoutines } from "../lib/routines";
 
 const token = Astro.cookies.get("access_token")?.value;
@@ -53,7 +54,7 @@ const y = new Date(`${todayStr}T00:00:00`);
 y.setDate(y.getDate() - 1);
 const yesterdayStr = [y.getFullYear(), String(y.getMonth() + 1).padStart(2, "0"), String(y.getDate()).padStart(2, "0")].join("-");
 
-const [{ data: paycheck }, { data: bankGoal }, { data: rewardGoal }, { data: offerings }, { data: pet }, { data: weekDone }, { data: progressResp }, { data: badgesResp }, { data: questResp }] =
+const [{ data: paycheck }, { data: bankGoal }, { data: rewardGoal }, { data: offerings }, { data: pet }, { data: weekDone }, { data: progressResp }, { data: badgesResp }, { data: questResp }, { data: checkinResp }] =
     await Promise.all([
         apiFetch<any>(`/api/bank/chore-paycheck/${user.id}`, { token }),
         starMode ? none : apiFetch<any>("/api/bank/goals/me", { token }),
@@ -66,11 +67,14 @@ const [{ data: paycheck }, { data: bankGoal }, { data: rewardGoal }, { data: off
         apiFetch<any>("/api/progress/badges", { token }),
         // UX-D3. apiFetch never throws; null → no quest card.
         apiFetch<any>("/api/progress/quest", { token }),
+        // Jarvis teen check-in. Teens only; apiFetch never throws; null → no card.
+        user.role === "teen" ? apiFetch<any>("/api/jarvis/checkin", { token }) : none,
     ]);
 
 const progress = progressView(progressResp, skin, lang);
 const badges = badgesView(badgesResp, lang);
 const quest = questView(questResp, lang, starMode);
+const checkin = checkinView(checkinResp, lang);
 // One celebration modal per load: the rank-up goes first, badges wait a visit.
 const rankCelebrating = shouldCelebrate(progress, user.completed_welcome_tour);
 
@@ -166,6 +170,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
         cup={cup}
         pet={pet ? { name: pet.name, species: pet.species, stage: pet.evolution_stage, status: pet.status_label } : null}
         quest={quest}
+        checkin={checkin}
     />
 
     {progress && <ProgressSheet progress={progress} badges={badges} lang={lang} />}

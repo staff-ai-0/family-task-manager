@@ -2699,7 +2699,7 @@ The per-member numbers (completion, late tasks, and gigs for the last 4 weeks) c
 
 **Routes:** `/parent/jarvis` · `/parent/jarvis-schedules`
 
-> **Who can use it:** Parents/Guardians only. Children and teens are redirected to their dashboard.
+> **Who can use it:** Parents/Guardians (the full copilot) and teens (a private, advice-only chat about their own chores — see 25.5). Children are redirected to their dashboard.
 >
 > **Plan required:** Jarvis is part of the **AI features** included with the **Plus** tier. The Free plan does not include the AI copilot.
 
@@ -2770,6 +2770,17 @@ A **schedule** is a recurring prompt that Jarvis runs automatically on a timer �
 Each schedule card shows its name, cron expression, prompt preview, next/last run, and channel. Use the play/pause button (**▶** / **⏸**) to enable or pause it, and the trash button (**🗑**) to delete it.
 
 > **Tip:** A "Sunday 6pm" weekly-summary schedule is a great way to get a recap of the family's week without having to ask.
+
+## 25.5 Jarvis Check-ins for Teens
+
+When a teen has a chore that is late, or one a parent sent back, Jarvis offers a hand on the teen's home screen: "Stuck on *Take out the trash*?"
+
+- **Yes, help me** — the teen picks what is going on with one tap (too hard, not sure what to do, no time, not fair, forgot, the app won't let me, something else) and gets a short tip. On plans with AI, a button opens their own Jarvis chat with the first message already typed.
+- **Not now** — the card goes away and Jarvis does not ask again for a week.
+
+Jarvis asks at most once a day and three times a week, and never twice about the same chore.
+
+> **For parents:** check-ins are off until you turn them on — a card on your home screen asks once, and the switch lives in **Settings → Family → Jarvis**. The reason your teen picks (and a short note, only for "the app won't let me" or "something else") helps us improve the app. We see counts for all families together, and read notes without names and without the chore's title — and only once at least five families take part. Turning the switch off stops both the questions and our use of the answers already given. These records are included in your family's data export.
 
 ---
 

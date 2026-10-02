@@ -232,6 +232,26 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
         </label>
     </section>
 
+    <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-3" id="teen-checkin-section"
+             data-saved={lang === "es" ? "Guardado." : "Saved."}
+             data-error={lang === "es" ? "No se pudo guardar. Intenta de nuevo." : "Could not save. Try again."}>
+        <h2 class="text-sm font-bold text-brand-ink">🤝 Jarvis</h2>
+        <label class="flex items-start gap-3 cursor-pointer">
+            <input type="checkbox" id="teen-checkin" checked={family?.teen_checkin_enabled === true}
+                   class="mt-0.5 h-5 w-5 rounded border-brand-ink/30 accent-brand-ink" />
+            <span>
+                <span class="block text-sm font-semibold text-brand-ink">
+                    {lang === "es" ? "Jarvis acompaña a tus adolescentes" : "Jarvis checks in with your teens"}
+                </span>
+                <span class="block text-xs text-brand-ink-soft mt-1">
+                    {lang === "es"
+                        ? "Cuando una tarea se atrasa o la regresas, Jarvis le pregunta a tu adolescente qué pasó y le da una idea para destrabarse. El motivo que elige (y una nota corta si es un problema con la app u otra cosa) nos ayuda a mejorar la app; lo vemos sin nombres."
+                        : "When a chore is late or you send it back, Jarvis asks your teen what happened and offers a way to get unstuck. The reason they pick (and a short note if it is a problem with the app or something else) helps us improve the app; we see it without names."}
+                </span>
+            </span>
+        </label>
+    </section>
+
     <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-3" id="modules-section">
         <h2 class="text-sm font-bold text-brand-ink">📦 {lang === "es" ? "Módulos" : "Modules"}</h2>
         <p class="text-xs text-brand-ink-soft">
@@ -641,6 +661,31 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ smart_reminders_enabled: input.checked }),
+            });
+            ok = r.ok;
+        } catch {
+            ok = false;
+        }
+        if (!ok) input.checked = !input.checked;
+        showToast(ok ? (section.dataset.saved ?? "") : (section.dataset.error ?? ""), ok ? "success" : "error");
+        input.disabled = false;
+    });
+</script>
+
+<script>
+    import { showToast } from "../../../lib/toast";
+
+    const section = document.getElementById("teen-checkin-section");
+    const input = document.getElementById("teen-checkin") as HTMLInputElement | null;
+    input?.addEventListener("change", async () => {
+        if (!section) return;
+        input.disabled = true;
+        let ok = false;
+        try {
+            const r = await fetch("/api/families/me", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ teen_checkin_enabled: input.checked }),
             });
             ok = r.ok;
         } catch {

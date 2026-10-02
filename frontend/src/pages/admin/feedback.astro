@@ -1,0 +1,141 @@
+---
+import AdminShell from "@components/ui/AdminShell.astro";
+import { apiFetch } from "../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const days = Astro.url.searchParams.get("days") === "90" ? 90 : 30;
+const offset = Math.max(0, Number(Astro.url.searchParams.get("offset") ?? "0") || 0);
+const LIMIT = 50;
+
+const params = new URLSearchParams({ days: String(days), limit: String(LIMIT), offset: String(offset) });
+// null = the call failed (see lib/api.ts); an empty platform is a real object of zeroes.
+const { data: result } = await apiFetch<any>(`/api/admin/teen-checkins?${params}`, { token });
+
+const REASON_LABELS: Record<string, string> = {
+    too_hard: "Too hard", not_clear: "Not sure what to do", no_time: "No time", not_fair: "Not fair",
+    forgot: "Forgot", app_problem: "App won't let me", other: "Something else",
+};
+const pct = (n: number, of: number) => (of > 0 ? `${Math.round((n / of) * 100)}%` : "—");
+const pageHref = (newOffset: number) => {
+    const p = new URLSearchParams(Astro.url.searchParams);
+    p.set("days", String(days));
+    p.set("offset", String(newOffset));
+    return `/admin/feedback?${p}`;
+};
+const windowClass = (d: number) =>
+    `rounded px-3 py-2 text-sm ${d === days ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`;
+---
+
+<AdminShell title="Teen check-ins" active="feedback">
+    <p class="mb-4 max-w-3xl text-sm text-slate-600">
+        What teens answer when Jarvis asks about a late or sent-back chore, across the families that have check-ins
+        switched on right now. Counts and anonymous notes only: no family, teen or chore is shown here.
+    </p>
+
+    <div class="mb-6 flex items-center gap-2">
+        <a href="/admin/feedback?days=30" class={windowClass(30)}>Last 30 days</a>
+        <a href="/admin/feedback?days=90" class={windowClass(90)}>Last 90 days</a>
+    </div>
+
+    {!result && (
+        <p class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            Could not load the check-ins. The backend may be restarting.
+        </p>
+    )}
+
+    {result && (
+        <>
+            <div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
+                {[
+                    ["Answered", result.answered],
+                    ["Not now", result.dismissed],
+                    ["Families", result.families],
+                    ["Teens", result.teens],
+                    ["Done afterwards", `${result.done_afterwards} (${pct(result.done_afterwards, result.answered)})`],
+                ].map(([label, value]) => (
+                    <div class="rounded border border-slate-200 bg-white p-3">
+                        <div class="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+                        <div class="num mt-1 text-xl font-semibold">{value}</div>
+                    </div>
+                ))}
+            </div>
+
+            <div class="mb-6 grid gap-6 md:grid-cols-2">
+                <div>
+                    <h2 class="mb-2 text-sm font-semibold text-slate-700">Answers by reason</h2>
+                    <table class="w-full border-collapse text-sm">
+                        <tbody>
+                            {Object.entries(result.by_reason as Record<string, number>).map(([key, n]) => (
+                                <tr class="border-b border-slate-100">
+                                    <td class="py-2">{REASON_LABELS[key] ?? key}</td>
+                                    <td class="num py-2 text-right">{n}</td>
+                                    <td class="num py-2 pl-3 text-right text-slate-500">{pct(n, result.answered)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <h2 class="mb-2 text-sm font-semibold text-slate-700">By kind and trigger</h2>
+                    <table class="w-full border-collapse text-sm">
+                        <tbody>
+                            {[
+                                ["About the chore", result.by_kind.chore],
+                                ["About the app", result.by_kind.app],
+                                ["Something else", result.by_kind.other],
+                                ["Chore was late", result.by_trigger.late],
+                                ["Chore was sent back", result.by_trigger.sent_back],
+                            ].map(([label, n]) => (
+                                <tr class="border-b border-slate-100">
+                                    <td class="py-2">{label}</td>
+                                    <td class="num py-2 text-right">{n}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <h2 class="mb-2 text-sm font-semibold text-slate-700">
+                Notes <span class="num font-normal text-slate-500">({result.notes.total})</span>
+            </h2>
+            {result.notes.withheld && (
+                <p class="rounded border border-slate-200 bg-white p-4 text-sm text-slate-500">
+                    Notes are shown once at least {result.min_families_for_notes} families take part
+                    ({result.families} so far). With fewer, a note would point at the teen who wrote it.
+                </p>
+            )}
+            {!result.notes.withheld && result.notes.items.length === 0 && (
+                <p class="rounded border border-slate-200 bg-white p-4 text-sm text-slate-500">No notes in this window.</p>
+            )}
+            {result.notes.items.length > 0 && (
+                <table class="w-full border-collapse text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-200 text-left text-slate-500">
+                            <th class="py-2">When</th>
+                            <th class="py-2">Reason</th>
+                            <th class="py-2">Lang</th>
+                            <th class="py-2">Note</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {result.notes.items.map((row: any) => (
+                            <tr class="border-b border-slate-100 align-top">
+                                <td class="num py-2 whitespace-nowrap">{String(row.created_at).slice(0, 10)}</td>
+                                <td class="py-2 whitespace-nowrap">{REASON_LABELS[row.reason] ?? row.reason}</td>
+                                <td class="py-2">{row.lang}</td>
+                                <td class="py-2">{row.note}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
+            <div class="mt-4 flex gap-3 text-sm">
+                {offset > 0 && <a class="underline" href={pageHref(Math.max(0, offset - LIMIT))}>Newer</a>}
+                {offset + LIMIT < result.notes.total && <a class="underline" href={pageHref(offset + LIMIT)}>Older</a>}
+            </div>
+        </>
+    )}
+</AdminShell>

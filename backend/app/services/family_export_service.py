@@ -80,6 +80,7 @@ from app.models import (
     UserRewardGoal,
     WeeklyQuest,
 )
+from app.models.teen_checkin import TeenCheckin
 from app.models.budget import (
     BudgetAccount,
     BudgetAllocation,
@@ -168,6 +169,8 @@ EXPORTED_FAMILY_TABLES: frozenset[str] = frozenset(
         # (counts can drop after a parent correction; the tier stays).
         UserBadge,
         WeeklyQuest,
+        # Jarvis teen check-ins: a teen's one-tap answers are family data.
+        TeenCheckin,
         Routine,
         Reward,
         RewardRedemption,
@@ -349,6 +352,7 @@ class FamilyExportService:
         savings_goals = await _rows(db, fam(KidSavingsGoal))
         badges = await _rows(db, fam(UserBadge))
         quests = await _rows(db, fam(WeeklyQuest))
+        teen_checkins = await _rows(db, fam(TeenCheckin))
         routines = await _rows(db, fam(Routine))
         _routine_ids = [r.id for r in routines]
         routine_steps = (
@@ -535,6 +539,7 @@ class FamilyExportService:
             "jarvis/messages.json": _dump(jarvis_messages),
             "jarvis/schedules.json": _dump(jarvis_schedules),
             "jarvis/pending_actions.json": _dump(jarvis_pending_actions),
+            "jarvis/teen_checkins.json": _dump(teen_checkins),
             "jarvis/mcp_tokens.json": _dump(
                 jarvis_mcp_tokens, exclude=_MCP_TOKEN_EXCLUDED_COLUMNS
             ),

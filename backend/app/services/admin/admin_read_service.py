@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.a2a import A2AWebhookDelivery, FamilyA2AWebhook
@@ -19,15 +19,23 @@ from app.models.family import Family
 from app.models.operator_audit import OperatorAuditLog
 from app.models.subscription import FamilySubscription, SubscriptionPlan
 from app.models.task_assignment import AssignmentStatus, TaskAssignment
+from app.models.teen_checkin import TeenCheckin
 from app.models.user import APPROVAL_PENDING, User
 from app.services.family_deletion_service import FamilyDeletionService
 from app.services.plan_credit_service import PlanCreditService
+from app.services.teen_checkin_service import REASONS
 
 # Subscription statuses that represent a live entitlement backed by PayPal.
 # 'past_due' and 'payment_failed' are inside the billing grace window and are
 # still paying customers. Anything without a paypal_subscription_id is a comp
 # or a free row and must not be counted as revenue.
 PAYING_STATUSES = ("active", "past_due", "payment_failed")
+
+
+# Teen check-in notes are shown to the operator only when at least this many
+# families take part in the window (see teen_checkin_summary).
+MIN_FAMILIES_FOR_NOTES = 5
+TEEN_CHECKIN_WINDOWS = (30, 90)
 
 
 class AdminReadService:
@@ -590,4 +598,87 @@ class AdminReadService:
                 }
                 for r in rows
             ],
+        }
+
+    @staticmethod
+    async def teen_checkin_summary(
+        db: AsyncSession, days: int, limit: int = 50, offset: int = 0,
+    ) -> dict:
+        """Why chores do not get done, across every family (Jarvis teen
+        check-ins). Counts and anonymous notes ONLY: nothing here may name a
+        family, a teen or a chore — the rows deliberately carry no title, and
+        this query selects no id."""
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        # Only families that are opted in RIGHT NOW: a parent who switches
+        # check-ins off, or closes the family, means "stop using my kid's
+        # answers" — the rows stay in the family's account, out of this view.
+        taking_part = select(Family.id).where(
+            Family.teen_checkin_enabled.is_(True),
+            Family.deleted_at.is_(None),
+            Family.is_active.is_(True),
+        )
+        recent = and_(TeenCheckin.created_at >= since, TeenCheckin.family_id.in_(taking_part))
+        answered_rows = (TeenCheckin.outcome == "answered")
+
+        outcomes = dict((await db.execute(
+            select(TeenCheckin.outcome, func.count()).where(recent).group_by(TeenCheckin.outcome)
+        )).all())
+        reasons = dict((await db.execute(
+            select(TeenCheckin.reason, func.count()).where(recent, answered_rows).group_by(TeenCheckin.reason)
+        )).all())
+        triggers = dict((await db.execute(
+            select(TeenCheckin.trigger, func.count()).where(recent, answered_rows).group_by(TeenCheckin.trigger)
+        )).all())
+        families, teens = (await db.execute(
+            select(func.count(func.distinct(TeenCheckin.family_id)), func.count(func.distinct(TeenCheckin.user_id)))
+            .where(recent)
+        )).one()
+        done_afterwards = (await db.execute(
+            select(func.count()).select_from(TeenCheckin)
+            .join(TaskAssignment, TaskAssignment.id == TeenCheckin.assignment_id)
+            .where(recent, answered_rows, TaskAssignment.status == AssignmentStatus.COMPLETED)
+        )).scalar() or 0
+        # A note is free text from one teen. With only a few families taking
+        # part, "without your name" would be a fiction — whoever reads it could
+        # tell whose it is. So notes are withheld below a minimum cohort.
+        withheld = int(families or 0) < MIN_FAMILIES_FOR_NOTES
+        notes_total, notes = 0, []
+        if not withheld:
+            has_note = TeenCheckin.note.is_not(None)
+            notes_total = (await db.execute(
+                select(func.count()).select_from(TeenCheckin).where(recent, has_note)
+            )).scalar() or 0
+            notes = (await db.execute(
+                select(TeenCheckin.created_at, TeenCheckin.reason, TeenCheckin.lang, TeenCheckin.note)
+                .where(recent, has_note)
+                .order_by(TeenCheckin.created_at.desc())
+                .limit(limit).offset(offset)
+            )).all()
+
+        by_reason = {key: int(reasons.get(key, 0)) for key in REASONS}
+        return {
+            "days": int(days),
+            "answered": int(outcomes.get("answered", 0)),
+            "dismissed": int(outcomes.get("dismissed", 0)),
+            "families": int(families or 0),
+            "teens": int(teens or 0),
+            "by_reason": by_reason,
+            "by_kind": {
+                "chore": sum(v for k, v in by_reason.items() if k not in ("app_problem", "other")),
+                "app": by_reason["app_problem"],
+                "other": by_reason["other"],
+            },
+            "by_trigger": {key: int(triggers.get(key, 0)) for key in ("late", "sent_back")},
+            "done_afterwards": int(done_afterwards),
+            "min_families_for_notes": MIN_FAMILIES_FOR_NOTES,
+            "notes": {
+                "total": int(notes_total),
+                # The day only: a full timestamp would line up with the
+                # "last seen" times shown elsewhere in this console.
+                "items": [
+                    {"created_at": created.date().isoformat(), "reason": reason, "lang": lang, "note": note}
+                    for created, reason, lang, note in notes
+                ],
+                "withheld": withheld,
+            },
         }
