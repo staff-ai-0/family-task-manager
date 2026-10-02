@@ -129,6 +129,7 @@ El objetivo de Family Task Manager es ayudar a las familias a construir, desde t
         - [17.5.2 Rango](#1752-rango)
         - [17.5.3 Insignias](#1753-insignias)
         - [17.5.4 Mision Semanal](#1754-mision-semanal)
+        - [17.5.5 Recordatorios Inteligentes y el Numero en el Icono](#1755-recordatorios-inteligentes-y-el-numero-en-el-icono)
 18. [Capitulo 18: Mascota Virtual](#capitulo-18-mascota-virtual)
 19. [Capitulo 19: Plan de Comidas](#capitulo-19-plan-de-comidas)
 20. [Capitulo 20: Listas de Compras](#capitulo-20-listas-de-compras)
@@ -2165,6 +2166,23 @@ La mision cambia de una semana a otra, y la meta se ajusta a cada nino: un poco 
 Lograr la meta paga un bono de puntos una sola vez. Las tareas y tareas extra que requieren revision de un papa cuentan cuando se aprueban, asi que el bono puede llegar despues de que el papa apruebe — incluso al inicio de la semana siguiente.
 
 > **Para papas:** la fila de cada hijo en su pantalla de inicio muestra su mision (🏁 3/5, o 🏁 ✓ cuando esta lograda). El bono se configura en **Ajustes → Familia → Mision semanal** (20 puntos por defecto). Ponerlo en 0 desactiva las misiones semanales. Las familias que ya usaban la app empiezan con las misiones semanales apagadas: una tarjeta en su pantalla de inicio ofrece activarlas.
+
+## 17.5.5 Recordatorios Inteligentes y el Numero en el Icono
+
+**El numero en el icono de la app** muestra lo que te esta esperando. Para ninos y adolescentes son las tareas que siguen abiertas (las de hoy y las atrasadas; las tareas extra son opcionales y no cuentan). Para los papas es todo lo que espera revision: tareas, gigs y solicitudes de recompensa. Desaparece cuando no hay nada pendiente.
+
+**Los recordatorios inteligentes** son para ninos y adolescentes. Por la tarde (desde las 6:00 pm, nunca despues de las 9:00 pm) la app envia como maximo un recordatorio al dia, y solo cuando todavia pueden hacer algo al respecto:
+
+| Recordatorio | Cuando |
+|---|---|
+| 🔥 Racha en riesgo | La racha es de 3 dias o mas y las tareas de hoy no estan terminadas |
+| 🏁 Mision a un paso | A la mision semanal le falta solo uno, y se puede lograr hoy (se envia una vez por mision) |
+
+Si aplican los dos, se envia el de la racha. Si todo esta hecho, no se envia nada.
+
+> **Para papas:** activalos o desactivalos en **Ajustes → Familia → Recordatorios inteligentes**. Estan activados por defecto. El interruptor no cambia el numero del icono ni ninguna otra notificacion.
+
+> **Nota:** el numero en el icono funciona en iPhone/iPad 16.4 o posterior (app agregada a la pantalla de inicio, notificaciones permitidas) y en la app de escritorio instalada en Chrome o Edge. Android no muestra un numero: muestra su propio punto en el icono mientras haya una notificacion sin leer. Un dispositivo que nunca permitio notificaciones no recibe recordatorios inteligentes.
 
 ---
 

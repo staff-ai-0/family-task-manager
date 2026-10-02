@@ -24,7 +24,10 @@ from app.models.notification import Notification, NotificationType as NT
 # read, inside the caller's transaction. Prod 2026-09-27: 664 of 958 unread
 # rows were these, keeping every badge at 75–214.
 # A parent nudge (UX-C2) supersedes the kid's older unread nudge the same way.
-SUPERSEDING_TYPES = frozenset({NT.TASK_DUE, NT.TASK_ASSIGNED, NT.PARENT_NUDGE})
+# The UX-D4a smart reminders (streak at risk / quest nudge) supersede too.
+SUPERSEDING_TYPES = frozenset({
+    NT.TASK_DUE, NT.TASK_ASSIGNED, NT.PARENT_NUDGE, NT.STREAK_AT_RISK, NT.QUEST_NUDGE,
+})
 
 # The unread badge only counts the last N days. Older unread rows stay in the
 # feed; they just stop inflating a number nobody can act on.
@@ -73,6 +76,33 @@ _COPY = {
             "es": "¡Complétalas para ganar puntos!",
             "en": "Complete them to earn points!",
         },
+    },
+    # UX-D4a smart reminders. "last" = this week's free pass is already used
+    # (a miss tonight resets the streak); "pass" = it is unused (a miss spends it).
+    "streak_at_risk_last": {
+        "type": NT.STREAK_AT_RISK,
+        "title": {"es": "🔥 Tu racha de {days} días termina esta noche", "en": "🔥 Your {days}-day streak ends tonight"},
+        "body": {"es": "Te faltan {n} tareas hoy. Termínalas para conservarla.", "en": "{n} chores left today. Finish them to keep it."},
+    },
+    "streak_at_risk_last_one": {
+        "type": NT.STREAK_AT_RISK,
+        "title": {"es": "🔥 Tu racha de {days} días termina esta noche", "en": "🔥 Your {days}-day streak ends tonight"},
+        "body": {"es": "Te falta 1 tarea hoy. Termínala para conservarla.", "en": "1 chore left today. Finish it to keep it."},
+    },
+    "streak_at_risk_pass": {
+        "type": NT.STREAK_AT_RISK,
+        "title": {"es": "🔥 Conserva tu racha de {days} días", "en": "🔥 Keep your {days}-day streak"},
+        "body": {"es": "Te faltan {n} tareas hoy. Termínalas y guarda tu pase libre 🛡️.", "en": "{n} chores left today. Finish them and save your free pass 🛡️."},
+    },
+    "streak_at_risk_pass_one": {
+        "type": NT.STREAK_AT_RISK,
+        "title": {"es": "🔥 Conserva tu racha de {days} días", "en": "🔥 Keep your {days}-day streak"},
+        "body": {"es": "Te falta 1 tarea hoy. Termínala y guarda tu pase libre 🛡️.", "en": "1 chore left today. Finish it and save your free pass 🛡️."},
+    },
+    "quest_nudge": {
+        "type": NT.QUEST_NUDGE,
+        "title": {"es": "🏁 Te falta 1 para tu misión de la semana", "en": "🏁 1 away from this week's quest"},
+        "body": {"es": "Complétala y gana +{bonus} puntos.", "en": "Finish it for +{bonus} points."},
     },
     "task_due_today_one": {
         "type": NT.TASK_DUE,
@@ -581,6 +611,7 @@ class NotificationService:
         type: Optional[str] = None,
         expires_at: Optional[datetime] = None,
         push: bool = True,
+        push_tag: Optional[str] = None,
     ) -> Notification:
         """Create a notification from a _COPY key, localized to the
         recipient's preferred_lang (or an explicit ``lang`` override).
@@ -601,6 +632,7 @@ class NotificationService:
             user_id=user_id,
             expires_at=expires_at,
             push=push,
+            push_tag=push_tag,
         )
 
     @staticmethod
@@ -663,13 +695,16 @@ class NotificationService:
         user_id: Optional[UUID] = None,
         expires_at: Optional[datetime] = None,
         push: bool = True,
+        push_tag: Optional[str] = None,
     ) -> Notification:
         """Create a notification. user_id=None broadcasts to whole family.
 
         When ``push`` is True and ``user_id`` is set, fires a web-push
         message after the commit so the kid's device buzzes immediately.
         Failures in push are swallowed — the in-app feed entry is what
-        matters; push is a nice-to-have.
+        matters; push is a nice-to-have. push_tag becomes the push
+        payload's tag: a newer push with the same tag replaces the older
+        one still on the lock screen.
         """
         await NotificationService._supersede_older(db, family_id, user_id, type)
         n = Notification(
@@ -698,15 +733,14 @@ class NotificationService:
             if recent <= 10:
                 try:
                     from app.services.push_service import PushService
-                    await PushService.send_to_user(
-                        db,
-                        user_id,
-                        {
-                            "title": title,
-                            "body": body or "",
-                            "url": link or "/notifications",
-                        },
-                    )
+                    payload = {
+                        "title": title,
+                        "body": body or "",
+                        "url": link or "/notifications",
+                    }
+                    if push_tag:
+                        payload["tag"] = push_tag
+                    await PushService.send_to_user(db, user_id, payload)
                 except Exception:
                     import logging
                     logging.getLogger(__name__).exception(

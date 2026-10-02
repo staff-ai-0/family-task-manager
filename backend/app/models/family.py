@@ -39,6 +39,9 @@ class Family(Base):
     # parent's choice (no card), > 0 = on with that bonus. Families created
     # after the weekly_quests migration default to 20.
     quest_bonus_points = Column(Integer, nullable=True, default=20, server_default="20")
+    # UX-D4a: the evening smart reminders for kids (streak at risk / quest one
+    # step away). One switch per family; the app-icon number is not affected.
+    smart_reminders_enabled = Column(Boolean, nullable=False, default=True, server_default="true")
     # Optional per-family module registry: list of ENABLED togglable module
     # keys (see app.core.modules.TOGGLABLE_MODULES). NULL = all modules on
     # (the pre-feature default). Core surfaces (tasks/rewards/points/bank

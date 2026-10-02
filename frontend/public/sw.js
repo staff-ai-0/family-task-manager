@@ -89,6 +89,22 @@ self.addEventListener('push', (event) => {
         renotify: true,
     };
     event.waitUntil(self.registration.showNotification(payload.title, opts));
+
+    // UX-D4a: every push carries the recipient's "waiting for you" count; set
+    // the app-icon number from it. The notification above is already handed to
+    // waitUntil on its own, and this runs inside a try, so nothing here can
+    // stop it from showing (a push with no visible notification can cost the
+    // subscription on iOS).
+    if (typeof payload.badge === 'number') {
+        try {
+            const setBadge = payload.badge > 0
+                ? (navigator.setAppBadge ? navigator.setAppBadge(payload.badge) : null)
+                : (navigator.clearAppBadge ? navigator.clearAppBadge() : null);
+            if (setBadge) event.waitUntil(Promise.resolve(setBadge).catch(() => {}));
+        } catch (e) {
+            // The number is a nicety.
+        }
+    }
 });
 
 self.addEventListener('notificationclick', (event) => {

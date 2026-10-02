@@ -168,6 +168,16 @@ class PushService:
         if not rows:
             return 0
 
+        # UX-D4a: every push carries the recipient's "waiting for you" count so
+        # the service worker can set the app-icon number while the app is
+        # closed. Best-effort: a failing count never costs the push itself.
+        if "badge" not in payload:
+            try:
+                from app.services.ping_service import PingService
+                payload = {**payload, "badge": await PingService.waiting_count_for_id(db, user_id)}
+            except Exception:
+                log.exception("waiting count failed for push to user %s", user_id)
+
         # Explicit exp: py-vapid's default is now + EXACTLY 86400s, and RFC
         # 8292 caps exp at "not more than 24 hours" — an Apple node whose
         # clock trails ours by seconds computes >24h and rejects the token

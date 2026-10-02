@@ -54,6 +54,8 @@ class FamilyUpdate(BaseModel):
     point_value_cents: Optional[int] = Field(None, ge=1, le=100_000)
     # UX-D3 weekly quest bonus in points; 0 switches weekly quests off.
     quest_bonus_points: Optional[int] = Field(None, ge=0, le=500)
+    # UX-D4a evening smart reminders for kids. None = leave as-is on PATCH.
+    smart_reminders_enabled: Optional[bool] = None
     # Module registry: list of ENABLED togglable modules. None = leave as-is
     # on PATCH; stored NULL = all on. Must be a subset of TOGGLABLE_MODULES.
     enabled_modules: Optional[List[str]] = None
@@ -105,6 +107,8 @@ class FamilyResponse(EntityResponse):
     # UX-D3 weekly quest bonus: NULL = not decided yet (quests off, parent hub
     # shows a one-time opt-in card), 0 = off by choice, > 0 = on.
     quest_bonus_points: Optional[int] = None
+    # UX-D4a: evening smart reminders for kids (on by default).
+    smart_reminders_enabled: bool = True
     # Stored value: NULL = all modules on. Clients resolve via the same rule.
     enabled_modules: Optional[List[str]] = None
 

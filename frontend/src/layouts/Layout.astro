@@ -40,6 +40,10 @@ const cookieRole = Astro.cookies.get("ui_role")?.value;
 const resolvedUiMode = uiMode
 	?? (cookieRole === "teen" ? "teen" : cookieRole === "parent" ? "adult" : "kid");
 
+// UX-D4a: a page rendered without a session clears the app-icon number, so a
+// shared phone never keeps the last user's count (logout lands on /login).
+const hasSession = Astro.cookies.has("access_token") || Astro.cookies.has("refresh_token");
+
 ---
 
 <!doctype html>
@@ -147,6 +151,12 @@ const resolvedUiMode = uiMode
             navigator.serviceWorker.register("/sw.js").catch(function () {});
         }
     </script>
+
+    {!hasSession && (
+        <script is:inline>
+            if (navigator.clearAppBadge) navigator.clearAppBadge().catch(function () {});
+        </script>
+    )}
 
     <script is:inline>
 (function installBanner() {

@@ -65,4 +65,21 @@ describe("submitDecision", () => {
         const f = vi.fn(async () => { throw new Error("offline"); });
         expect(await submitDecision({ kind: "task", id: "a1", approve: true }, f as unknown as typeof fetch)).toEqual({ ok: false, error: null });
     });
+    it("announces a successful decision so the icon number refreshes", async () => {
+        const dispatchEvent = vi.fn();
+        vi.stubGlobal("window", { dispatchEvent });
+        try {
+            await submitDecision({ kind: "task", id: "a1", approve: true }, (async () => json(200, {})) as unknown as typeof fetch);
+            expect(dispatchEvent).toHaveBeenCalledTimes(1);
+            expect(dispatchEvent.mock.calls[0][0].type).toBe("ftm:waiting-changed");
+            await submitDecision({ kind: "task", id: "a1", approve: true }, (async () => json(500, {})) as unknown as typeof fetch);
+            expect(dispatchEvent).toHaveBeenCalledTimes(1);
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
+    it("works where there is no window at all", async () => {
+        const res = await submitDecision({ kind: "task", id: "a1", approve: true }, (async () => json(200, {})) as unknown as typeof fetch);
+        expect(res).toEqual({ ok: true });
+    });
 });

@@ -65,6 +65,18 @@ async def unread_count(
     return {"unread": n}
 
 
+@router.get("/waiting-count")
+async def waiting_count(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """UX-D4a: the app-icon number — open chores for a kid, the review queue
+    for a parent. Scoped to the caller's own family."""
+    from app.services.ping_service import PingService
+
+    return {"count": await PingService.waiting_count(db, current_user)}
+
+
 @router.post("/{notif_id}/read", response_model=NotificationOut)
 async def mark_read(
     notif_id: UUID,
