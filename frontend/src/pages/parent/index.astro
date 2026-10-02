@@ -60,6 +60,8 @@ const [
         : Promise.resolve({ data: null }),
 ]);
 const family = familyRes.data;
+// Jarvis teen check-in: the opt-in card is only for families with a teen.
+const hasTeen = (oversightRes.data?.members ?? []).some((k: any) => String(k.role).toLowerCase() === "teen");
 
 // The parent's OWN chores — C1 compact deck, same rule as before (incl. overdue).
 const myProgress = progressRes.data;
@@ -212,6 +214,28 @@ const hello = firstName(user.name);
         </div>
     )}
 
+    {family && family.teen_checkin_enabled == null && hasTeen && (
+        <div id="checkin-intro-banner" class="max-w-md mx-auto w-full mb-6 bg-brand-sky/10 border border-brand-sky/30 rounded-2xl p-5 shadow-[var(--shadow-card)]">
+            <h2 class="font-bold text-brand-ink text-base mb-1">
+                {lang === "es" ? "Nuevo: Jarvis acompaña a tus adolescentes" : "New: Jarvis checks in with your teens"}
+            </h2>
+            <p class="text-sm text-brand-ink-soft mb-3">
+                {lang === "es"
+                    ? "Cuando una tarea se atrasa o la regresas, Jarvis le pregunta a tu adolescente qué pasó y le da una idea para destrabarse. El motivo que elige (y una nota corta si es un problema con la app) nos ayuda a mejorar la app; lo vemos sin nombres."
+                    : "When a chore is late or you send it back, Jarvis asks your teen what happened and offers a way to get unstuck. The reason they pick (and a short note if it is a problem with the app) helps us improve the app; we see it without names."}
+            </p>
+            <div class="flex flex-wrap gap-2">
+                <button id="checkin-intro-on" class={buttonClass("secondary", "sm")}>
+                    {lang === "es" ? "Activar" : "Turn on"}
+                </button>
+                <button id="checkin-intro-off"
+                        class="px-4 py-2 rounded-lg bg-brand-cream-deep text-brand-ink text-xs font-semibold hover:bg-brand-cream border border-brand-ink/15 transition-colors">
+                    {lang === "es" ? "Ahora no" : "Not now"}
+                </button>
+            </div>
+        </div>
+    )}
+
     <ParentHub
         lang={lang}
         tz={tz}
@@ -265,6 +289,23 @@ const hello = firstName(user.name);
     };
     document.getElementById("quest-intro-on")?.addEventListener("click", () => questIntroDecide(20));
     document.getElementById("quest-intro-off")?.addEventListener("click", () => questIntroDecide(0));
+
+    // Jarvis teen check-in opt-in: true turns it on, false is "not now" — either
+    // way the family is no longer undecided, so the card never returns.
+    const checkinIntroDecide = async (on: boolean) => {
+        try {
+            const r = await fetch("/api/families/me", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ teen_checkin_enabled: on }),
+            });
+            if (r.ok) document.getElementById("checkin-intro-banner")?.remove();
+        } catch (e) {
+            console.error("teen check-in opt-in decision failed:", e);
+        }
+    };
+    document.getElementById("checkin-intro-on")?.addEventListener("click", () => checkinIntroDecide(true));
+    document.getElementById("checkin-intro-off")?.addEventListener("click", () => checkinIntroDecide(false));
 </script>
 
 <script>
