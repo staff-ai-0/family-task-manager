@@ -22,8 +22,8 @@ describe("family settings — smart reminders switch (UX-D4a)", () => {
     it("explains what it does, in both languages", () => {
         expect(section).toContain("Recordatorios inteligentes para los hijos");
         expect(section).toContain("Smart reminders for kids");
-        expect(section).toContain("A las 6:00 pm avisamos a tus hijos solo si su racha está en riesgo o les falta un paso para su misión de la semana. Máximo un aviso al día.");
-        expect(section).toContain("At 6:00 pm we tell your kids only when their streak is at risk or they are one step from their weekly quest. One reminder a day at most.");
+        expect(section).toContain("Por la tarde (desde las 6:00 pm) avisamos a tus hijos solo si su racha está en riesgo o les falta un paso para su misión de la semana. Máximo un aviso al día.");
+        expect(section).toContain("In the evening (from 6:00 pm) we tell your kids only when their streak is at risk or they are one step from their weekly quest. One reminder a day at most.");
     });
     it("saves at once through the family update, toasts, and reverts on failure", () => {
         expect(src).toMatch(/smart_reminders_enabled: input\.checked/);

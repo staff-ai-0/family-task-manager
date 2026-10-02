@@ -2193,7 +2193,7 @@ Reaching the goal pays a points bonus once. Chores and bonus tasks that need a p
 
 **The number on the app icon** shows what is waiting for you. For kids and teens it is the chores still open (today's and any late ones — bonus tasks are optional and not counted). For parents it is everything waiting for review: chores, gigs and reward requests. It disappears when nothing is waiting.
 
-**Smart reminders** are for kids and teens. At 6:00 pm the app sends at most one reminder, and only when there is something they can still do about it:
+**Smart reminders** are for kids and teens. In the evening (from 6:00 pm, never after 9:00 pm) the app sends at most one reminder a day, and only when there is something they can still do about it:
 
 | Reminder | When |
 |---|---|
@@ -2204,7 +2204,7 @@ If both apply, the streak reminder is sent. If everything is done, nothing is se
 
 > **For parents:** switch them off or on in **Settings → Family → Smart reminders**. They are on by default. The switch does not change the icon number or any other notification.
 
-> **Note:** the icon number needs the app installed on the home screen with notifications allowed (iPhone/iPad 16.4 or later, Android, or desktop Chrome/Edge). A device that never allowed notifications gets no smart reminders.
+> **Note:** the icon number works on iPhone/iPad 16.4 or later (app added to the home screen, notifications allowed) and on the installed desktop app in Chrome or Edge. Android does not show a number: it shows its own dot on the icon while a notification is unread. A device that never allowed notifications gets no smart reminders.
 
 ---
 

@@ -2171,7 +2171,7 @@ Lograr la meta paga un bono de puntos una sola vez. Las tareas y tareas extra qu
 
 **El numero en el icono de la app** muestra lo que te esta esperando. Para ninos y adolescentes son las tareas que siguen abiertas (las de hoy y las atrasadas; las tareas extra son opcionales y no cuentan). Para los papas es todo lo que espera revision: tareas, gigs y solicitudes de recompensa. Desaparece cuando no hay nada pendiente.
 
-**Los recordatorios inteligentes** son para ninos y adolescentes. A las 6:00 pm la app envia como maximo un recordatorio, y solo cuando todavia pueden hacer algo al respecto:
+**Los recordatorios inteligentes** son para ninos y adolescentes. Por la tarde (desde las 6:00 pm, nunca despues de las 9:00 pm) la app envia como maximo un recordatorio al dia, y solo cuando todavia pueden hacer algo al respecto:
 
 | Recordatorio | Cuando |
 |---|---|
@@ -2182,7 +2182,7 @@ Si aplican los dos, se envia el de la racha. Si todo esta hecho, no se envia nad
 
 > **Para papas:** activalos o desactivalos en **Ajustes → Familia → Recordatorios inteligentes**. Estan activados por defecto. El interruptor no cambia el numero del icono ni ninguna otra notificacion.
 
-> **Nota:** el numero en el icono requiere la app instalada en la pantalla de inicio con las notificaciones permitidas (iPhone/iPad 16.4 o posterior, Android, o Chrome/Edge de escritorio). Un dispositivo que nunca permitio notificaciones no recibe recordatorios inteligentes.
+> **Nota:** el numero en el icono funciona en iPhone/iPad 16.4 o posterior (app agregada a la pantalla de inicio, notificaciones permitidas) y en la app de escritorio instalada en Chrome o Edge. Android no muestra un numero: muestra su propio punto en el icono mientras haya una notificacion sin leer. Un dispositivo que nunca permitio notificaciones no recibe recordatorios inteligentes.
 
 ---
 

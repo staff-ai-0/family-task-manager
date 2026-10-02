@@ -87,6 +87,23 @@ describe("wiring", () => {
         }
         expect(nav).toMatch(/visibilitychange/);
     });
+    it("the path the browser asks for has a same-origin route, GET only", () => {
+        // Browser code can only reach the backend through an Astro /api route.
+        // Without this file the request is a silent 404 and the number never
+        // updates between full page loads.
+        const lib = read("../src/lib/appBadge.ts");
+        const path = lib.match(/fetchImpl\("(\/api\/[^"]+)"/)?.[1];
+        expect(path).toBe("/api/notifications/waiting-count");
+        const route = read(`../src/pages${path}.ts`);
+        expect(route).toMatch(/export const \{ GET \} = createApiProxy\(\{ name: "notifications" \}\);/);
+        expect(route).not.toMatch(/POST|PUT|PATCH|DELETE/);
+    });
+    it("BottomNav asks once per burst of events", () => {
+        // A batch approve fires one event per item; overlapping answers could
+        // land out of order and leave an older, higher number on the icon.
+        expect(nav).toMatch(/clearTimeout\(pending\);\s*pending = setTimeout\(\(\) => void refreshAppBadge\(\), 400\);/);
+        expect(nav.match(/refreshAppBadge\(\)/g) ?? []).toHaveLength(1);
+    });
     it("Layout clears the number on a logged-out page", () => {
         expect(layout).toMatch(/const hasSession = Astro\.cookies\.has\("access_token"\) \|\| Astro\.cookies\.has\("refresh_token"\)/);
         const block = layout.match(/\{!hasSession && \([\s\S]*?<\/script>\s*\)\}/)?.[0] ?? "";
@@ -98,7 +115,14 @@ describe("wiring", () => {
         expect(handler).toMatch(/typeof payload\.badge === 'number'/);
         expect(handler).toContain("navigator.setAppBadge");
         expect(handler).toContain("navigator.clearAppBadge");
-        expect(handler).toMatch(/Promise\.all\(work\)/);
-        expect(handler).toMatch(/\.catch\(/);
+        // The notification is handed to waitUntil FIRST, on its own; the badge
+        // comes after, inside a try, so nothing it does can stop the notification.
+        const shown = handler.indexOf("event.waitUntil(self.registration.showNotification(payload.title, opts));");
+        const badge = handler.indexOf("typeof payload.badge === 'number'");
+        expect(shown).toBeGreaterThan(-1);
+        expect(badge).toBeGreaterThan(shown);
+        const block = handler.slice(badge);
+        expect(block).toMatch(/try \{[\s\S]*navigator\.setAppBadge[\s\S]*\} catch \(/);
+        expect(block).toMatch(/\.catch\(/);
     });
 });

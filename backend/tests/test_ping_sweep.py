@@ -139,6 +139,13 @@ class TestStreakPing:
         await _assign(db_session, test_child_user, chore, today, AssignmentStatus.COMPLETED, grade="missed")
         assert await PingService.run_evening_sweep(db_session, now=_at(today, 18)) == 0
 
+    async def test_a_rejected_chore_reopened_today_sends_nothing(self, db_session, test_family, test_child_user):
+        today = _wednesday()
+        chore = await _at_risk_kid(db_session, test_child_user, today, days=5)
+        await _assign(db_session, test_child_user, chore, today, AssignmentStatus.PENDING, grade="missed",
+                      approval=ApprovalStatus.REJECTED)
+        assert await PingService.run_evening_sweep(db_session, now=_at(today, 18)) == 0
+
 
 class TestWhoAndWhen:
     @pytest.mark.parametrize("hour,expected", [(17, 0), (18, 1), (19, 1), (20, 1), (21, 0)])
@@ -191,6 +198,23 @@ class TestWhoAndWhen:
         test_teen_user.approval_status = "pending"
         await db_session.commit()
         assert await PingService.run_evening_sweep(db_session, now=_at(today, 18)) == 0
+
+    async def test_one_family_failing_does_not_stop_the_next(self, db_session, test_family, test_child_user):
+        broken = Family(name="Broken", timezone="Etc/GMT+1")
+        db_session.add(broken)
+        await db_session.commit()
+        today = _wednesday()
+        await _at_risk_kid(db_session, test_child_user, today)
+        from app.services import ping_service
+        real = ping_service._safe_zoneinfo
+
+        def flaky(name):
+            if name == "Etc/GMT+1":
+                raise RuntimeError("boom")
+            return real(name)
+
+        with patch.object(ping_service, "_safe_zoneinfo", side_effect=flaky):
+            assert await PingService.run_evening_sweep(db_session, now=_at(today, 18)) == 1
 
     async def test_a_teen_is_pinged_like_a_child(self, db_session, test_family, test_teen_user):
         today = _wednesday()

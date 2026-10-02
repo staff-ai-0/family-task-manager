@@ -186,7 +186,13 @@ const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shad
         const nav = document.querySelector<HTMLElement>("nav[data-waiting-count]");
         if (nav) void applyAppBadge(Number(nav.dataset.waitingCount));
     });
-    const refresh = () => void refreshAppBadge();
+    // One request per burst: a batch approve fires this once per item, and
+    // overlapping answers could land out of order and leave an older number.
+    let pending: ReturnType<typeof setTimeout> | undefined;
+    const refresh = () => {
+        clearTimeout(pending);
+        pending = setTimeout(() => void refreshAppBadge(), 400);
+    };
     window.addEventListener("ftm:deck-completed", refresh);
     window.addEventListener("ftm:deck-empty", refresh);
     window.addEventListener("ftm:waiting-changed", refresh);

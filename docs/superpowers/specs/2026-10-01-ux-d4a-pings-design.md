@@ -34,7 +34,7 @@ The icon number is for every role.
 
 ### When
 
-The sweep job runs hourly at minute 0. It acts on a family while that family's local time (`families.timezone`, UTC on an invalid name) is **18:00–20:59**. The window exists for recovery only: with the server up, every eligible kid is handled by the 18:00 run and the later runs find nothing to do. If the server was down at 18:00, the 19:00 or 20:00 run sends instead. After 20:59 nothing is sent that day.
+The sweep job runs hourly at minute 0. It acts on a family while that family's local time (`families.timezone`, UTC on an invalid name) is **18:00–20:59**. Every run re-checks the kids who have not been reminded today. So the 19:00 and 20:00 runs recover a missed 18:00 run (server down), and they also reach a kid who only became eligible after 18:00 — for example one who finished a chore at 18:30 and is now one step from the quest. The reminder is still true at that hour. After 20:59 nothing is sent that day. (Amended after the final review: the first draft called the later runs "recovery only", which the code never was.)
 
 ### Push 1 — streak at risk
 
@@ -155,7 +155,7 @@ No new table, so the family export registry is unchanged.
 
 - `badgeAction(count: unknown) -> { op: "set"; n: number } | { op: "clear" }` — pure: a positive integer sets, anything else clears.
 - `applyAppBadge(count)` — feature-detects `navigator.setAppBadge` / `clearAppBadge`; a browser without them does nothing; rejections are swallowed.
-- `refreshAppBadge()` — `GET /api/notifications/waiting-count`, then `applyAppBadge`. A 401/403 clears the number (the session is gone); any other failure leaves the current number alone.
+- `refreshAppBadge()` — `GET /api/notifications/waiting-count` through a same-origin Astro route (`pages/api/notifications/waiting-count.ts`, GET only; browser code cannot reach the backend any other way), then `applyAppBadge`. A 401/403 clears the number (the session is gone); any other failure leaves the current number alone.
 
 ### Wiring
 
@@ -170,11 +170,11 @@ No new table, so the family export registry is unchanged.
 
 ### Settings
 
-`parent/settings/family.astro`, a new section `#smart-reminders-section` directly under `#quest-section`: one checkbox switch, "Recordatorios inteligentes para los hijos" / "Smart reminders for kids", with one line: "A las 6:00 pm avisamos a tus hijos solo si su racha está en riesgo o les falta un paso para su misión de la semana. Máximo un aviso al día." / "At 6:00 pm we tell your kids only when their streak is at risk or they are one step from their weekly quest. One reminder a day at most." Saves immediately through the family update route; `showToast` confirms or reports failure (and the switch reverts on failure). Kit classes only; no native dialogs.
+`parent/settings/family.astro`, a new section `#smart-reminders-section` directly under `#quest-section`: one checkbox switch, "Recordatorios inteligentes para los hijos" / "Smart reminders for kids", with one line: "Por la tarde (desde las 6:00 pm) avisamos a tus hijos solo si su racha está en riesgo o les falta un paso para su misión de la semana. Máximo un aviso al día." / "In the evening (from 6:00 pm) we tell your kids only when their streak is at risk or they are one step from their weekly quest. One reminder a day at most." Saves immediately through the family update route; `showToast` confirms or reports failure (and the switch reverts on failure). Kit classes only; no native dialogs.
 
 ## Platform limits (stated in the guide)
 
-- The icon number needs the App Badging API: installed PWA on iPhone/iPad (iOS 16.4+, home screen, notifications allowed), Android and desktop Chrome/Edge. Elsewhere nothing is shown and nothing breaks.
+- The icon number needs the App Badging API: installed PWA on iPhone/iPad (iOS 16.4+, home screen, notifications allowed) and the installed desktop app in Chrome/Edge. **Android does not support it** — Android shows its own dot on the icon while a notification is unread, never a number (corrected after the final review; the first draft listed Android). Elsewhere nothing is shown and nothing breaks.
 - A kid whose device never allowed notifications gets no smart reminder.
 
 ## Error handling

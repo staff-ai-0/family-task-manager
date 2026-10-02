@@ -30,9 +30,10 @@ from app.services.task_assignment_service import TaskAssignmentService
 
 log = logging.getLogger(__name__)
 
-# The sweep acts while the family's local hour is 18, 19 or 20. With the server
-# up, the 18:00 run handles everyone; the later hours only recover a run that
-# was missed. Nothing is sent after 20:59.
+# The sweep acts while the family's local hour is 18, 19 or 20. Every run
+# re-checks the kids who have not been reminded today, so the 19:00 and 20:00
+# runs recover a missed 18:00 run AND reach a kid who only became eligible
+# after it (say, one step from the quest at 18:30). Nothing is sent after 20:59.
 PING_FIRST_HOUR = 18
 PING_LAST_HOUR = 20
 STREAK_PING_MIN_DAYS = 3
@@ -71,14 +72,24 @@ def quest_can_do_today(quest: str, rows: list[ChoreRow], today: date, tz: ZoneIn
     kid's assignments dated today; the states are the quest's own rules."""
     live = [r for r in rows if r.status != AssignmentStatus.CANCELLED]
     chores = [r for r in live if not r.is_bonus]
-    doable = any(r.status == AssignmentStatus.PENDING and chore_state(r, today, tz) == "maybe" for r in chores)
+
+    def clean(r: ChoreRow) -> bool:
+        # A rejected chore is re-opened as PENDING but keeps its "missed" mark,
+        # and the quest will not count the redo: it is not a step to promise.
+        return r.grade != "missed" and r.approval != ApprovalStatus.REJECTED
+
+    doable = any(
+        r.status == AssignmentStatus.PENDING and clean(r) and chore_state(r, today, tz) == "maybe"
+        for r in chores
+    )
     if quest == "on_time":
         return doable
     if quest == "perfect_days":
-        return doable and all(chore_state(r, today, tz) != "no" for r in chores)
+        return doable and all(clean(r) and chore_state(r, today, tz) != "no" for r in chores)
     if quest == "extra_mile":
         return any(
-            r.is_bonus and r.status != AssignmentStatus.COMPLETED and bonus_state(r, today) == "maybe"
+            r.is_bonus and clean(r) and r.status != AssignmentStatus.COMPLETED
+            and bonus_state(r, today) == "maybe"
             for r in live
         )
     if quest == "go_getter":
@@ -220,7 +231,8 @@ class PingService:
     async def run_evening_sweep(db: AsyncSession, now: Optional[datetime] = None) -> int:
         """Hourly, across ALL families: the evening smart reminders for kids.
 
-        Acts on a family while its local hour is 18–20 (see PING_FIRST_HOUR).
+        Acts on a family while its local hour is 18–20 (see PING_FIRST_HOUR);
+        each run re-checks every kid not reminded yet today.
         Idempotent per kid per family-local day: a kid who already has a
         reminder row since local midnight is skipped, so the 19:00 and 20:00
         runs (and a restart) never double-send. Only kids with a push
@@ -238,19 +250,26 @@ class PingService:
         )).all()
         in_window = checked = sent = 0
         for fam in families:
-            tz = _safe_zoneinfo(fam.timezone)
-            local_now = now.astimezone(tz)
-            if not in_ping_window(local_now):
+            # One family failing (here, before its kids are even listed) must
+            # not cost every family after it their reminders.
+            try:
+                tz = _safe_zoneinfo(fam.timezone)
+                local_now = now.astimezone(tz)
+                if not in_ping_window(local_now):
+                    continue
+                in_window += 1
+                kids = (await db.execute(
+                    select(User.id, User.role, User.star_mode).where(
+                        User.family_id == fam.id,
+                        User.role.in_(KID_ROLES),
+                        TaskAssignmentService._participating_member_clause(),
+                        exists().where(PushSubscription.user_id == User.id),
+                    )
+                )).all()
+            except Exception:
+                log.exception("smart reminder sweep failed for family %s", fam.id)
+                await db.rollback()
                 continue
-            in_window += 1
-            kids = (await db.execute(
-                select(User.id, User.role, User.star_mode).where(
-                    User.family_id == fam.id,
-                    User.role.in_(KID_ROLES),
-                    TaskAssignmentService._participating_member_clause(),
-                    exists().where(PushSubscription.user_id == User.id),
-                )
-            )).all()
             for kid in kids:
                 checked += 1
                 try:

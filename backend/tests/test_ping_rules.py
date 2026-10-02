@@ -37,6 +37,11 @@ class TestTodayFacts:
         assert today_facts([row(), row(ST.COMPLETED, grade="missed")]) == (1, True)
         assert today_facts([row(), row(ST.COMPLETED, approval=AP.REJECTED)]) == (1, True)
 
+    def test_a_rejected_chore_reopened_for_a_redo_loses_the_day(self):
+        # What production writes on a rejection: back to PENDING, still marked.
+        reopened = row(ST.PENDING, grade="missed", approval=AP.REJECTED)
+        assert today_facts([row(), reopened]) == (2, True)
+
     def test_a_missed_bonus_or_a_cancelled_chore_does_not(self):
         rows = [row(), row(ST.COMPLETED, bonus=True, grade="missed"), row(ST.CANCELLED, grade="missed")]
         assert today_facts(rows) == (1, False)
@@ -64,6 +69,16 @@ class TestQuestCanDoToday:
         assert quest_can_do_today("on_time", [row(ST.OVERDUE)], TODAY, UTC, 0) is False
         assert quest_can_do_today("on_time", [row(ST.COMPLETED, approval=AP.PENDING)], TODAY, UTC, 0) is False
         assert quest_can_do_today("on_time", [row(bonus=True)], TODAY, UTC, 0) is False
+
+    def test_a_rejected_chore_reopened_for_a_redo_is_not_a_step(self):
+        # The redo keeps its "missed" mark, so the quest will not count it:
+        # a nudge that points at it would promise a step that does not exist.
+        reopened = row(ST.PENDING, grade="missed", approval=AP.REJECTED)
+        assert quest_can_do_today("on_time", [reopened], TODAY, UTC, 0) is False
+        assert quest_can_do_today("on_time", [reopened, row()], TODAY, UTC, 0) is True
+        assert quest_can_do_today("perfect_days", [reopened, row()], TODAY, UTC, 0) is False
+        bonus = row(ST.PENDING, bonus=True, grade="missed", approval=AP.REJECTED)
+        assert quest_can_do_today("extra_mile", [bonus], TODAY, UTC, 0) is False
 
     def test_perfect_days_also_needs_no_failed_chore_today(self):
         assert quest_can_do_today("perfect_days", [row(), row(ST.COMPLETED)], TODAY, UTC, 0) is True
