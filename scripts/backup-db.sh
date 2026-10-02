@@ -18,7 +18,7 @@
 #      `podman volume export` (audit 2026-07-07: uploads were never backed up)
 #      — but only when the volume changed since the last archive that reached
 #      offsite, or that archive is older than UPLOADS_MAX_AGE_DAYS
-#   3. Prunes local artifacts older than RETENTION_DAYS (default 14)
+#   3. Prunes local artifacts older than RETENTION_DAYS (default 30)
 #   4. If OFFSITE_RCLONE_REMOTE is set (e.g. "b2:family-backups"), pushes both
 #      artifacts there with rclone and prunes remote copies older than
 #      OFFSITE_RETENTION_DAYS (default 30). Any offsite failure exits non-zero
@@ -31,7 +31,7 @@
 #   PG_SERVICE              compose service name of postgres (default
 #                           "postgres"; local dev compose names it "db")
 #   BACKUP_DIR              default backups/scheduled (relative to APP_DIR)
-#   RETENTION_DAYS          local retention, default 14
+#   RETENTION_DAYS          local retention, default 30
 #   UPLOADS_VOLUME          override uploads-volume autodetection
 #   SKIP_UPLOADS=1          skip the uploads archive (e.g. docker-only host)
 #   UPLOADS_MAX_AGE_DAYS    re-archive an UNCHANGED uploads volume once its
@@ -63,7 +63,10 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.onprem.yml}"
 COMPOSE_CMD="${COMPOSE_CMD:-podman compose}"
 PG_SERVICE="${PG_SERVICE:-postgres}"
 BACKUP_DIR="${BACKUP_DIR:-backups/scheduled}"
-RETENTION_DAYS="${RETENTION_DAYS:-14}"
+# 30, matching the systemd unit. It was 14 here and 30 only in the unit, so
+# the timer kept a month while every deploy's pre-deploy backup (which runs
+# this script without the unit's environment) pruned at two weeks.
+RETENTION_DAYS="${RETENTION_DAYS:-30}"
 UPLOADS_MAX_AGE_DAYS="${UPLOADS_MAX_AGE_DAYS:-7}"
 if ! [[ "$UPLOADS_MAX_AGE_DAYS" =~ ^[0-9]+$ ]]; then
     echo "[backup-db] ERROR: UPLOADS_MAX_AGE_DAYS must be a whole number of days, got '${UPLOADS_MAX_AGE_DAYS}'" >&2

@@ -18,7 +18,7 @@ systemd units only (see `~/.claude/CLAUDE.md` global rules).
    the volume changed** since the last archive that reached offsite, or that
    archive is older than `UPLOADS_MAX_AGE_DAYS` (default 7). The DB dump is
    taken on every run. See "Uploads archive: skipped when unchanged" below.
-3. Prunes local artifacts older than `RETENTION_DAYS` (default 14)
+3. Prunes local artifacts older than `RETENTION_DAYS` (default 30)
 4. If `OFFSITE_RCLONE_REMOTE` is set, `rclone copy`s both artifacts to
    `<remote>/scheduled/` and prunes remote copies older than
    `OFFSITE_RETENTION_DAYS` (default 30). **Any offsite failure exits
@@ -183,7 +183,7 @@ journalctl --user -u family-onprem-backup.service -n 50
 | `COMPOSE_FILE` | `docker-compose.onprem.yml` | set in the unit (also the script default) |
 | `PG_SERVICE` | `postgres` | compose service name (`db` in local dev compose) |
 | `BACKUP_DIR` | `backups/scheduled` | where artifacts land (relative to `APP_DIR`) |
-| `RETENTION_DAYS` | `14` | local prune age |
+| `RETENTION_DAYS` | `30` | local prune age (the unit sets the same value; the script default is what deploy-triggered and hand runs get) |
 | `UPLOADS_VOLUME` | autodetect | override `<project>_receipt_uploads` detection |
 | `SKIP_UPLOADS` | unset | `1` = DB dump only (docker-only GCP rollback host) |
 | `UPLOADS_MAX_AGE_DAYS` | `7` | re-archive an unchanged uploads volume after this many days; `0` = every run |
