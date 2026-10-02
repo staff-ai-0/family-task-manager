@@ -113,6 +113,7 @@ class FamilyResponse(EntityResponse):
     smart_reminders_enabled: bool = True
     # Jarvis teen check-in: NULL = undecided (off + one-time parent-hub card).
     teen_checkin_enabled: Optional[bool] = None
+    teen_checkin_decided_at: Optional[datetime] = None
     # Stored value: NULL = all modules on. Clients resolve via the same rule.
     enabled_modules: Optional[List[str]] = None
 

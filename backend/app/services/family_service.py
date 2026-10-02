@@ -148,6 +148,11 @@ class FamilyService:
                 tzinfo=None
             )
 
+        # The teen check-in stores a minor's answers for the product team, so
+        # every answer a parent gives (on, off, or back to undecided) is dated.
+        if "teen_checkin_enabled" in update_fields:
+            family.teen_checkin_decided_at = datetime.now(timezone.utc)
+
         family.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(family)

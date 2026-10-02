@@ -52,7 +52,7 @@ A candidate chore is one of the teen's own non-bonus assignments, in the caller'
 
 | Trigger | Condition |
 |---|---|
-| `sent_back` | status `PENDING` and `approval_status = REJECTED` (a parent rejected it; the app re-opened it for a redo) |
+| `sent_back` | status `PENDING` or `OVERDUE` and `approval_status = REJECTED` (a parent rejected it; the app re-opened it for a redo — the hourly overdue sweep then flips a past-dated one to `OVERDUE`, so both count; amended after the final review) |
 | `late` | status `PENDING` or `OVERDUE`, `assigned_date` before today, and not a `sent_back` row |
 
 One chore is offered: the most recently dated `sent_back` one if any, otherwise the most recently dated `late` one.
@@ -127,7 +127,7 @@ The chore's title is **not** copied: titles are written by the family and can co
 - `NULL` — undecided: check-ins off; the parent hub shows a one-time card when the family has at least one teen. Every family starts here, existing and new.
 - `true` — on. · `false` — off by choice (no card).
 
-Hub card: "Nuevo: Jarvis acompaña a tus adolescentes" / "New: Jarvis checks in with your teens" — "Cuando una tarea se atrasa o la regresas, Jarvis le pregunta a tu adolescente qué pasó y le da una idea para destrabarse. El motivo que elige (y una nota corta si es un problema con la app) nos ayuda a mejorar la app; lo vemos sin nombres." / "When a chore is late or you send it back, Jarvis asks your teen what happened and offers a way to get unstuck. The reason they pick (and a short note if it is a problem with the app) helps us improve the app; we see it without names." — buttons "Activar" / "Turn on" and "Ahora no" / "Not now" (`true` / `false`).
+Hub card: "Nuevo: Jarvis acompaña a tus adolescentes" / "New: Jarvis checks in with your teens" — "Cuando una tarea se atrasa o la regresas, Jarvis le pregunta a tu adolescente qué pasó y le da una idea para destrabarse. El motivo que elige (y una nota corta si es un problema con la app u otra cosa) nos ayuda a mejorar la app; lo vemos sin nombres." / "When a chore is late or you send it back, Jarvis asks your teen what happened and offers a way to get unstuck. The reason they pick (and a short note if it is a problem with the app or something else) helps us improve the app; we see it without names." — buttons "Activar" / "Turn on" and "Ahora no" / "Not now" (`true` / `false`).
 
 Settings → Family: a checkbox section "Jarvis acompaña a tus adolescentes" / "Jarvis checks in with your teens" with the same explanation; saves at once, toast, reverts on failure (the D4a switch pattern).
 
@@ -139,7 +139,15 @@ Operator console page `/admin/feedback`, backed by `GET /api/admin/teen-checkins
 - answers by reason, grouped **chore** (`too_hard`, `not_clear`, `no_time`, `not_fair`, `forgot`) / **app** (`app_problem`) / **other**;
 - answers by trigger (`late`, `sent_back`);
 - "done afterwards": how many answered check-ins point at a chore that is now completed — the closest thing to "did it help";
-- notes, newest first, 50 per page: date, reason, language, text. **No teen, no family, no chore.**
+- notes, newest first, 50 per page: date (the day, never a timestamp), reason, language, text. **No teen, no family, no chore.**
+
+Added after the final review, to keep "without names" true:
+
+- Only families that are opted in **right now** are counted: switching check-ins off, or closing the family, takes that family's rows out of this view at once (the rows stay in the family's account and export; they are not used).
+- Only the two windows (30 / 90 days) are accepted.
+- Notes are **withheld until at least 5 families take part** in the window (`MIN_FAMILIES_FOR_NOTES`); counts are still shown.
+- `families.teen_checkin_decided_at` records when a parent last answered.
+- The note hint asks the teen not to write names.
 
 All counts are cast to `int`.
 

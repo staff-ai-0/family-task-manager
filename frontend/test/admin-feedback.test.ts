@@ -33,6 +33,12 @@ describe("operator console — teen check-ins", () => {
         expect(page).toContain("Could not load");
         expect(page).toContain("No notes in this window.");
     });
+    it("says so when notes are withheld for lack of families", () => {
+        expect(page).toMatch(/\{result\.notes\.withheld && \(/);
+        expect(page).toContain("Notes are shown once at least");
+        expect(page).toContain("result.min_families_for_notes");
+        expect(page).toMatch(/\{!result\.notes\.withheld && result\.notes\.items\.length === 0 && \(/);
+    });
     it("never reaches for an identity", () => {
         expect(page).not.toMatch(/family_id|user_id|assignment_id|\.name\b|\.email\b|\/admin\/families\//);
     });

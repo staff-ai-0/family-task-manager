@@ -48,11 +48,14 @@ def trigger_for(status, approval, assigned_date: date, today: date) -> Optional[
     """Why this chore is worth a check-in, or None.
 
     sent_back — a parent rejected it and the app re-opened it for a redo
-    (PENDING + REJECTED), whatever its date. late — still open and dated
-    before today."""
-    if status == AssignmentStatus.PENDING and approval == ApprovalStatus.REJECTED:
+    (open + REJECTED), whatever its date. The hourly overdue sweep flips a
+    re-opened chore dated before today from PENDING to OVERDUE and leaves
+    approval_status alone, so both statuses count. late — still open, dated
+    before today, and not sent back."""
+    still_open = status in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE)
+    if still_open and approval == ApprovalStatus.REJECTED:
         return "sent_back"
-    if status in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE) and assigned_date < today:
+    if still_open and assigned_date < today:
         return "late"
     return None
 
@@ -81,10 +84,12 @@ def may_offer(today: date, past: list[tuple[date, str]]) -> bool:
 
 
 def normalize_note(reason: Optional[str], note: Optional[str]) -> Optional[str]:
-    """Trimmed note, or None when blank. Raises ValueError for a note on a
+    """One clean line, or None when blank. Raises ValueError for a note on a
     reason that takes none, or one longer than NOTE_MAX — never silently
-    dropped: the teen was told where their words go."""
-    text = (note or "").strip()
+    dropped: the teen was told where their words go. Line breaks become
+    spaces and control characters are removed (PostgreSQL refuses a NUL in
+    text, which would otherwise surface as a 500)."""
+    text = " ".join("".join(ch for ch in (note or "") if ch.isprintable() or ch.isspace()).split())
     if not text:
         return None
     if reason not in NOTE_REASONS:

@@ -6,8 +6,8 @@ const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.ur
 const hub = read("../src/pages/parent/index.astro");
 const settings = read("../src/pages/parent/settings/family.astro");
 
-const ES = "Cuando una tarea se atrasa o la regresas, Jarvis le pregunta a tu adolescente qué pasó y le da una idea para destrabarse. El motivo que elige (y una nota corta si es un problema con la app) nos ayuda a mejorar la app; lo vemos sin nombres.";
-const EN = "When a chore is late or you send it back, Jarvis asks your teen what happened and offers a way to get unstuck. The reason they pick (and a short note if it is a problem with the app) helps us improve the app; we see it without names.";
+const ES = "Cuando una tarea se atrasa o la regresas, Jarvis le pregunta a tu adolescente qué pasó y le da una idea para destrabarse. El motivo que elige (y una nota corta si es un problema con la app u otra cosa) nos ayuda a mejorar la app; lo vemos sin nombres.";
+const EN = "When a chore is late or you send it back, Jarvis asks your teen what happened and offers a way to get unstuck. The reason they pick (and a short note if it is a problem with the app or something else) helps us improve the app; we see it without names.";
 
 describe("parent hub — teen check-in opt-in card", () => {
     const banner = hub.match(/<div id="checkin-intro-banner"[\s\S]*?<\/div>\s*\)\}/)?.[0] ?? "";

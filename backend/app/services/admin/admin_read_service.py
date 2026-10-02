@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.a2a import A2AWebhookDelivery, FamilyA2AWebhook
@@ -30,6 +30,12 @@ from app.services.teen_checkin_service import REASONS
 # still paying customers. Anything without a paypal_subscription_id is a comp
 # or a free row and must not be counted as revenue.
 PAYING_STATUSES = ("active", "past_due", "payment_failed")
+
+
+# Teen check-in notes are shown to the operator only when at least this many
+# families take part in the window (see teen_checkin_summary).
+MIN_FAMILIES_FOR_NOTES = 5
+TEEN_CHECKIN_WINDOWS = (30, 90)
 
 
 class AdminReadService:
@@ -603,7 +609,15 @@ class AdminReadService:
         family, a teen or a chore — the rows deliberately carry no title, and
         this query selects no id."""
         since = datetime.now(timezone.utc) - timedelta(days=days)
-        recent = TeenCheckin.created_at >= since
+        # Only families that are opted in RIGHT NOW: a parent who switches
+        # check-ins off, or closes the family, means "stop using my kid's
+        # answers" — the rows stay in the family's account, out of this view.
+        taking_part = select(Family.id).where(
+            Family.teen_checkin_enabled.is_(True),
+            Family.deleted_at.is_(None),
+            Family.is_active.is_(True),
+        )
+        recent = and_(TeenCheckin.created_at >= since, TeenCheckin.family_id.in_(taking_part))
         answered_rows = (TeenCheckin.outcome == "answered")
 
         outcomes = dict((await db.execute(
@@ -624,16 +638,22 @@ class AdminReadService:
             .join(TaskAssignment, TaskAssignment.id == TeenCheckin.assignment_id)
             .where(recent, answered_rows, TaskAssignment.status == AssignmentStatus.COMPLETED)
         )).scalar() or 0
-        has_note = TeenCheckin.note.is_not(None)
-        notes_total = (await db.execute(
-            select(func.count()).select_from(TeenCheckin).where(recent, has_note)
-        )).scalar() or 0
-        notes = (await db.execute(
-            select(TeenCheckin.created_at, TeenCheckin.reason, TeenCheckin.lang, TeenCheckin.note)
-            .where(recent, has_note)
-            .order_by(TeenCheckin.created_at.desc())
-            .limit(limit).offset(offset)
-        )).all()
+        # A note is free text from one teen. With only a few families taking
+        # part, "without your name" would be a fiction — whoever reads it could
+        # tell whose it is. So notes are withheld below a minimum cohort.
+        withheld = int(families or 0) < MIN_FAMILIES_FOR_NOTES
+        notes_total, notes = 0, []
+        if not withheld:
+            has_note = TeenCheckin.note.is_not(None)
+            notes_total = (await db.execute(
+                select(func.count()).select_from(TeenCheckin).where(recent, has_note)
+            )).scalar() or 0
+            notes = (await db.execute(
+                select(TeenCheckin.created_at, TeenCheckin.reason, TeenCheckin.lang, TeenCheckin.note)
+                .where(recent, has_note)
+                .order_by(TeenCheckin.created_at.desc())
+                .limit(limit).offset(offset)
+            )).all()
 
         by_reason = {key: int(reasons.get(key, 0)) for key in REASONS}
         return {
@@ -650,11 +670,15 @@ class AdminReadService:
             },
             "by_trigger": {key: int(triggers.get(key, 0)) for key in ("late", "sent_back")},
             "done_afterwards": int(done_afterwards),
+            "min_families_for_notes": MIN_FAMILIES_FOR_NOTES,
             "notes": {
                 "total": int(notes_total),
+                # The day only: a full timestamp would line up with the
+                # "last seen" times shown elsewhere in this console.
                 "items": [
-                    {"created_at": created.isoformat(), "reason": reason, "lang": lang, "note": note}
+                    {"created_at": created.date().isoformat(), "reason": reason, "lang": lang, "note": note}
                     for created, reason, lang, note in notes
                 ],
+                "withheld": withheld,
             },
         }

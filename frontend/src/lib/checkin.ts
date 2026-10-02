@@ -64,7 +64,10 @@ export const CHECKIN_COPY = {
     yes: { es: "Sí, ayúdame", en: "Yes, help me" },
     notNow: { es: "Ahora no", en: "Not now" },
     pick: { es: "¿Qué pasa?", en: "What's going on?" },
-    noteHint: { es: "Tu nota llega al equipo de la app, sin tu nombre.", en: "Your note goes to the app's team, without your name." },
+    noteHint: {
+        es: "Tu nota llega al equipo de la app, sin tu nombre. No escribas nombres.",
+        en: "Your note goes to the app's team, without your name. Please don't write names.",
+    },
     notePlaceholder: { es: "Cuéntanos (opcional)", en: "Tell us (optional)" },
     send: { es: "Enviar", en: "Send" },
     chat: { es: "Hablarlo con Jarvis", en: "Talk it through with Jarvis" },

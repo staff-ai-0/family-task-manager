@@ -30,8 +30,8 @@ const windowClass = (d: number) =>
 
 <AdminShell title="Teen check-ins" active="feedback">
     <p class="mb-4 max-w-3xl text-sm text-slate-600">
-        What teens answer when Jarvis asks about a late or sent-back chore, across every family that turned check-ins on.
-        Counts and anonymous notes only: no family, teen or chore is shown here.
+        What teens answer when Jarvis asks about a late or sent-back chore, across the families that have check-ins
+        switched on right now. Counts and anonymous notes only: no family, teen or chore is shown here.
     </p>
 
     <div class="mb-6 flex items-center gap-2">
@@ -101,7 +101,13 @@ const windowClass = (d: number) =>
             <h2 class="mb-2 text-sm font-semibold text-slate-700">
                 Notes <span class="num font-normal text-slate-500">({result.notes.total})</span>
             </h2>
-            {result.notes.items.length === 0 && (
+            {result.notes.withheld && (
+                <p class="rounded border border-slate-200 bg-white p-4 text-sm text-slate-500">
+                    Notes are shown once at least {result.min_families_for_notes} families take part
+                    ({result.families} so far). With fewer, a note would point at the teen who wrote it.
+                </p>
+            )}
+            {!result.notes.withheld && result.notes.items.length === 0 && (
                 <p class="rounded border border-slate-200 bg-white p-4 text-sm text-slate-500">No notes in this window.</p>
             )}
             {result.notes.items.length > 0 && (

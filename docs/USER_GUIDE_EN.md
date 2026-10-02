@@ -2699,7 +2699,7 @@ The per-member numbers (completion, late tasks, and gigs for the last 4 weeks) c
 
 **Routes:** `/parent/jarvis` · `/parent/jarvis-schedules`
 
-> **Who can use it:** Parents/Guardians only. Children and teens are redirected to their dashboard.
+> **Who can use it:** Parents/Guardians (the full copilot) and teens (a private, advice-only chat about their own chores — see 25.5). Children are redirected to their dashboard.
 >
 > **Plan required:** Jarvis is part of the **AI features** included with the **Plus** tier. The Free plan does not include the AI copilot.
 
@@ -2780,7 +2780,7 @@ When a teen has a chore that is late, or one a parent sent back, Jarvis offers a
 
 Jarvis asks at most once a day and three times a week, and never twice about the same chore.
 
-> **For parents:** check-ins are off until you turn them on — a card on your home screen asks once, and the switch lives in **Settings → Family → Jarvis**. The reason your teen picks (and a short note, only for "the app won't let me" or "something else") helps us improve the app; we see it without names and without the chore's title. These records are included in your family's data export.
+> **For parents:** check-ins are off until you turn them on — a card on your home screen asks once, and the switch lives in **Settings → Family → Jarvis**. The reason your teen picks (and a short note, only for "the app won't let me" or "something else") helps us improve the app. We see counts for all families together, and read notes without names and without the chore's title — and only once at least five families take part. Turning the switch off stops both the questions and our use of the answers already given. These records are included in your family's data export.
 
 ---
 

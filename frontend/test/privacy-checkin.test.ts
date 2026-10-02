@@ -14,10 +14,27 @@ describe("privacy notice — teen check-ins", () => {
         expect(page).toContain("Acompañamiento de Jarvis para adolescentes");
         expect(page).toContain("solo si la madre, padre o tutor lo activa");
         expect(page).toContain("hasta 200 caracteres");
-        expect(page).toContain("sin nombres");
         expect(page).toContain("Jarvis check-ins for teens");
         expect(page).toContain("only if the parent or guardian turns it on");
         expect(page).toContain("up to 200 characters");
-        expect(page).toContain("without names");
+    });
+    it("matches what the code does: linked to the teen, notes read one by one, a floor, and what off means", () => {
+        for (const phrase of [
+            "ligado al perfil del adolescente",
+            "si respondió o eligió «ahora no»",
+            "lee las notas una por una, sin el nombre del adolescente ni de la familia",
+            "al menos cinco familias",
+            "dejamos de preguntar y de usar las respuestas ya guardadas",
+            "linked to the teen's profile",
+            "whether they answered or chose “not now”",
+            "reads the notes one by one, without the teen's or the family's name",
+            "at least five families",
+            "we stop asking and stop using the answers already stored",
+        ]) {
+            expect(page).toContain(phrase);
+        }
+        // The first draft claimed everything was "aggregate"; notes are not.
+        expect(page).not.toContain("de forma agregada y sin nombres para mejorar");
+        expect(page).not.toContain("in aggregate and without names to improve");
     });
 });

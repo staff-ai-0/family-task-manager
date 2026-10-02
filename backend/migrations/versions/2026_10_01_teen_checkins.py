@@ -18,6 +18,8 @@ def upgrade() -> None:
     # No default: NULL = undecided. Check-ins store a minor's answers for the
     # product team, so every family — existing and new — must say yes first.
     op.add_column("families", sa.Column("teen_checkin_enabled", sa.Boolean(), nullable=True))
+    # When a parent last answered — the record of the consent itself.
+    op.add_column("families", sa.Column("teen_checkin_decided_at", sa.DateTime(timezone=True), nullable=True))
     op.create_table(
         "teen_checkins",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -57,11 +59,15 @@ def upgrade() -> None:
     op.create_index("ix_teen_checkins_family_id", "teen_checkins", ["family_id"])
     op.create_index("ix_teen_checkins_user_id", "teen_checkins", ["user_id"])
     op.create_index("ix_teen_checkins_created_at", "teen_checkins", ["created_at"])
+    # Deleting a chore sets assignment_id NULL here: without an index that is a table scan.
+    op.create_index("ix_teen_checkins_assignment_id", "teen_checkins", ["assignment_id"])
 
 
 def downgrade() -> None:
+    op.drop_index("ix_teen_checkins_assignment_id", table_name="teen_checkins")
     op.drop_index("ix_teen_checkins_created_at", table_name="teen_checkins")
     op.drop_index("ix_teen_checkins_user_id", table_name="teen_checkins")
     op.drop_index("ix_teen_checkins_family_id", table_name="teen_checkins")
     op.drop_table("teen_checkins")
+    op.drop_column("families", "teen_checkin_decided_at")
     op.drop_column("families", "teen_checkin_enabled")

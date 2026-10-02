@@ -2528,7 +2528,7 @@ Los numeros por miembro se exportan a **CSV** via `/api/analytics/export.csv` (a
 
 **Rutas:** `/parent/jarvis` · `/parent/jarvis-schedules`
 
-> **Quien puede usarlo:** Solo Padres/Tutores. Los hijos y adolescentes son redirigidos a su tablero.
+> **Quien puede usarlo:** Padres/Tutores (el copiloto completo) y adolescentes (un chat privado, solo de consejos, sobre sus propias tareas; vea 25.5). Los ninos son redirigidos a su tablero.
 >
 > **Plan requerido:** Jarvis forma parte de las **funciones de IA** del plan **Plus**. El plan Gratuito no incluye el copiloto de IA.
 
@@ -2601,7 +2601,7 @@ Cuando un adolescente tiene una tarea atrasada, o una que un papa le regreso, Ja
 
 Jarvis pregunta como maximo una vez al dia y tres veces por semana, y nunca dos veces por la misma tarea.
 
-> **Para papas:** esta funcion esta apagada hasta que la actives: una tarjeta en tu pantalla de inicio pregunta una sola vez, y el interruptor vive en **Ajustes → Familia → Jarvis**. El motivo que elige tu adolescente (y una nota corta, solo para "la app no me deja" u "otra cosa") nos ayuda a mejorar la app; lo vemos sin nombres y sin el titulo de la tarea. Estos registros se incluyen en la exportacion de datos de tu familia.
+> **Para papas:** esta funcion esta apagada hasta que la actives: una tarjeta en tu pantalla de inicio pregunta una sola vez, y el interruptor vive en **Ajustes → Familia → Jarvis**. El motivo que elige tu adolescente (y una nota corta, solo para "la app no me deja" u "otra cosa") nos ayuda a mejorar la app. Vemos los conteos de todas las familias juntas, y leemos las notas sin nombres y sin el titulo de la tarea, y solo cuando participan al menos cinco familias. Apagar el interruptor detiene tanto las preguntas como nuestro uso de las respuestas ya dadas. Estos registros se incluyen en la exportacion de datos de tu familia.
 
 ---
 

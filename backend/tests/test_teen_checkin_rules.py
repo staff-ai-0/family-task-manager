@@ -30,6 +30,11 @@ class TestTrigger:
         assert trigger_for(ST.PENDING, AP.REJECTED, TODAY, TODAY) == "sent_back"
         assert trigger_for(ST.PENDING, AP.REJECTED, TODAY - timedelta(days=3), TODAY) == "sent_back"
 
+    def test_sent_back_survives_the_overdue_sweep(self):
+        # The hourly sweep flips a re-opened chore dated before today to
+        # OVERDUE and leaves approval_status alone: still "sent back".
+        assert trigger_for(ST.OVERDUE, AP.REJECTED, TODAY - timedelta(days=1), TODAY) == "sent_back"
+
     def test_late_is_open_and_dated_before_today(self):
         assert trigger_for(ST.OVERDUE, AP.NONE, TODAY - timedelta(days=1), TODAY) == "late"
         assert trigger_for(ST.PENDING, AP.NONE, TODAY - timedelta(days=1), TODAY) == "late"
@@ -104,6 +109,11 @@ class TestNote:
     def test_refused_for_every_other_reason(self, reason):
         with pytest.raises(ValueError):
             normalize_note(reason, "my brother never does his")
+
+    def test_control_characters_and_line_breaks_are_cleaned(self):
+        assert normalize_note("other", "no\x00 abre\x07") == "no abre"
+        assert normalize_note("app_problem", "line one\n\tline two") == "line one line two"
+        assert normalize_note("other", "\x00\x01") is None
 
     def test_refused_when_too_long(self):
         with pytest.raises(ValueError):

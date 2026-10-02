@@ -74,6 +74,34 @@ class TestOffer:
         offer = await TeenCheckinService.offer_for(db_session, test_teen_user)
         assert offer.assignment_id == back.id and offer.trigger == "sent_back"
 
+    async def test_a_sent_back_chore_stays_sent_back_after_the_overdue_sweep(self, db_session, test_family, test_teen_user):
+        await _on(db_session, test_family)
+        today = await _today(db_session, test_family.id)
+        chore = await _template(db_session, test_family.id)
+        await _assign(db_session, test_teen_user, chore, today - timedelta(days=1))                # plain late, more recent
+        back = await _assign(db_session, test_teen_user, chore, today - timedelta(days=2), AssignmentStatus.OVERDUE,
+                             ApprovalStatus.REJECTED, grade="missed")
+        offer = await TeenCheckinService.offer_for(db_session, test_teen_user)
+        assert offer.assignment_id == back.id and offer.trigger == "sent_back"
+        await TeenCheckinService.record(db_session, test_teen_user, back.id, "answered", "not_clear", None)
+        assert (await db_session.execute(select(TeenCheckin.trigger))).scalar_one() == "sent_back"
+
+    async def test_a_family_far_from_utc_is_handled_on_its_own_day(self, db_session, test_family, test_teen_user):
+        test_family.timezone = "America/Mexico_City"
+        await _on(db_session, test_family)
+        today = await _today(db_session, test_family.id)                                            # the family's date
+        chore = await _template(db_session, test_family.id)
+        a = await _assign(db_session, test_teen_user, chore, today - timedelta(days=1))
+        other = await _assign(db_session, test_teen_user, await _template(db_session, test_family.id, title="Dishes"),
+                              today - timedelta(days=3))
+        offer = await TeenCheckinService.offer_for(db_session, test_teen_user)
+        assert offer.assignment_id == a.id
+        assert await TeenCheckinService.record(db_session, test_teen_user, a.id, "answered", "forgot", None) is True
+        row = (await db_session.execute(select(TeenCheckin))).scalar_one()
+        assert row.days_late == 1
+        assert await TeenCheckinService.offer_for(db_session, test_teen_user) is None               # one a day, their day
+        assert other.id != a.id
+
     async def test_undecided_and_off_families_get_nothing(self, db_session, test_family, test_teen_user):
         today = await _today(db_session, test_family.id)
         chore = await _template(db_session, test_family.id)

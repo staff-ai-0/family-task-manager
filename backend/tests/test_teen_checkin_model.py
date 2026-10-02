@@ -53,11 +53,15 @@ def test_revision_chain():
 
 def test_upgrade_adds_an_undecided_switch_and_the_table():
     calls = _run("upgrade")
-    adds = [a for n, a, _k in calls if n == "add_column"]
-    assert len(adds) == 1 and adds[0][0] == "families"
-    column = adds[0][1]
-    assert column.name == "teen_checkin_enabled" and column.nullable is True
+    adds = {a[1].name: a for n, a, _k in calls if n == "add_column"}
+    assert set(adds) == {"teen_checkin_enabled", "teen_checkin_decided_at"}
+    assert all(a[0] == "families" for a in adds.values())
+    column = adds["teen_checkin_enabled"][1]
+    assert column.nullable is True
     assert column.server_default is None                       # every family starts undecided
+    assert adds["teen_checkin_decided_at"][1].nullable is True
+    indexes = {a[0] for n, a, _k in calls if n == "create_index"}
+    assert "ix_teen_checkins_assignment_id" in indexes
     tables = [a for n, a, _k in calls if n == "create_table"]
     assert [t[0] for t in tables] == ["teen_checkins"]
     names = {getattr(c, "name", None) for c in tables[0][1:]}
@@ -70,6 +74,7 @@ def test_reverse_migration_removes_both():
     calls = _run("downgrade")
     assert ("drop_table", ("teen_checkins",), {}) in calls
     assert ("drop_column", ("families", "teen_checkin_enabled"), {}) in calls
+    assert ("drop_column", ("families", "teen_checkin_decided_at"), {}) in calls
 
 
 async def _assignment(db, teen):
@@ -161,9 +166,20 @@ class TestFamilySwitch:
 
     async def test_other_updates_leave_it_alone(self, client, auth_headers, db_session, test_family):
         await client.patch("/api/families/me", json={"teen_checkin_enabled": True}, headers=auth_headers)
+        await db_session.refresh(test_family)
+        decided = test_family.teen_checkin_decided_at
         await client.patch("/api/families/me", json={"quest_bonus_points": 30}, headers=auth_headers)
         await db_session.refresh(test_family)
         assert test_family.teen_checkin_enabled is True
+        assert test_family.teen_checkin_decided_at == decided      # not a new decision
+
+    async def test_the_decision_is_timestamped(self, client, auth_headers, db_session, test_family):
+        assert test_family.teen_checkin_decided_at is None
+        before = datetime.now(timezone.utc) - timedelta(seconds=5)
+        r = await client.patch("/api/families/me", json={"teen_checkin_enabled": False}, headers=auth_headers)
+        assert r.json()["teen_checkin_decided_at"] is not None
+        await db_session.refresh(test_family)
+        assert test_family.teen_checkin_decided_at >= before       # a "no" is a decision too
 
     async def test_a_teen_cannot_change_it(self, client, db_session, test_family, test_teen_user):
         login = await client.post("/api/auth/login", json={"email": "teen@test.com", "password": "password123"})

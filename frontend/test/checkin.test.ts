@@ -34,8 +34,8 @@ describe("card copy", () => {
         expect(CHECKIN_COPY.yes).toEqual({ es: "Sí, ayúdame", en: "Yes, help me" });
         expect(CHECKIN_COPY.notNow).toEqual({ es: "Ahora no", en: "Not now" });
         expect(CHECKIN_COPY.noteHint).toEqual({
-            es: "Tu nota llega al equipo de la app, sin tu nombre.",
-            en: "Your note goes to the app's team, without your name.",
+            es: "Tu nota llega al equipo de la app, sin tu nombre. No escribas nombres.",
+            en: "Your note goes to the app's team, without your name. Please don't write names.",
         });
         expect(CHECKIN_COPY.chat).toEqual({ es: "Hablarlo con Jarvis", en: "Talk it through with Jarvis" });
     });

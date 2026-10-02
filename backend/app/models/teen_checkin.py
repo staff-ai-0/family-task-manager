@@ -41,7 +41,7 @@ class TeenCheckin(Base):
     )
     # SET NULL: deleting the chore keeps the answer (the counts stay true).
     assignment_id = Column(
-        UUID(as_uuid=True), ForeignKey("task_assignments.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True), ForeignKey("task_assignments.id", ondelete="SET NULL"), nullable=True, index=True
     )
     trigger = Column(String(16), nullable=False)       # late | sent_back
     outcome = Column(String(16), nullable=False)       # answered | dismissed
