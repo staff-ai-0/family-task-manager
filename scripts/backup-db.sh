@@ -65,6 +65,10 @@ PG_SERVICE="${PG_SERVICE:-postgres}"
 BACKUP_DIR="${BACKUP_DIR:-backups/scheduled}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 UPLOADS_MAX_AGE_DAYS="${UPLOADS_MAX_AGE_DAYS:-7}"
+if ! [[ "$UPLOADS_MAX_AGE_DAYS" =~ ^[0-9]+$ ]]; then
+    echo "[backup-db] ERROR: UPLOADS_MAX_AGE_DAYS must be a whole number of days, got '${UPLOADS_MAX_AGE_DAYS}'" >&2
+    exit 1
+fi
 OFFSITE_RCLONE_REMOTE="${OFFSITE_RCLONE_REMOTE:-}"
 OFFSITE_RETENTION_DAYS="${OFFSITE_RETENTION_DAYS:-30}"
 
@@ -211,7 +215,11 @@ else
     if [[ -f "$UPLOADS_STATE" ]]; then
         read -r LAST_FP LAST_NAME LAST_DEST < "$UPLOADS_STATE" || true
     fi
-    if [[ -n "$LAST_NAME" && "$UPLOADS_FP" == "$LAST_FP" && "$OFFSITE_DEST_ID" == "$LAST_DEST" \
+    # The explicit `-gt 0` is not redundant with the find below: GNU find's
+    # `-mtime -0` MATCHES a file written a moment ago (BSD find's does not),
+    # so on Linux "0 = archive every run" would silently skip instead.
+    if [[ "$UPLOADS_MAX_AGE_DAYS" -gt 0 && -n "$LAST_NAME" \
+          && "$UPLOADS_FP" == "$LAST_FP" && "$OFFSITE_DEST_ID" == "$LAST_DEST" \
           && -n "$(find "${BACKUP_DIR}/${LAST_NAME}" -type f -mtime "-${UPLOADS_MAX_AGE_DAYS}" 2>/dev/null)" ]]; then
         echo "[backup-db] uploads volume ${VOL} unchanged since ${LAST_NAME} — not re-archiving"
     else
