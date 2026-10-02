@@ -6,11 +6,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import require_parent_role, require_teen_or_parent
+from app.core.dependencies import get_current_user, require_parent_role, require_teen_or_parent
 from app.core.exceptions import ValidationError
 from app.core.premium import require_feature
 from app.core.rate_limiter import limiter, AI_LIMIT
@@ -25,6 +25,7 @@ from app.services.jarvis_service import (
 )
 from app.services.jarvis_pending_action_service import PendingActionService
 from app.services.jarvis_mcp_token_service import TokenService
+from app.services.teen_checkin_service import NOTE_MAX, TeenCheckinService, normalize_note
 
 
 router = APIRouter()
@@ -314,3 +315,83 @@ async def revoke_mcp_token(
     family_id = to_uuid_required(current_user.family_id)
     await TokenService.revoke(db, token_id, family_id)
     return None
+
+
+# ── Teen check-in ─────────────────────────────────────────────────────────
+# Jarvis offers a hand when a teen has a late or sent-back chore; the teen
+# answers with one tap. No LLM call here, so no AI gate — the conversation
+# that may follow is the ordinary (gated) teen chat.
+CheckinReason = Literal["too_hard", "not_clear", "no_time", "not_fair", "forgot", "app_problem", "other"]
+
+
+class CheckinOffer(BaseModel):
+    assignment_id: UUID
+    title: str
+    title_es: Optional[str] = None
+    trigger: str
+    days_late: int
+
+
+class CheckinOfferResponse(BaseModel):
+    offer: Optional[CheckinOffer] = None
+    can_chat: bool = False
+
+
+class CheckinAnswer(BaseModel):
+    assignment_id: UUID
+    outcome: Literal["answered", "dismissed"]
+    reason: Optional[CheckinReason] = None
+    note: Optional[str] = Field(None, max_length=NOTE_MAX + 50)
+
+    @model_validator(mode="after")
+    def _consistent(self):
+        if self.outcome == "answered":
+            if self.reason is None:
+                raise ValueError("an answer needs a reason")
+            normalize_note(self.reason, self.note)          # raises ValueError → 422
+        elif self.reason is not None or (self.note or "").strip():
+            raise ValueError("a dismissal carries no reason and no note")
+        return self
+
+
+@router.get("/checkin", response_model=CheckinOfferResponse)
+async def checkin_offer(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The chore Jarvis would ask this teen about now, if any. Read-only.
+    Everyone but a teen in an opted-in family gets `offer: null`."""
+    offer = await TeenCheckinService.offer_for(db, current_user)
+    if offer is None:
+        return CheckinOfferResponse()
+    from app.services.progress_service import ProgressService
+
+    today, _tz = await ProgressService.family_today(db, to_uuid_required(current_user.family_id))
+    return CheckinOfferResponse(
+        offer=CheckinOffer(
+            assignment_id=offer.assignment_id,
+            title=offer.title,
+            title_es=offer.title_es,
+            trigger=offer.trigger,
+            days_late=max(0, (today - offer.assigned_date).days),
+        ),
+        can_chat=await TeenCheckinService.can_chat(db, to_uuid_required(current_user.family_id)),
+    )
+
+
+@router.post("/checkin")
+async def checkin_answer(
+    data: CheckinAnswer,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Store the teen's one-tap answer (or "not now") for the offered chore."""
+    saved = await TeenCheckinService.record(
+        db, current_user, data.assignment_id, data.outcome, data.reason, data.note,
+    )
+    if not saved:
+        raise HTTPException(status_code=409, detail="That task is not being asked about right now.")
+    return {
+        "saved": True,
+        "can_chat": await TeenCheckinService.can_chat(db, to_uuid_required(current_user.family_id)),
+    }
