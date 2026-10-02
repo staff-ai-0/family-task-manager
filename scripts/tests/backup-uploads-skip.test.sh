@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# Regression test for the uploads-archive skip logic in scripts/backup-db.sh.
+# Regression test for scripts/backup-db.sh: the uploads-archive skip logic and
+# the default local retention.
 #
 # Runs the real script against stubbed `podman`, `gsutil` and compose commands
 # (no containers, no network), so it works on a laptop and in CI:
@@ -132,6 +133,24 @@ new_app "destination changed"
 run_backup
 run_backup OFFSITE_GCS_BUCKET=gs://other-bucket/scheduled
 expect "new destination gets its own uploads archive" "$(uploads_pushed)" 1
+
+# ── 8. Default local retention is 30 days on every invocation path ──────────
+# The default was 14 while the systemd unit set 30: the timer kept a month,
+# but each deploy's backup run (no unit environment) pruned at two weeks.
+new_app "default retention"
+mkdir -p "$APP/backups/scheduled"
+python3 - "$APP/backups/scheduled" <<'AGE'
+import os, sys, time
+for name, days in (("db-20000101-000000.sql.gz", 20), ("db-20000102-000000.sql.gz", 32)):
+    path = os.path.join(sys.argv[1], name)
+    open(path, "w").close()
+    t = time.time() - days * 86400
+    os.utime(path, (t, t))
+AGE
+kept() { [[ -f "$APP/backups/scheduled/$1" ]] && echo kept || echo pruned; }
+run_backup
+expect "a 20-day-old dump is kept" "$(kept db-20000101-000000.sql.gz)" kept
+expect "a 32-day-old dump is pruned" "$(kept db-20000102-000000.sql.gz)" pruned
 
 if [[ "$FAILED" == "0" ]]; then
     echo "PASS"
