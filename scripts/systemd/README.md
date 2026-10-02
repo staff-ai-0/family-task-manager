@@ -14,7 +14,10 @@ systemd units only (see `~/.claude/CLAUDE.md` global rules).
 
 1. `pg_dump`s the postgres container → `backups/scheduled/db-<ts>.sql.gz`
 2. `podman volume export`s the `receipt_uploads` volume (gig proof photos,
-   receipt images) → `backups/scheduled/uploads-<ts>.tar.gz`
+   receipt images) → `backups/scheduled/uploads-<ts>.tar.gz` — **only when
+   the volume changed** since the last archive that reached offsite, or that
+   archive is older than `UPLOADS_MAX_AGE_DAYS` (default 7). The DB dump is
+   taken on every run. See "Uploads archive: skipped when unchanged" below.
 3. Prunes local artifacts older than `RETENTION_DAYS` (default 14)
 4. If `OFFSITE_RCLONE_REMOTE` is set, `rclone copy`s both artifacts to
    `<remote>/scheduled/` and prunes remote copies older than
@@ -46,7 +49,7 @@ without an open session.)
 
 ## Offsite setup — GCS (CANONICAL on 10.1.0.91, live since 2026-08-06)
 
-Backups push to `gs://agentia-family-ftm-backups/scheduled` via `gsutil` and
+Backups push to `gs://agentia-ftm-offsite-backups/scheduled` via `gsutil` and
 the service-account key already on the host at
 `/etc/gcs/sa-onprem-backup-key.json` (the same one school-admin has used since
 2026-07 — `gcloud`/`gsutil` are already installed, so there is nothing to
@@ -56,7 +59,7 @@ Config lives in the deployed `.env`, so the systemd timer, a manual run and
 `deploy-onprem.sh`'s pre-deploy backup all behave identically:
 
 ```bash
-OFFSITE_GCS_BUCKET=gs://agentia-family-ftm-backups/scheduled
+OFFSITE_GCS_BUCKET=gs://agentia-ftm-offsite-backups/scheduled
 # GCS_KEY_FILE defaults to /etc/gcs/sa-onprem-backup-key.json
 ```
 
@@ -72,13 +75,54 @@ Two deliberate properties, both worth preserving:
    the one script we least want one in. `OFFSITE_RETENTION_DAYS` applies only
    to the rclone path.
 
-Bucket: project `agentia-calendar-501506`, location `us-south1`, class
-NEARLINE, uniform access, public access prevented. To inspect or change:
+Bucket: project `icegg-school-admin` (owner `info@agent-ia.mx`, the same
+project as the SA and school-admin's backup bucket), location `us-south1`,
+class NEARLINE, uniform access, public access prevented. To inspect or change:
 
 ```bash
-gcloud storage ls -l gs://agentia-family-ftm-backups/scheduled/
-gcloud storage buckets describe gs://agentia-family-ftm-backups --format="default(lifecycle)"
+gcloud storage ls -l gs://agentia-ftm-offsite-backups/scheduled/
+gcloud storage buckets describe gs://agentia-ftm-offsite-backups --format="default(lifecycle)"
 ```
+
+To recreate the bucket's access (as `info@agent-ia.mx`) — create + view only,
+never `objectAdmin`, or property 1 above is gone:
+
+```bash
+for R in roles/storage.objectCreator roles/storage.objectViewer; do
+  gcloud storage buckets add-iam-policy-binding gs://agentia-ftm-offsite-backups \
+    --member=serviceAccount:sa-onprem-backup@icegg-school-admin.iam.gserviceaccount.com --role=$R
+done
+```
+
+Until 2026-10-01 the bucket was `gs://agentia-family-ftm-backups` in
+`agentia-calendar-501506` — a personal project (`juan.mtz79@gmail.com`) on a
+separate billing account, which is how a declined card there put the offsite
+copies at risk without anyone connecting the two. That bucket is no longer
+written to; its own 31-day lifecycle empties it.
+
+### Uploads archive: skipped when unchanged
+
+The timer fires every 6 h and every deploy runs the script too, but the
+uploads volume changes about once a day. Re-archiving it every time produced
+4–8 byte-identical ~850 MB files a day: by 2026-10-01 that was 56 GB on the
+prod disk (`/home` at 93 %) and 96 GB in the bucket.
+
+The script now hashes the `podman volume export` stream (deterministic for an
+unchanged volume, ~3 s) and skips the archive when it matches the last one,
+recorded in `backups/scheduled/.uploads-last-archived`. Four guards keep
+"skip" from ever meaning "no copy":
+
+- the record is written **after** the offsite push, so an archive that never
+  left the host is retried on the next run;
+- the record names the offsite destination, so pointing `OFFSITE_*` at a new
+  bucket archives again instead of leaving the new bucket without uploads;
+- the previous archive must still be on disk;
+- it must be younger than `UPLOADS_MAX_AGE_DAYS` (default 7), so an untouched
+  volume is still re-archived weekly — keep this well below `RETENTION_DAYS`
+  and the 31-day bucket lifecycle, or both would expire the only copy.
+
+Force an archive by hand with `UPLOADS_MAX_AGE_DAYS=0 ./scripts/backup-db.sh`.
+Regression test (stubs, no containers): `bash scripts/tests/backup-uploads-skip.test.sh`.
 
 A failed push is **fatal** here (exit non-zero, so the timer records it). That
 differs on purpose from `school-admin/scripts/backup-91-to-gcs.sh`, which logs
@@ -91,7 +135,8 @@ and restore it:
 ```bash
 D=/tmp/offsite-check && mkdir -p $D
 GOOGLE_APPLICATION_CREDENTIALS=/etc/gcs/sa-onprem-backup-key.json \
-  gsutil -q cp "gs://agentia-family-ftm-backups/scheduled/*" $D/
+  gsutil -q cp "gs://agentia-ftm-offsite-backups/scheduled/db-*" \
+               "gs://agentia-ftm-offsite-backups/scheduled/globals-*" $D/
 ./scripts/restore-drill.sh $D/$(ls -1 $D | grep '^db-' | tail -1)
 ```
 
@@ -141,6 +186,7 @@ journalctl --user -u family-onprem-backup.service -n 50
 | `RETENTION_DAYS` | `14` | local prune age |
 | `UPLOADS_VOLUME` | autodetect | override `<project>_receipt_uploads` detection |
 | `SKIP_UPLOADS` | unset | `1` = DB dump only (docker-only GCP rollback host) |
+| `UPLOADS_MAX_AGE_DAYS` | `7` | re-archive an unchanged uploads volume after this many days; `0` = every run |
 | `OFFSITE_RCLONE_REMOTE` | unset | e.g. `b2-family:family-backups`; unset = no push |
 | `OFFSITE_RETENTION_DAYS` | `30` | remote prune age |
 

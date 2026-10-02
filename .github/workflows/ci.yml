@@ -210,6 +210,12 @@ jobs:
           print("compose files parse and scalar values are clean")
           PY
 
+      # backup-db.sh skips the uploads archive when the volume is unchanged.
+      # A bug there is silent data loss (a skip that never ends), so the
+      # guards are pinned by a stub-driven test — no containers needed.
+      - name: Backup script (uploads skip guards)
+        run: bash scripts/tests/backup-uploads-skip.test.sh
+
   # Nothing was watching the dependency pins or scanning for committed secrets.
   # This repo handles PayPal, LiteLLM, SMTP and OAuth credentials, and shipped
   # authlib 1.3.0 (CVE-2024-37568, imported nowhere) for months unnoticed.
