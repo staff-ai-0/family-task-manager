@@ -2592,6 +2592,17 @@ Use **▶** / **⏸** para activar/pausar y **🗑** para eliminar.
 
 > **Consejo:** Una programacion de resumen semanal "Domingo 6pm" es ideal para recibir un repaso sin tener que preguntar.
 
+## 25.5 Jarvis Acompana a los Adolescentes
+
+Cuando un adolescente tiene una tarea atrasada, o una que un papa le regreso, Jarvis le ofrece ayuda en su pantalla de inicio: "¿Atorado con *Saca la basura*?"
+
+- **Si, ayudame** — el adolescente elige con un toque que esta pasando (esta muy dificil, no se bien que hacer, no tengo tiempo, no me parece justo, se me olvido, la app no me deja, otra cosa) y recibe un consejo corto. En planes con IA, un boton abre su propio chat con Jarvis con el primer mensaje ya escrito.
+- **Ahora no** — la tarjeta desaparece y Jarvis no vuelve a preguntar en una semana.
+
+Jarvis pregunta como maximo una vez al dia y tres veces por semana, y nunca dos veces por la misma tarea.
+
+> **Para papas:** esta funcion esta apagada hasta que la actives: una tarjeta en tu pantalla de inicio pregunta una sola vez, y el interruptor vive en **Ajustes → Familia → Jarvis**. El motivo que elige tu adolescente (y una nota corta, solo para "la app no me deja" u "otra cosa") nos ayuda a mejorar la app; lo vemos sin nombres y sin el titulo de la tarea. Estos registros se incluyen en la exportacion de datos de tu familia.
+
 ---
 
 # Capitulo 26: Planes de Suscripcion — Referencia Rapida

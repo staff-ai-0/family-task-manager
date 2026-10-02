@@ -2771,6 +2771,17 @@ Each schedule card shows its name, cron expression, prompt preview, next/last ru
 
 > **Tip:** A "Sunday 6pm" weekly-summary schedule is a great way to get a recap of the family's week without having to ask.
 
+## 25.5 Jarvis Check-ins for Teens
+
+When a teen has a chore that is late, or one a parent sent back, Jarvis offers a hand on the teen's home screen: "Stuck on *Take out the trash*?"
+
+- **Yes, help me** — the teen picks what is going on with one tap (too hard, not sure what to do, no time, not fair, forgot, the app won't let me, something else) and gets a short tip. On plans with AI, a button opens their own Jarvis chat with the first message already typed.
+- **Not now** — the card goes away and Jarvis does not ask again for a week.
+
+Jarvis asks at most once a day and three times a week, and never twice about the same chore.
+
+> **For parents:** check-ins are off until you turn them on — a card on your home screen asks once, and the switch lives in **Settings → Family → Jarvis**. The reason your teen picks (and a short note, only for "the app won't let me" or "something else") helps us improve the app; we see it without names and without the chore's title. These records are included in your family's data export.
+
 ---
 
 # Chapter 26: Subscription Plans — Quick Reference
