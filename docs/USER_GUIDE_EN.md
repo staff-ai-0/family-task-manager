@@ -129,6 +129,7 @@ Family Task Manager's objective is to help families build real habits of respons
         - [17.5.2 Rank](#1752-rank)
         - [17.5.3 Badges](#1753-badges)
         - [17.5.4 Weekly Quest](#1754-weekly-quest)
+        - [17.5.5 Smart Reminders and the App-Icon Number](#1755-smart-reminders-and-the-app-icon-number)
 18. [Chapter 18: Virtual Pet](#chapter-18-virtual-pet)
 19. [Chapter 19: Meal Planning](#chapter-19-meal-planning)
 20. [Chapter 20: Shopping Lists](#chapter-20-shopping-lists)
@@ -2187,6 +2188,23 @@ The quest changes from week to week, and the goal is sized to each kid: a little
 Reaching the goal pays a points bonus once. Chores and bonus tasks that need a parent's review count once they are approved, so the bonus can arrive after the parent approves — even early the following week.
 
 > **For parents:** each kid's row on your home screen shows their quest (🏁 3/5, or 🏁 ✓ when done). You set the bonus in **Settings → Family → Weekly quest** (20 points by default). Setting it to 0 turns weekly quests off. Families that were already using the app start with weekly quests off: a card on your home screen offers to turn them on.
+
+## 17.5.5 Smart Reminders and the App-Icon Number
+
+**The number on the app icon** shows what is waiting for you. For kids and teens it is the chores still open (today's and any late ones — bonus tasks are optional and not counted). For parents it is everything waiting for review: chores, gigs and reward requests. It disappears when nothing is waiting.
+
+**Smart reminders** are for kids and teens. At 6:00 pm the app sends at most one reminder, and only when there is something they can still do about it:
+
+| Reminder | When |
+|---|---|
+| 🔥 Streak at risk | The streak is 3 days or more and today's chores are not finished |
+| 🏁 Quest one step away | The weekly quest needs just one more, and it can be done today (sent once per quest) |
+
+If both apply, the streak reminder is sent. If everything is done, nothing is sent.
+
+> **For parents:** switch them off or on in **Settings → Family → Smart reminders**. They are on by default. The switch does not change the icon number or any other notification.
+
+> **Note:** the icon number needs the app installed on the home screen with notifications allowed (iPhone/iPad 16.4 or later, Android, or desktop Chrome/Edge). A device that never allowed notifications gets no smart reminders.
 
 ---
 
