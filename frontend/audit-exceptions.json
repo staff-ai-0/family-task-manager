@@ -1,0 +1,8 @@
+[
+  {
+    "id": "GHSA-ch52-4w7c-c8xp",
+    "package": "http-cache-semantics",
+    "reason": "No patched version exists (advisory lists none; 4.2.0 is latest). Reached only through astro/dist/assets/build/remote.js, the build-time remote-image cache; this app does not use astro:assets and runs no shared HTTP cache through it, so the cross-user cached-response disclosure has no path here. Re-check for a patched release or an astro bump at expiry.",
+    "expires": "2026-12-01"
+  }
+]

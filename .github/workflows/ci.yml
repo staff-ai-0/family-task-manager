@@ -248,9 +248,13 @@ jobs:
         with:
           node-version: "22"
 
+      # `npm audit --audit-level=high` with time-boxed exceptions
+      # (frontend/audit-exceptions.json). An advisory with no patched version
+      # would otherwise keep this job red on every PR until upstream moves,
+      # and a permanently red gate stops being a gate.
       - name: npm audit (frontend, prod deps)
         working-directory: frontend
-        run: npm audit --omit=dev --audit-level=high
+        run: npm run audit:gate
 
       - name: Secret scan
         uses: gitleaks/gitleaks-action@v3
