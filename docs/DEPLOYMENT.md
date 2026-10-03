@@ -38,7 +38,7 @@ $DC exec -T backend alembic upgrade head
 - `./scripts/backup-db.sh` — on-demand dump (also runs automatically at the start of each deploy). Writes three artifacts per run: `db-<ts>.sql.gz`, `globals-<ts>.sql.gz` (cluster roles — `pg_dump` does NOT contain them) and `uploads-<ts>.tar.gz`.
 - `./scripts/restore-db.sh` — restore helper
 - `./scripts/restore-drill.sh` — **proves the newest backup actually restores**, into a throwaway container; reads live only. Run it after any change to the backup/restore path.
-- systemd timers in `scripts/systemd/` schedule host-side dumps (`family-onprem-backup.*`, every 6h) and the weekly restore drill (`family-onprem-restore-drill.*`, Sun 04:30)
+- systemd timers in `scripts/systemd/` schedule host-side dumps (`family-onprem-backup.*`, 00:00 and 12:00) and the weekly restore drill (`family-onprem-restore-drill.*`, Sun 04:30)
 
 > A dump and its `globals-` sidecar belong together: restoring into a fresh
 > cluster without the roles the dump GRANTs to aborts the whole

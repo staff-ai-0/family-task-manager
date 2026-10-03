@@ -1,9 +1,12 @@
 # scripts/systemd/family-onprem-backup.timer
 [Unit]
-Description=Run the on-prem Family Task Manager DB backup every 6h
+Description=Run the on-prem Family Task Manager DB backup twice a day
 
 [Timer]
-OnCalendar=00/6:00:00
+# 00:00 and 12:00 host time. Was every 6h until 2026-10-03; the DB dump is
+# tiny either way, and the uploads archive is only written when the volume
+# changed, so two runs a day is the cadence the operator asked for.
+OnCalendar=*-*-* 00,12:00:00
 Persistent=true
 
 [Install]
