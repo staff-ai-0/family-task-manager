@@ -215,6 +215,8 @@ jobs:
       # guards are pinned by a stub-driven test — no containers needed.
       - name: Backup script (uploads skip guards)
         run: bash scripts/tests/backup-uploads-skip.test.sh
+      - name: Backup mirror script (immutability, freshness, prune)
+        run: bash scripts/tests/backup-mirror-pull.test.sh
 
   # Nothing was watching the dependency pins or scanning for committed secrets.
   # This repo handles PayPal, LiteLLM, SMTP and OAuth credentials, and shipped
