@@ -201,7 +201,7 @@ else
         echo "            Set UPLOADS_VOLUME=<name> explicitly and re-run." >&2
         exit 1
     fi
-    # Skip the archive when nothing changed. The timer fires every 6h and
+    # Skip the archive when nothing changed. The timer fired every 6h and
     # every deploy runs this script too, while the volume changes about once a
     # day: until 2026-10 that meant 4-8 byte-identical ~850 MB archives daily —
     # 56 GB on the prod disk (93% full) and 96 GB offsite. The export stream

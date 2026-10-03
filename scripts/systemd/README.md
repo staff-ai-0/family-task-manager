@@ -102,7 +102,7 @@ written to; its own 31-day lifecycle empties it.
 
 ### Uploads archive: skipped when unchanged
 
-The timer fires every 6 h and every deploy runs the script too, but the
+The timer used to fire every 6 h and every deploy runs the script too, but the
 uploads volume changes about once a day. Re-archiving it every time produced
 4–8 byte-identical ~850 MB files a day: by 2026-10-01 that was 56 GB on the
 prod disk (`/home` at 93 %) and 96 GB in the bucket.
