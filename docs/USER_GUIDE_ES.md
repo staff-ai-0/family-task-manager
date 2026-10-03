@@ -130,6 +130,7 @@ El objetivo de Family Task Manager es ayudar a las familias a construir, desde t
         - [17.5.3 Insignias](#1753-insignias)
         - [17.5.4 Mision Semanal](#1754-mision-semanal)
         - [17.5.5 Recordatorios Inteligentes y el Numero en el Icono](#1755-recordatorios-inteligentes-y-el-numero-en-el-icono)
+        - [17.5.6 Caja Sorpresa](#1756-caja-sorpresa)
 18. [Capitulo 18: Mascota Virtual](#capitulo-18-mascota-virtual)
 19. [Capitulo 19: Plan de Comidas](#capitulo-19-plan-de-comidas)
 20. [Capitulo 20: Listas de Compras](#capitulo-20-listas-de-compras)
@@ -2183,6 +2184,17 @@ Si aplican los dos, se envia el de la racha. Si todo esta hecho, no se envia nad
 > **Para papas:** activalos o desactivalos en **Ajustes → Familia → Recordatorios inteligentes**. Estan activados por defecto. El interruptor no cambia el numero del icono ni ninguna otra notificacion.
 
 > **Nota:** el numero en el icono funciona en iPhone/iPad 16.4 o posterior (app agregada a la pantalla de inicio, notificaciones permitidas) y en la app de escritorio instalada en Chrome o Edge. Android no muestra un numero: muestra su propio punto en el icono mientras haya una notificacion sin leer. Un dispositivo que nunca permitio notificaciones no recibe recordatorios inteligentes.
+
+## 17.5.6 Caja Sorpresa
+
+Termina todas tus tareas del dia y aparece una caja cerrada en tu pantalla de inicio: "🎁 ¡Una caja sorpresa! Toca para abrir". Adentro hay una de dos cosas:
+
+- una **sorpresa** que tus papas escribieron en el frasco de la familia — "elige el postre", "30 minutos mas de pantalla" — al azar, nunca la misma dos dias seguidos;
+- **puntos** cuando el frasco esta vacio: entre la cuarta parte del maximo de la familia y ese maximo (20 por defecto).
+
+Una caja por dia. Una caja no caduca: si no la abriste, te espera. Una sorpresa que revelas aparece en la pantalla de tus papas bajo **Por entregar** hasta que te la den.
+
+> **Para papas:** activa las cajas en **Ajustes → Familia → Caja sorpresa**, define el maximo de puntos (0 apaga las cajas) y llena el **frasco de sorpresas**: hasta 20 sorpresas cortas, que se reutilizan y puedes quitar cuando quieras. Las familias que ya usaban la app empiezan con las cajas apagadas: una tarjeta en tu pantalla de inicio pregunta una sola vez.
 
 ---
 
