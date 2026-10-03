@@ -1,0 +1,58 @@
+---
+/**
+ * UX-D4b: surprises the kids revealed that a parent has not handed over yet.
+ * One row per surprise; "Delivered ✓" removes the row after a 2xx; the whole
+ * strip hides when nothing is left.
+ */
+import { buttonClass } from "../../lib/buttonClasses";
+
+interface Props {
+    items: { id: string; kid_name: string; surprise_title: string; surprise_emoji?: string | null; day: string }[];
+    lang: "es" | "en";
+}
+const { items, lang } = Astro.props;
+const es = lang === "es";
+---
+
+<section data-deliver-root data-lang={lang} hidden={items.length === 0} class="max-w-md mx-auto w-full mb-6" aria-labelledby="deliver-heading">
+    <h2 id="deliver-heading" class="text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft mb-2 px-1">
+        {es ? "Por entregar" : "To deliver"}
+    </h2>
+    <ul class="space-y-2">
+        {items.map((it) => (
+            <li data-deliver-id={it.id} class="flex items-center gap-3 rounded-2xl border border-brand-ink/10 bg-white p-3 shadow-[var(--shadow-card)]">
+                <span class="text-2xl" aria-hidden="true">{it.surprise_emoji || "🎁"}</span>
+                <span class="min-w-0 flex-1 text-sm text-brand-ink">
+                    <span class="font-bold">{it.kid_name}</span> — <span class="italic">{it.surprise_title}</span>
+                </span>
+                <button type="button" data-deliver-done class={buttonClass("secondary", "sm")}>{es ? "Entregada ✓" : "Delivered ✓"}</button>
+            </li>
+        ))}
+    </ul>
+</section>
+
+<script>
+    import { showToast } from "../../lib/toast";
+
+    const root = document.querySelector<HTMLElement>("[data-deliver-root]");
+    if (root) {
+        const es = root.dataset.lang !== "en";
+        root.querySelectorAll<HTMLButtonElement>("[data-deliver-done]").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                const row = btn.closest<HTMLElement>("[data-deliver-id]");
+                const id = row?.dataset.deliverId;
+                if (!row || !id) return;
+                btn.disabled = true;
+                try {
+                    const r = await fetch(`/api/progress/mystery/${id}/delivered`, { method: "POST", credentials: "same-origin" });
+                    if (!r.ok) throw new Error(String(r.status));
+                    row.remove();
+                    if (!root.querySelector("[data-deliver-id]")) root.setAttribute("hidden", "");
+                } catch {
+                    btn.disabled = false;
+                    showToast(es ? "No se pudo guardar. Intenta de nuevo." : "Could not save. Try again.", "error");
+                }
+            });
+        });
+    }
+</script>
