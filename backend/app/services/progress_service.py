@@ -130,6 +130,7 @@ def compute_streak(states: dict[date, DayState], today: date) -> StreakResult:
 
 # ── Queries (family-scoped) ──────────────────────────────────────────────
 from datetime import datetime  # noqa: E402
+from typing import Optional  # noqa: E402
 from uuid import UUID  # noqa: E402
 from zoneinfo import ZoneInfo  # noqa: E402
 
@@ -191,8 +192,12 @@ class ProgressService:
     @staticmethod
     async def day_states(
         db: AsyncSession, family_id: UUID, user_id: UUID, today: date, tz: ZoneInfo,
+        since: Optional[date] = None,
     ) -> dict[date, DayState]:
-        start = today - timedelta(days=STREAK_LOOKBACK_DAYS)
+        """Per-day states from `since` (default: the streak lookback) to today.
+        Callers that only need the last day or two (the mystery box) pass
+        `since` so a dashboard read does not scan a year of assignments."""
+        start = since if since is not None else today - timedelta(days=STREAK_LOOKBACK_DAYS)
         rows = (await db.execute(
             select(
                 TaskAssignment.assigned_date,

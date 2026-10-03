@@ -28,13 +28,13 @@ A **perfect day** is the streak's rule for a day in state `done` (`ProgressServi
 
 A day with no chores, or with only bonus tasks, gives no box.
 
-One box per kid per day: `UNIQUE(family_id, user_id, day)`. A box is created the first time the kid's home reads progress on a perfect day (created on read, like the quest). It never expires: an unopened box waits, and several unopened ones are shown together ("×2").
+One box per kid per day: `UNIQUE(family_id, user_id, day)`. A box is created the first time the kid's progress is read on or after a perfect day — today's, and yesterday's when that day was perfect and has no box yet (a day finished from the pet page or marked done by a parent, first read after midnight). Older days are never backfilled (created on read, like the quest; amended after the final review). It never expires: an unopened box waits, and several unopened ones are shown together ("×2").
 
 ### Opening
 
 The content is decided **when the box is opened**, not when it appears:
 
-1. If the family's jar has at least one active surprise, pick one at random, excluding the surprise this kid got in their most recent opened box (when the jar has two or more). Copy its title and emoji onto the box (`kind = surprise`).
+1. If the family's jar has at least one surprise, pick one at random, excluding the surprise this kid got in their most recent opened box (when the jar has two or more). Copy its title and emoji onto the box (`kind = surprise`).
 2. Otherwise `kind = points`: a random whole number from `max(1, M // 4)` to `M`, where `M = families.mystery_box_points`; paid once into the points ledger as a `bonus` `PointTransaction` ("Caja sorpresa" / "Mystery box") in the same commit, through the quest's pay-once pattern (guarded `UPDATE … WHERE opened_at IS NULL RETURNING`, locked user row, `db.refresh(kid)` before adding).
 
 A box can only be opened by the kid it belongs to, in a family whose boxes are on (`mystery_box_points > 0`). In a family that switched off, an unopened box cannot be opened (`409`) and waits; if the family turns boxes on again it opens then.
@@ -61,7 +61,7 @@ Parent copy: "Por entregar" / "To deliver", "Entregada ✓" / "Delivered ✓", "
 ## Architecture
 
 **Backend**
-- `backend/app/models/mystery.py`: `MysterySurprise` (`mystery_surprises`: `id, family_id, title, emoji, is_active, created_by, created_at`) and `MysteryBox` (`mystery_boxes`: `id, family_id, user_id, day, kind, surprise_id (SET NULL), surprise_title, surprise_emoji, points, opened_at, delivered_at, delivered_by, created_at`; `UNIQUE(family_id, user_id, day)`; CHECKs: `kind IS NULL OR kind IN ('surprise','points')`, `(opened_at IS NULL) = (kind IS NULL)`, `points >= 0`). Both tables join `EXPORTED_FAMILY_TABLES` (`progress/mystery_surprises.json`, `progress/mystery_boxes.json`).
+- `backend/app/models/mystery.py`: `MysterySurprise` (`mystery_surprises`: `id, family_id, title, emoji, created_by, created_at` — removed rows are deleted outright; opened boxes keep their copied title) and `MysteryBox` (`mystery_boxes`: `id, family_id, user_id, day, kind, surprise_id (SET NULL), surprise_title, surprise_emoji, points, opened_at, delivered_at, delivered_by, created_at`; `UNIQUE(family_id, user_id, day)`; CHECKs: `kind IS NULL OR kind IN ('surprise','points')`, `(opened_at IS NULL) = (kind IS NULL)`, `points >= 0`). Both tables join `EXPORTED_FAMILY_TABLES` (`progress/mystery_surprises.json`, `progress/mystery_boxes.json`).
 - Migration `mystery_box` (down-revision `teen_checkins`): the two tables and `families.mystery_box_points` (`ADD COLUMN … DEFAULT 20` then `UPDATE families SET mystery_box_points = NULL`, the quest's opt-in trick).
 - `backend/app/services/mystery_service.py`: pure `points_for(max_points, rng)`, `pick_surprise(surprises, last_surprise_id, rng)`; `MysteryService.sync(db, user)` (creates today's box when the day is perfect; returns the view), `open(db, user, box_id)`, `deliveries(db, family_id)`, `mark_delivered(db, parent, box_id)`, jar `list / add / remove`.
 - Routes: `GET /api/progress/mystery`, `POST /api/progress/mystery/{id}/open` (kid/teen; `applies: false` for parents), `GET /api/progress/mystery/deliveries`, `POST /api/progress/mystery/{id}/delivered` (parent), `GET / POST /api/families/surprises`, `DELETE /api/families/surprises/{id}` (parent). `FamilyUpdate.mystery_box_points` (`ge=0, le=500`), `FamilyResponse.mystery_box_points: Optional[int]`.

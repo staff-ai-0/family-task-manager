@@ -26,6 +26,19 @@ export function revealedFrom(box: unknown): Revealed | null {
     };
 }
 
+/** "today" / "yesterday" / "N days ago" for a YYYY-MM-DD day, in the parent's
+ *  language; "" for anything unparsable. Compared on UTC calendar days. */
+export function dayLabel(day: string, lang: Lang, now: Date = new Date()): string {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+    if (!m) return "";
+    const then = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const days = Math.round((today - then) / 86_400_000);
+    if (days <= 0) return lang === "es" ? "hoy" : "today";
+    if (days === 1) return lang === "es" ? "ayer" : "yesterday";
+    return lang === "es" ? `hace ${days} días` : `${days} days ago`;
+}
+
 /** null unless the boxes apply to this user and are on for the family. An
  *  enabled family with nothing to show still gets a view: the card renders
  *  hidden and wakes up when the deck empties. */
@@ -37,13 +50,15 @@ export function mysteryView(resp: unknown): MysteryView | null {
     return {
         closedCount: unopened.length,
         closedId: first && typeof first.id === "string" ? first.id : null,
-        revealed: unopened.length === 0 ? revealedFrom(r.opened_today) : null,
+        revealed: revealedFrom(r.opened_today),
     };
 }
 
 export function mysteryDomUpdate(view: MysteryView, lang: Lang, starMode: boolean) {
+    // Both can show at once: today's reveal stays on screen while the next
+    // box waits underneath — a reveal must never vanish behind a repaint.
     const showClosed = view.closedCount > 0;
-    const showRevealed = !showClosed && view.revealed !== null;
+    const showRevealed = view.revealed !== null;
     let revealedText = "";
     if (view.revealed) {
         if (view.revealed.kind === "points") {

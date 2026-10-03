@@ -117,6 +117,28 @@ class TestCreation:
         resp = await MysteryService.sync(db_session, test_parent_user)
         assert resp.applies is False and await _boxes(db_session) == []
 
+    async def test_a_perfect_yesterday_first_read_today_still_gets_its_box(self, db_session, test_family, test_child_user):
+        # The last chore was finished elsewhere (pet page, parent marked it
+        # done) and the kid opens the home after midnight: the streak counts
+        # that day, so the box must exist too.
+        today = await _today(db_session, test_family.id)
+        chore = await _template(db_session, test_family.id)
+        await _assign(db_session, test_child_user, chore, today - timedelta(days=1))
+        resp = await MysteryService.sync(db_session, test_child_user)
+        assert [b.day for b in resp.unopened] == [today - timedelta(days=1)]
+        await _assign(db_session, test_child_user, chore, today - timedelta(days=2))    # older: never backfilled
+        resp = await MysteryService.sync(db_session, test_child_user)
+        assert [b.day for b in resp.unopened] == [today - timedelta(days=1)]
+
+    async def test_a_later_rejection_does_not_take_the_box_back(self, db_session, test_family, test_child_user):
+        today, chore = await _perfect_day(db_session, test_child_user)
+        box = (await MysteryService.sync(db_session, test_child_user)).unopened[0]
+        await MysteryService.open(db_session, test_child_user, box.id)
+        await _assign(db_session, test_child_user, chore, today, grade="missed")         # un-perfected afterwards
+        resp = await MysteryService.sync(db_session, test_child_user)
+        assert resp.opened_today is not None and resp.opened_today.id == box.id
+        assert len(await _boxes(db_session)) == 1
+
     async def test_yesterdays_unopened_box_still_waits(self, db_session, test_family, test_child_user):
         today = await _today(db_session, test_family.id)
         db_session.add(MysteryBox(family_id=test_family.id, user_id=test_child_user.id, day=today - timedelta(days=1),
@@ -243,6 +265,22 @@ class TestOpening:
         await MysteryService.open(db_session, test_child_user, box.id)
         resp = await MysteryService.sync(db_session, test_child_user)
         assert resp.unopened == [] and resp.opened_today is not None and resp.opened_today.id == box.id
+
+    async def test_a_backlog_box_opened_today_is_todays_reveal(self, db_session, test_family, test_child_user):
+        # "Opened today" is about WHEN it was opened, not which day earned it:
+        # a kid opening yesterday's waiting box must still see what they got.
+        today = await _today(db_session, test_family.id)
+        db_session.add(MysteryBox(family_id=test_family.id, user_id=test_child_user.id, day=today - timedelta(days=1),
+                                  points=0, created_at=datetime.now(timezone.utc)))
+        await db_session.commit()
+        old = (await MysteryService.sync(db_session, test_child_user)).unopened[0]
+        await MysteryService.open(db_session, test_child_user, old.id)
+        resp = await MysteryService.sync(db_session, test_child_user)
+        assert resp.unopened == [] and resp.opened_today is not None and resp.opened_today.id == old.id
+        # With a second box still waiting, the reveal is still reported.
+        await _perfect_day(db_session, test_child_user)
+        resp = await MysteryService.sync(db_session, test_child_user)
+        assert len(resp.unopened) == 1 and resp.opened_today is not None and resp.opened_today.id == old.id
 
 
 class TestDeliveries:

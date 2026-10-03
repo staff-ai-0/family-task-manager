@@ -21,10 +21,25 @@ describe("parent hub — surprises to deliver", () => {
         expect(strip).toContain("Entregada ✓");
         expect(strip).toContain("Delivered ✓");
         expect(strip).toMatch(/data-deliver-id=\{it\.id\}/);
+        expect(strip).toMatch(/dayLabel\(it\.day, lang\)/);
         expect(strip).toMatch(/fetch\(`\/api\/progress\/mystery\/\$\{id\}\/delivered`, \{ method: "POST"/);
         expect(strip).toMatch(/showToast\(/);
         expect(strip).not.toMatch(/\b(alert|confirm|prompt)\(/);
         expect(existsSync(path("../src/pages/api/progress/[...path].ts"))).toBe(true);
+    });
+});
+
+describe("deliver strip day label", () => {
+    it("says today, yesterday, or days ago, in both languages", async () => {
+        const { dayLabel } = await import("../src/lib/mystery");
+        const today = new Date();
+        const iso = (d: Date) => d.toISOString().slice(0, 10);
+        const back = (n: number) => { const d = new Date(today); d.setUTCDate(d.getUTCDate() - n); return iso(d); };
+        expect(dayLabel(iso(today), "en", today)).toBe("today");
+        expect(dayLabel(back(1), "es", today)).toBe("ayer");
+        expect(dayLabel(back(3), "en", today)).toBe("3 days ago");
+        expect(dayLabel(back(3), "es", today)).toBe("hace 3 días");
+        expect(dayLabel("not-a-date", "en", today)).toBe("");
     });
 });
 

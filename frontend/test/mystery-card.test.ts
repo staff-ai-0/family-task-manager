@@ -18,6 +18,8 @@ describe("MysteryBoxCard", () => {
     it("hides the whole card while there is nothing to show, and wakes up when the deck empties", () => {
         expect(card).toMatch(/<section data-mystery-card[^>]*hidden=\{!u\.showClosed && !u\.showRevealed\}/);
         expect(card).toContain('"ftm:deck-empty"');
+        // Overdue cards keep the deck non-empty, yet the day can be perfect: refetch on every completion too.
+        expect(card).toContain('"ftm:deck-completed"');
         expect(card).toMatch(/fetch\("\/api\/progress\/mystery"/);
     });
     it("opens through the proxied route, celebrates once, and keeps busy state", () => {
@@ -25,6 +27,9 @@ describe("MysteryBoxCard", () => {
         expect(card).toMatch(/method: "POST"/);
         expect(card).toContain("fireConfetti(");
         expect(card).toMatch(/if \(busy\) return;/);
+        // A failed open never leaves "Opening…" on screen: the last view is repainted.
+        expect(card).toMatch(/let shown: MysteryView/);
+        expect(card).toMatch(/finally \{[\s\S]*paint\(shown\)/);
         expect(card).toMatch(/showToast\(/);
         expect(card).toMatch(/r\.status === 409/);
         expect(existsSync(path("../src/pages/api/progress/[...path].ts"))).toBe(true);

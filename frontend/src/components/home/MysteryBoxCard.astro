@@ -18,6 +18,7 @@ const u = mysteryDomUpdate(view, lang, starMode);
 ---
 
 <section data-mystery-card data-lang={lang} data-star={starMode ? "1" : "0"} data-box-id={view.closedId ?? ""}
+         data-view={JSON.stringify(view)}
          hidden={!u.showClosed && !u.showRevealed}
          class="rounded-2xl border border-brand-ink/10 bg-white p-4 shadow-[var(--shadow-card)]">
     <h2 class="text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft">{MYSTERY_COPY.heading[lang]}</h2>
@@ -44,8 +45,14 @@ const u = mysteryDomUpdate(view, lang, starMode);
         const revealed = card.querySelector<HTMLElement>("[data-mystery-revealed]")!;
         const revealedText = card.querySelector<HTMLElement>("[data-mystery-revealed-text]")!;
         let busy = false;
+        // The last view painted, so a failed open can restore the screen
+        // instead of leaving "Opening…" behind.
+        let shown: MysteryView = (() => {
+            try { return JSON.parse(card.dataset.view ?? "") as MysteryView; } catch { return { closedCount: 0, closedId: null, revealed: null }; }
+        })();
 
         const paint = (view: MysteryView) => {
+            shown = view;
             const u = mysteryDomUpdate(view, lang, star);
             card.dataset.boxId = view.closedId ?? "";
             closed.toggleAttribute("hidden", !u.showClosed);
@@ -82,8 +89,9 @@ const u = mysteryDomUpdate(view, lang, starMode);
                 if (!r.ok) throw new Error(String(r.status));
                 const got = revealedFrom(await r.json());
                 if (!got) throw new Error("bad reveal");
-                // Show this reveal first, then let the server say what else waits.
-                paint({ closedCount: 0, closedId: null, revealed: got });
+                // Show this reveal first; the server then says what else waits
+                // (the reveal stays — the next closed box appears beneath it).
+                paint({ closedCount: Math.max(0, shown.closedCount - 1), closedId: null, revealed: got });
                 fireConfetti(card);
                 await refresh();
             } catch {
@@ -91,10 +99,14 @@ const u = mysteryDomUpdate(view, lang, starMode);
                 await refresh();
             } finally {
                 busy = false;
+                paint(shown);
             }
         });
 
-        // The deck fires this the moment the day's last chore is done.
+        // The deck fires deck-empty the moment the day's last chore is done;
+        // overdue cards from earlier days keep it non-empty while the day can
+        // still be perfect, so every completion refetches too (idempotent).
         window.addEventListener("ftm:deck-empty", () => void refresh());
+        window.addEventListener("ftm:deck-completed", () => void refresh());
     }
 </script>

@@ -5,6 +5,7 @@
  * strip hides when nothing is left.
  */
 import { buttonClass } from "../../lib/buttonClasses";
+import { dayLabel } from "../../lib/mystery";
 
 interface Props {
     items: { id: string; kid_name: string; surprise_title: string; surprise_emoji?: string | null; day: string }[];
@@ -24,6 +25,7 @@ const es = lang === "es";
                 <span class="text-2xl" aria-hidden="true">{it.surprise_emoji || "🎁"}</span>
                 <span class="min-w-0 flex-1 text-sm text-brand-ink">
                     <span class="font-bold">{it.kid_name}</span> — <span class="italic">{it.surprise_title}</span>
+                    <span class="text-brand-ink-soft"> ({dayLabel(it.day, lang)})</span>
                 </span>
                 <button type="button" data-deliver-done class={buttonClass("secondary", "sm")}>{es ? "Entregada ✓" : "Delivered ✓"}</button>
             </li>

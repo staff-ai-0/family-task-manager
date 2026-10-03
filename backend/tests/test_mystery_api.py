@@ -1,5 +1,5 @@
 """UX-D4b mystery box endpoints."""
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from app.models.task_assignment import ApprovalStatus, AssignmentStatus, TaskAssignment
@@ -42,6 +42,20 @@ class TestKid:
         assert again.json() == o.json()
         after = (await client.get("/api/progress/mystery", headers=h)).json()
         assert after["unopened"] == [] and after["opened_today"]["id"] == box_id
+
+    async def test_reading_the_boxes_scans_one_day_not_a_year(self, client, db_session, test_family, test_child_user, monkeypatch):
+        from app.services import mystery_service
+        from app.services.progress_service import ProgressService
+        seen = {}
+        real = ProgressService.day_states
+
+        async def spy(db, family_id, user_id, today, tz, since=None):
+            seen["since"] = since
+            return await real(db, family_id, user_id, today, tz, since=since)
+
+        monkeypatch.setattr(mystery_service.ProgressService, "day_states", staticmethod(spy))
+        await client.get("/api/progress/mystery", headers=await _login(client, "child@test.com"))
+        assert seen["since"] is not None and (seen["since"] - (datetime.now(timezone.utc).date())).days >= -2
 
     async def test_someone_elses_box_is_not_found(self, client, db_session, test_family, test_child_user, test_teen_user):
         await _perfect_day(db_session, test_child_user)

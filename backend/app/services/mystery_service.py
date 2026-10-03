@@ -7,7 +7,7 @@ guarded UPDATE. Pure rules first, then the family-scoped queries.
 from __future__ import annotations
 
 import random
-from datetime import datetime, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -73,23 +73,35 @@ class MysteryService:
         if maximum <= 0:
             return MysteryResponse(applies=True, enabled=False)
         today, tz = await ProgressService.family_today(db, family_id)
-        states = await ProgressService.day_states(db, family_id, user_id, today, tz)
-        if states.get(today) == DayState.done:
+        # Today and yesterday only: yesterday covers a day finished away from
+        # the home (pet page, parent marked it done) and first read after
+        # midnight — the streak counts it, so the box must exist too. Older
+        # days are not backfilled: switching a family on must not drop a
+        # year of boxes at once.
+        yesterday = today - timedelta(days=1)
+        states = await ProgressService.day_states(db, family_id, user_id, today, tz, since=yesterday)
+        perfect = [d for d in (yesterday, today) if states.get(d) == DayState.done]
+        if perfect:
+            now = datetime.now(timezone.utc)
             await db.execute(
                 pg_insert(MysteryBox)
-                .values(family_id=family_id, user_id=user_id, day=today, points=0,
-                        created_at=datetime.now(timezone.utc))
+                .values([dict(family_id=family_id, user_id=user_id, day=d, points=0, created_at=now) for d in perfect])
                 .on_conflict_do_nothing(constraint="uq_mystery_boxes_family_user_day")
             )
             await db.commit()
+        # "Opened today" is about WHEN it was opened (family-local), not which
+        # day earned it: a kid opening yesterday's waiting box must still see
+        # what they got.
+        midnight = datetime.combine(today, time.min, tzinfo=tz)
         rows = (await db.execute(
             select(MysteryBox).where(
                 MysteryBox.family_id == family_id, MysteryBox.user_id == user_id,
-                (MysteryBox.opened_at.is_(None)) | (MysteryBox.day == today),
+                (MysteryBox.opened_at.is_(None)) | (MysteryBox.opened_at >= midnight),
             ).order_by(MysteryBox.day)
         )).scalars().all()
         unopened = [_view(b) for b in rows if b.opened_at is None]
-        opened_today = next((_view(b) for b in rows if b.opened_at is not None and b.day == today), None)
+        opened = [b for b in rows if b.opened_at is not None]
+        opened_today = _view(max(opened, key=lambda b: b.opened_at)) if opened else None
         return MysteryResponse(applies=True, enabled=True, unopened=unopened, opened_today=opened_today)
 
     @staticmethod
@@ -153,7 +165,8 @@ class MysteryService:
         rows = (await db.execute(
             select(MysteryBox, User.name)
             .join(User, User.id == MysteryBox.user_id)
-            .where(MysteryBox.family_id == family_id, MysteryBox.kind == "surprise", MysteryBox.delivered_at.is_(None))
+            .where(MysteryBox.family_id == family_id, MysteryBox.kind == "surprise", MysteryBox.delivered_at.is_(None),
+                   User.deleted_at.is_(None))
             .order_by(MysteryBox.opened_at.desc())
         )).all()
         return [

@@ -16,6 +16,10 @@ describe("mysteryView", () => {
         const v = mysteryView({ applies: true, enabled: true, unopened: [closed("b1", "2026-10-02"), closed("b9")], opened_today: null });
         expect(v).toEqual({ closedCount: 2, closedId: "b1", revealed: null });
     });
+    it("keeps today's reveal even while more boxes wait", () => {
+        const v = mysteryView({ applies: true, enabled: true, unopened: [closed("b9")], opened_today: surprise });
+        expect(v).toEqual({ closedCount: 1, closedId: "b9", revealed: { kind: "surprise", title: "Pick dessert tonight", emoji: "🍨", points: 0 } });
+    });
     it("carries today's reveal when nothing is closed", () => {
         expect(mysteryView({ applies: true, enabled: true, unopened: [], opened_today: surprise })).toEqual({
             closedCount: 0, closedId: null, revealed: { kind: "surprise", title: "Pick dessert tonight", emoji: "🍨", points: 0 },
@@ -36,6 +40,10 @@ describe("revealedFrom", () => {
 });
 
 describe("mysteryDomUpdate", () => {
+    it("shows the reveal AND the next closed box together", () => {
+        const both = mysteryDomUpdate({ closedCount: 1, closedId: "b9", revealed: { kind: "points", title: "", emoji: "", points: 7 } }, "en", false);
+        expect(both).toMatchObject({ showClosed: true, showRevealed: true, revealedText: "+7 points", closedLabel: "🎁 A mystery box! Tap to open" });
+    });
     it("closed: one box, or several with a count", () => {
         const one = mysteryDomUpdate({ closedCount: 1, closedId: "b1", revealed: null }, "en", false);
         expect(one).toMatchObject({ showClosed: true, showRevealed: false, closedLabel: "🎁 A mystery box! Tap to open" });
