@@ -26,7 +26,9 @@ from app.schemas.family import (
     FamilyWithMembers,
     FamilyStats,
 )
+from app.schemas.progress import SurpriseCreate, SurpriseView
 from app.schemas.user import UserResponse, strip_superadmin_flag
+from app.services.mystery_service import MysteryService
 from app.models import User
 
 router = APIRouter()
@@ -144,6 +146,36 @@ async def delete_my_family(
         confirm_name=payload.confirm_name,
     )
     return None
+
+
+# ── UX-D4b mystery box: the surprise jar (parent only) ────────────────
+@router.get("/surprises", response_model=List[SurpriseView])
+async def list_surprises(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await MysteryService.list_surprises(db, to_uuid_required(current_user.family_id))
+    return [SurpriseView(id=r.id, title=r.title, emoji=r.emoji) for r in rows]
+
+
+@router.post("/surprises", response_model=SurpriseView, status_code=status.HTTP_201_CREATED)
+async def add_surprise(
+    data: SurpriseCreate,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    row = await MysteryService.add_surprise(db, current_user, data.title, data.emoji)
+    return SurpriseView(id=row.id, title=row.title, emoji=row.emoji)
+
+
+@router.delete("/surprises/{surprise_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_surprise(
+    surprise_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    await MysteryService.remove_surprise(db, to_uuid_required(current_user.family_id), surprise_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{family_id}", response_model=FamilyResponse)

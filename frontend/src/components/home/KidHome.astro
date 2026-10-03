@@ -9,12 +9,14 @@
 import TaskDeck from "../deck/TaskDeck.astro";
 import QuestCard from "./QuestCard.astro";
 import CheckinCard from "./CheckinCard.astro";
+import MysteryBoxCard from "./MysteryBoxCard.astro";
 import EnablePushButton from "../EnablePushButton.astro";
 import PetAvatar from "../pet/PetAvatar.astro";
 import type { Deck } from "../../lib/deck";
 import type { GigChip } from "../../lib/kidHome";
 import type { QuestView } from "../../lib/quest";
 import type { CheckinView } from "../../lib/checkin";
+import type { MysteryView } from "../../lib/mystery";
 import { routineName, routineProgress, type DashboardRoutine } from "../../lib/routines";
 
 interface Props {
@@ -41,8 +43,10 @@ interface Props {
     quest: QuestView | null;
     /** Jarvis teen check-in; null = nothing offered (or not a teen). */
     checkin: CheckinView | null;
+    /** UX-D4b mystery box; null = boxes off for this family (or not a kid). */
+    mystery: MysteryView | null;
 }
-const { lang, userId, starMode, deck, choreMode, deckCounter, inReview, routines, gigs, showGigs, goal, cup, pet, quest, checkin } = Astro.props;
+const { lang, userId, starMode, deck, choreMode, deckCounter, inReview, routines, gigs, showGigs, goal, cup, pet, quest, checkin, mystery } = Astro.props;
 const es = lang === "es";
 const gigsRow = showGigs && gigs.length > 0;
 const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString(es ? "es-MX" : "en-US")}`;
@@ -72,6 +76,8 @@ const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString(es ?
     />
 
     {checkin && <CheckinCard checkin={checkin} lang={lang} />}
+
+    {mystery && <MysteryBoxCard view={mystery} lang={lang} starMode={starMode} />}
 
     {quest && <QuestCard quest={quest} lang={lang} starMode={starMode} />}
 

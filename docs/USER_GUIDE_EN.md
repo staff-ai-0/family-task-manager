@@ -130,6 +130,7 @@ Family Task Manager's objective is to help families build real habits of respons
         - [17.5.3 Badges](#1753-badges)
         - [17.5.4 Weekly Quest](#1754-weekly-quest)
         - [17.5.5 Smart Reminders and the App-Icon Number](#1755-smart-reminders-and-the-app-icon-number)
+        - [17.5.6 Mystery Box](#1756-mystery-box)
 18. [Chapter 18: Virtual Pet](#chapter-18-virtual-pet)
 19. [Chapter 19: Meal Planning](#chapter-19-meal-planning)
 20. [Chapter 20: Shopping Lists](#chapter-20-shopping-lists)
@@ -2205,6 +2206,17 @@ If both apply, the streak reminder is sent. If everything is done, nothing is se
 > **For parents:** switch them off or on in **Settings → Family → Smart reminders**. They are on by default. The switch does not change the icon number or any other notification.
 
 > **Note:** the icon number works on iPhone/iPad 16.4 or later (app added to the home screen, notifications allowed) and on the installed desktop app in Chrome or Edge. Android does not show a number: it shows its own dot on the icon while a notification is unread. A device that never allowed notifications gets no smart reminders.
+
+## 17.5.6 Mystery Box
+
+Finish every chore of the day and a closed box appears on your home screen: "🎁 A mystery box! Tap to open". Inside is one of two things:
+
+- a **surprise** your parents wrote into the family's jar — "Pick dessert tonight", "30 more minutes of screen time" — picked at random, never the same one two days in a row;
+- **points** when the jar is empty: between a quarter of the family's maximum and the maximum (20 by default).
+
+One box per day. A box never expires: if you did not open it, it waits for you. A surprise you reveal shows up on your parents' home screen under **To deliver** until they hand it over.
+
+> **For parents:** turn boxes on in **Settings → Family → Mystery box**, set the points maximum (0 turns boxes off), and fill the **surprise jar** — up to 20 short surprises, reused forever, removable any time. Families that were already using the app start with boxes off: a card on your home screen asks once.
 
 ---
 

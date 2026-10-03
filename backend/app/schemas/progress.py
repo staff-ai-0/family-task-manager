@@ -1,7 +1,7 @@
 """UX-D1 progress (streak + rank), UX-D2 badges, and UX-D3 weekly quest API
 shapes. All numbers are plain ints."""
 from datetime import date, datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -81,3 +81,41 @@ class QuestResponse(BaseModel):
 
 class AckQuestRequest(BaseModel):
     id: UUID
+
+
+# ── UX-D4b mystery box ─────────────────────────────────────────────────
+class MysteryBoxView(BaseModel):
+    id: UUID
+    day: date
+    opened: bool
+    kind: Optional[str] = None            # surprise | points once opened
+    surprise_title: Optional[str] = None
+    surprise_emoji: Optional[str] = None
+    points: int = 0
+
+
+class MysteryResponse(BaseModel):
+    applies: bool
+    enabled: bool = False                 # the family's boxes are on
+    unopened: List[MysteryBoxView] = []   # oldest first
+    opened_today: Optional[MysteryBoxView] = None
+
+
+class DeliveryView(BaseModel):
+    id: UUID
+    kid_name: str
+    surprise_title: str
+    surprise_emoji: Optional[str] = None
+    day: date
+    opened_at: datetime
+
+
+class SurpriseView(BaseModel):
+    id: UUID
+    title: str
+    emoji: Optional[str] = None
+
+
+class SurpriseCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=80)   # trimmed and bounded to 60 by the service
+    emoji: Optional[str] = Field(None, max_length=8)

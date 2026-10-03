@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import ParentHub from "../../components/home/ParentHub.astro";
+import DeliverStrip from "../../components/home/DeliverStrip.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
 import { buildDeck } from "../../lib/deck";
@@ -40,7 +41,7 @@ const budgetMonth = now.getMonth() + 1;
 const [
     familyRes, progressRes, cupRes, oversightRes, bankFamilyRes, payoutRes,
     taskPendingRes, gigPendingRes, redemptionRes, onboardingRes,
-    monthRes, draftsRes,
+    monthRes, draftsRes, deliveriesRes,
 ] = await Promise.all([
     apiFetch<any>("/api/families/me", { token }),
     apiFetch<any>("/api/task-assignments/progress", { token }),
@@ -58,8 +59,11 @@ const [
     budgetOn
         ? apiFetch<{ count: number }>("/api/budget/receipt-drafts/count", { token })
         : Promise.resolve({ data: null }),
+    // UX-D4b: surprises the kids revealed that nobody has handed over yet.
+    apiFetch<any[]>("/api/progress/mystery/deliveries", { token }),
 ]);
 const family = familyRes.data;
+const deliveries: any[] = deliveriesRes.data ?? [];
 // Jarvis teen check-in: the opt-in card is only for families with a teen.
 const hasTeen = (oversightRes.data?.members ?? []).some((k: any) => String(k.role).toLowerCase() === "teen");
 
@@ -236,6 +240,33 @@ const hello = firstName(user.name);
         </div>
     )}
 
+    {family && family.mystery_box_points == null && (
+        <div id="mystery-intro-banner" class="max-w-md mx-auto w-full mb-6 bg-brand-sky/10 border border-brand-sky/30 rounded-2xl p-5 shadow-[var(--shadow-card)]">
+            <h2 class="font-bold text-brand-ink text-base mb-1">
+                {lang === "es" ? "Nuevo: la caja sorpresa" : "New: the mystery box"}
+            </h2>
+            <p class="text-sm text-brand-ink-soft mb-3">
+                {lang === "es"
+                    ? "Cuando un hijo termina todas sus tareas del día, le aparece una caja sorpresa. Dentro va una sorpresa de tu frasco (tú las escribes) o, si el frasco está vacío, hasta 20 puntos. "
+                    : "When a kid finishes every chore of the day, a mystery box appears. Inside is a surprise from your jar (you write them) or, if the jar is empty, up to 20 points. "}
+                <a href="/parent/settings/family#mystery-section" class="text-brand-sky-text font-semibold hover:underline">
+                    {lang === "es" ? "Llenar el frasco" : "Fill the jar"}
+                </a>
+            </p>
+            <div class="flex flex-wrap gap-2">
+                <button id="mystery-intro-on" class={buttonClass("secondary", "sm")}>
+                    {lang === "es" ? "Activar" : "Turn on"}
+                </button>
+                <button id="mystery-intro-off"
+                        class="px-4 py-2 rounded-lg bg-brand-cream-deep text-brand-ink text-xs font-semibold hover:bg-brand-cream border border-brand-ink/15 transition-colors">
+                    {lang === "es" ? "Ahora no" : "Not now"}
+                </button>
+            </div>
+        </div>
+    )}
+
+    <DeliverStrip items={deliveries} lang={lang} />
+
     <ParentHub
         lang={lang}
         tz={tz}
@@ -306,6 +337,22 @@ const hello = firstName(user.name);
     };
     document.getElementById("checkin-intro-on")?.addEventListener("click", () => checkinIntroDecide(true));
     document.getElementById("checkin-intro-off")?.addEventListener("click", () => checkinIntroDecide(false));
+
+    // UX-D4b mystery box opt-in: 20 turns boxes on with the default maximum, 0 is "not now".
+    const mysteryIntroDecide = async (points: number) => {
+        try {
+            const r = await fetch("/api/families/me", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ mystery_box_points: points }),
+            });
+            if (r.ok) document.getElementById("mystery-intro-banner")?.remove();
+        } catch (e) {
+            console.error("mystery box opt-in decision failed:", e);
+        }
+    };
+    document.getElementById("mystery-intro-on")?.addEventListener("click", () => mysteryIntroDecide(20));
+    document.getElementById("mystery-intro-off")?.addEventListener("click", () => mysteryIntroDecide(0));
 </script>
 
 <script>

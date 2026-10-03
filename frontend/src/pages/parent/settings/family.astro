@@ -15,6 +15,9 @@ if (!user) {
 if (user.role !== "parent") return Astro.redirect("/dashboard");
 
 const { data: family } = await apiFetch<any>("/api/families/me", { token });
+// UX-D4b: the surprise jar, rendered server-side; the script keeps it in sync.
+const { data: jar } = await apiFetch<any[]>("/api/families/surprises", { token });
+const surprises: any[] = jar ?? [];
 
 // Common North-American + Latin-American zones bubbled to the top, then everything else.
 const PRIORITY_TZ = [
@@ -250,6 +253,64 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
                 </span>
             </span>
         </label>
+    </section>
+
+    <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-4" id="mystery-section"
+             data-lang={lang}
+             data-saved={lang === "es" ? "Guardado." : "Saved."}
+             data-error={lang === "es" ? "No se pudo guardar. Intenta de nuevo." : "Could not save. Try again."}
+             data-range={lang === "es" ? "Usa un número entero de 0 a 500." : "Use a whole number from 0 to 500."}
+             data-full={lang === "es" ? "El frasco está lleno (20)." : "The jar is full (20)."}>
+        <h2 class="text-sm font-bold text-brand-ink">🎁 {lang === "es" ? "Caja sorpresa" : "Mystery box"}</h2>
+        <p class="text-xs text-brand-ink-soft">
+            {lang === "es"
+                ? "Cuando un hijo termina todas sus tareas del día, le aparece una caja sorpresa. Dentro va una sorpresa del frasco o, si está vacío, puntos."
+                : "When a kid finishes every chore of the day, a mystery box appears. Inside is a surprise from the jar or, if it is empty, points."}
+        </p>
+        <div>
+            <label for="mystery-points" class="block text-sm font-semibold text-brand-ink mb-1">
+                {lang === "es" ? "Puntos máximos cuando el frasco está vacío" : "Maximum points when the jar is empty"}
+            </label>
+            <div class="flex items-center gap-3">
+                <input type="number" id="mystery-points" inputmode="numeric" min="0" max="500" step="1"
+                       value={family?.mystery_box_points ?? ""} placeholder="20"
+                       class="w-32 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
+                <button type="button" id="mystery-save" class={`disabled:opacity-60 ${buttonClass("secondary", "sm")}`}>
+                    {lang === "es" ? "Guardar" : "Save"}
+                </button>
+                <span id="mystery-status" class="text-sm" aria-live="polite"></span>
+            </div>
+            <p class="text-xs text-brand-ink-soft mt-1">
+                {lang === "es" ? "Entre la cuarta parte y este máximo. 0 apaga las cajas." : "Between a quarter and this maximum. 0 turns boxes off."}
+            </p>
+        </div>
+        <div>
+            <h3 class="text-sm font-semibold text-brand-ink">{lang === "es" ? "Frasco de sorpresas" : "Surprise jar"}</h3>
+            <p class="text-xs text-brand-ink-soft mt-1 mb-2">
+                {lang === "es"
+                    ? "Cosas pequeñas y reales: \"elige el postre\", \"30 min más de pantalla\". Se reutilizan; nunca la misma dos días seguidos."
+                    : "Small, real things: \"pick dessert\", \"30 more minutes of screen time\". Reused; never the same one two days in a row."}
+            </p>
+            <ul data-jar-list class="space-y-1">
+                {surprises.map((s: any) => (
+                    <li data-jar-item={s.id} class="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-brand-ink border border-brand-ink/10">
+                        <span aria-hidden="true">{s.emoji || "🎁"}</span>
+                        <span class="min-w-0 flex-1">{s.title}</span>
+                        <button type="button" data-jar-remove={s.id} class="text-xs font-semibold text-red-700 hover:underline">
+                            {lang === "es" ? "Quitar" : "Remove"}
+                        </button>
+                    </li>
+                ))}
+            </ul>
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+                <input type="text" id="jar-emoji" maxlength="4" placeholder="🎉" aria-label="Emoji"
+                       class="w-14 rounded-lg border border-brand-ink/20 bg-white px-2 py-2 text-center text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
+                <input type="text" id="jar-title" maxlength="60" placeholder={lang === "es" ? "Elige el postre de hoy" : "Pick tonight's dessert"}
+                       aria-label={lang === "es" ? "Sorpresa" : "Surprise"}
+                       class="min-w-0 flex-1 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
+                <button type="button" id="jar-add" class={buttonClass("secondary", "sm")}>{lang === "es" ? "Agregar" : "Add"}</button>
+            </div>
+        </div>
     </section>
 
     <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-3" id="modules-section">
@@ -694,5 +755,97 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
         if (!ok) input.checked = !input.checked;
         showToast(ok ? (section.dataset.saved ?? "") : (section.dataset.error ?? ""), ok ? "success" : "error");
         input.disabled = false;
+    });
+</script>
+
+<script>
+    import { showToast } from "../../../lib/toast";
+
+    const section = document.getElementById("mystery-section");
+    const pointsInput = document.getElementById("mystery-points") as HTMLInputElement | null;
+    const save = document.getElementById("mystery-save") as HTMLButtonElement | null;
+    const status = document.getElementById("mystery-status");
+    save?.addEventListener("click", async () => {
+        if (!section || !pointsInput || !status) return;
+        const raw = pointsInput.value.trim();
+        const value = Number(raw);
+        status.className = "text-sm";
+        if (raw === "" || !Number.isInteger(value) || value < 0 || value > 500) {
+            status.textContent = section.dataset.range ?? "";
+            status.className = "text-sm text-red-700";
+            return;
+        }
+        save.setAttribute("disabled", "true");
+        try {
+            const r = await fetch("/api/families/me", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ mystery_box_points: value }),
+            });
+            status.textContent = r.ok ? (section.dataset.saved ?? "") : (section.dataset.error ?? "");
+            status.className = r.ok ? "text-sm text-green-700" : "text-sm text-red-700";
+        } catch {
+            status.textContent = section.dataset.error ?? "";
+            status.className = "text-sm text-red-700";
+        } finally {
+            save.removeAttribute("disabled");
+        }
+    });
+
+    // The jar: add appends a row, remove deletes one; both through the API.
+    const list = section?.querySelector<HTMLElement>("[data-jar-list]");
+    const title = document.getElementById("jar-title") as HTMLInputElement | null;
+    const emoji = document.getElementById("jar-emoji") as HTMLInputElement | null;
+    const add = document.getElementById("jar-add") as HTMLButtonElement | null;
+    const es = section?.dataset.lang === "es";
+
+    const wireRemove = (btn: HTMLButtonElement) => {
+        btn.addEventListener("click", async () => {
+            const id = btn.dataset.jarRemove;
+            if (!id) return;
+            btn.disabled = true;
+            try {
+                const r = await fetch(`/api/families/surprises/${id}`, { method: "DELETE", credentials: "same-origin" });
+                if (!r.ok) throw new Error(String(r.status));
+                btn.closest("[data-jar-item]")?.remove();
+            } catch {
+                btn.disabled = false;
+                showToast(section?.dataset.error ?? "", "error");
+            }
+        });
+    };
+    list?.querySelectorAll<HTMLButtonElement>("[data-jar-remove]").forEach(wireRemove);
+
+    add?.addEventListener("click", async () => {
+        if (!list || !title || !section) return;
+        const text = title.value.trim();
+        if (!text) { title.focus(); return; }
+        if (list.querySelectorAll("[data-jar-item]").length >= 20) { showToast(section.dataset.full ?? "", "info"); return; }
+        add.disabled = true;
+        try {
+            const r = await fetch("/api/families/surprises", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title: text, emoji: emoji?.value.trim() || null }),
+            });
+            if (!r.ok) throw new Error(String(r.status));
+            const s = await r.json();
+            const li = document.createElement("li");
+            li.dataset.jarItem = s.id;
+            li.className = "flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-brand-ink border border-brand-ink/10";
+            const icon = document.createElement("span"); icon.setAttribute("aria-hidden", "true"); icon.textContent = s.emoji || "🎁";
+            const label = document.createElement("span"); label.className = "min-w-0 flex-1"; label.textContent = s.title;
+            const btn = document.createElement("button"); btn.type = "button"; btn.dataset.jarRemove = s.id;
+            btn.className = "text-xs font-semibold text-red-700 hover:underline"; btn.textContent = es ? "Quitar" : "Remove";
+            wireRemove(btn);
+            li.append(icon, label, btn);
+            list.appendChild(li);
+            title.value = ""; if (emoji) emoji.value = "";
+            showToast(section.dataset.saved ?? "", "success");
+        } catch {
+            showToast(section.dataset.error ?? "", "error");
+        } finally {
+            add.disabled = false;
+        }
     });
 </script>

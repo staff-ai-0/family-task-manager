@@ -1,0 +1,112 @@
+---
+/**
+ * UX-D4b mystery box on the kid home. One card: closed (tap to open) or
+ * revealed (today's surprise / points). Rendered from mysteryDomUpdate(), the
+ * same mapping the script writes back after an open or a refetch. Hidden
+ * entirely while there is nothing to show, so it can wake up the moment the
+ * last chore is done (ftm:deck-empty) without a reload.
+ */
+import { MYSTERY_COPY, mysteryDomUpdate, type MysteryView } from "../../lib/mystery";
+
+interface Props {
+    view: MysteryView;
+    lang: "es" | "en";
+    starMode: boolean;
+}
+const { view, lang, starMode } = Astro.props;
+const u = mysteryDomUpdate(view, lang, starMode);
+---
+
+<section data-mystery-card data-lang={lang} data-star={starMode ? "1" : "0"} data-box-id={view.closedId ?? ""}
+         data-view={JSON.stringify(view)}
+         hidden={!u.showClosed && !u.showRevealed}
+         class="rounded-2xl border border-brand-ink/10 bg-white p-4 shadow-[var(--shadow-card)]">
+    <h2 class="text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft">{MYSTERY_COPY.heading[lang]}</h2>
+    <button type="button" data-mystery-closed hidden={!u.showClosed}
+            class="mt-2 w-full rounded-xl bg-brand-sun px-4 py-4 text-left font-display text-lg font-extrabold text-brand-ink transition-transform active:scale-95">
+        <span data-mystery-closed-label>{u.closedLabel}</span>
+    </button>
+    <div data-mystery-revealed hidden={!u.showRevealed} class="mt-2 rounded-xl bg-brand-sun px-3 py-3 text-brand-ink">
+        <p class="font-display text-lg font-extrabold" data-mystery-revealed-text>{u.revealedText}</p>
+    </div>
+</section>
+
+<script>
+    import { fireConfetti } from "../../lib/celebrate";
+    import { MYSTERY_COPY, mysteryDomUpdate, mysteryView, revealedFrom, type MysteryView } from "../../lib/mystery";
+    import { showToast } from "../../lib/toast";
+
+    const card = document.querySelector<HTMLElement>("[data-mystery-card]");
+    if (card) {
+        const lang = card.dataset.lang === "en" ? "en" : "es";
+        const star = card.dataset.star === "1";
+        const closed = card.querySelector<HTMLButtonElement>("[data-mystery-closed]")!;
+        const closedLabel = card.querySelector<HTMLElement>("[data-mystery-closed-label]")!;
+        const revealed = card.querySelector<HTMLElement>("[data-mystery-revealed]")!;
+        const revealedText = card.querySelector<HTMLElement>("[data-mystery-revealed-text]")!;
+        let busy = false;
+        // The last view painted, so a failed open can restore the screen
+        // instead of leaving "Opening…" behind.
+        let shown: MysteryView = (() => {
+            try { return JSON.parse(card.dataset.view ?? "") as MysteryView; } catch { return { closedCount: 0, closedId: null, revealed: null }; }
+        })();
+
+        const paint = (view: MysteryView) => {
+            shown = view;
+            const u = mysteryDomUpdate(view, lang, star);
+            card.dataset.boxId = view.closedId ?? "";
+            closed.toggleAttribute("hidden", !u.showClosed);
+            closedLabel.textContent = u.closedLabel;
+            revealed.toggleAttribute("hidden", !u.showRevealed);
+            revealedText.textContent = u.revealedText;
+            card.toggleAttribute("hidden", !u.showClosed && !u.showRevealed);
+        };
+
+        const refresh = async () => {
+            try {
+                const r = await fetch("/api/progress/mystery", { credentials: "same-origin" });
+                if (!r.ok) return;
+                const view = mysteryView(await r.json());
+                if (view) paint(view);
+            } catch {
+                /* keep what is shown */
+            }
+        };
+
+        closed.addEventListener("click", async () => {
+            if (busy) return;
+            const id = card.dataset.boxId;
+            if (!id) return;
+            busy = true;
+            closedLabel.textContent = MYSTERY_COPY.opening[lang];
+            try {
+                const r = await fetch(`/api/progress/mystery/${id}/open`, { method: "POST", credentials: "same-origin" });
+                if (r.status === 409) {
+                    showToast(MYSTERY_COPY.off[lang], "info");
+                    await refresh();
+                    return;
+                }
+                if (!r.ok) throw new Error(String(r.status));
+                const got = revealedFrom(await r.json());
+                if (!got) throw new Error("bad reveal");
+                // Show this reveal first; the server then says what else waits
+                // (the reveal stays — the next closed box appears beneath it).
+                paint({ closedCount: Math.max(0, shown.closedCount - 1), closedId: null, revealed: got });
+                fireConfetti(card);
+                await refresh();
+            } catch {
+                showToast(MYSTERY_COPY.failed[lang], "error");
+                await refresh();
+            } finally {
+                busy = false;
+                paint(shown);
+            }
+        });
+
+        // The deck fires deck-empty the moment the day's last chore is done;
+        // overdue cards from earlier days keep it non-empty while the day can
+        // still be perfect, so every completion refetches too (idempotent).
+        window.addEventListener("ftm:deck-empty", () => void refresh());
+        window.addEventListener("ftm:deck-completed", () => void refresh());
+    }
+</script>
