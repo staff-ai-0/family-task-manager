@@ -140,6 +140,42 @@ GOOGLE_APPLICATION_CREDENTIALS=/etc/gcs/sa-onprem-backup-key.json \
 ./scripts/restore-drill.sh $D/$(ls -1 $D | grep '^db-' | tail -1)
 ```
 
+## Second copy on 10.1.0.99 (mirror, twice a day)
+
+`scripts/backup-mirror-pull.sh` runs on **.99** (user `jc`, user timer
+`family-backup-mirror.timer`, 00:30 and 12:30) and pulls
+`backups/scheduled/` from .91 into `/mnt/nvme/backups/family-task-manager/scheduled`.
+Pull, not push: .91 holds no credential for the copy, and the key .99 uses
+is restricted on .91 to read-only rsync of that one directory (`rrsync -ro`).
+The mirror never overwrites a file it already has, never deletes on sync, and
+prunes by its own 30-day age rule — so a compromised .91 can neither reach,
+alter nor erase it. A run fails (unit shows failed) when the newest dump on the
+mirror is older than 13 h.
+
+Install (one-time):
+
+```bash
+# on .99 — key for the pull, and the app host's host key
+ssh-keygen -t ed25519 -N "" -C family-mirror@deb-gpu -f ~/.ssh/id_ed25519_family_mirror
+ssh-keyscan -t ed25519 10.1.0.91 >> ~/.ssh/known_hosts
+cat ~/.ssh/id_ed25519_family_mirror.pub
+
+# on .91 — rrsync (ships with rsync, python) + the restricted key
+mkdir -p ~/bin && cp /usr/share/doc/rsync/support/rrsync ~/bin/rrsync && chmod +x ~/bin/rrsync
+echo 'restrict,from="10.1.0.99",command="/home/jc/bin/rrsync -ro /home/jc/family-task-manager/backups/scheduled" <paste the .pub line>' >> ~/.ssh/authorized_keys
+
+# on .99 — script + user units
+mkdir -p ~/bin && cp scripts/backup-mirror-pull.sh ~/bin/family-backup-mirror-pull.sh && chmod +x ~/bin/family-backup-mirror-pull.sh
+cp scripts/systemd/family-backup-mirror.{service,timer} ~/.config/systemd/user/
+systemctl --user daemon-reload && systemctl --user enable --now family-backup-mirror.timer
+systemctl --user start family-backup-mirror.service && journalctl --user -u family-backup-mirror.service -n 5
+```
+
+(.99 has no checkout of this repo — `scp` the script and units over from a
+clone. Keep the copies in sync with the repo when they change.)
+
+Regression test (local source, no ssh): `bash scripts/tests/backup-mirror-pull.test.sh`.
+
 ## Offsite setup (rclone — alternative, e.g. Backblaze B2)
 
 Backups on the same disk as the live DB are not backups. One-time setup:

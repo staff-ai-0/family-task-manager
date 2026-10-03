@@ -1,0 +1,11 @@
+# scripts/systemd/family-backup-mirror.service
+# USER unit for the MIRROR host (10.1.0.99) — install under
+# ~/.config/systemd/user/ there, not on the app host. Runs as jc, no sudo.
+[Unit]
+Description=Family Task Manager — pull a second copy of the backups from 10.1.0.91
+
+[Service]
+Type=oneshot
+ExecStart=/home/jc/bin/family-backup-mirror-pull.sh
+# Defaults inside the script: MIRROR_SRC=jc@10.1.0.91:/ (rrsync-restricted),
+# MIRROR_DEST=/mnt/nvme/backups/family-task-manager/scheduled, 30-day prune.

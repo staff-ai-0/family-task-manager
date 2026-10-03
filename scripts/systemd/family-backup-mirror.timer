@@ -1,0 +1,11 @@
+# scripts/systemd/family-backup-mirror.timer
+[Unit]
+Description=Pull the Family Task Manager backups onto this host twice a day
+
+[Timer]
+# 30 min after the app host's 00:00 / 12:00 backup runs.
+OnCalendar=*-*-* 00,12:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
