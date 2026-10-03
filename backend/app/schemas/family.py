@@ -58,6 +58,8 @@ class FamilyUpdate(BaseModel):
     smart_reminders_enabled: Optional[bool] = None
     # Jarvis teen check-in: true = on, false = off, null = back to undecided.
     teen_checkin_enabled: Optional[bool] = None
+    # UX-D4b mystery box points maximum; 0 switches boxes off.
+    mystery_box_points: Optional[int] = Field(None, ge=0, le=500)
     # Module registry: list of ENABLED togglable modules. None = leave as-is
     # on PATCH; stored NULL = all on. Must be a subset of TOGGLABLE_MODULES.
     enabled_modules: Optional[List[str]] = None
@@ -114,6 +116,8 @@ class FamilyResponse(EntityResponse):
     # Jarvis teen check-in: NULL = undecided (off + one-time parent-hub card).
     teen_checkin_enabled: Optional[bool] = None
     teen_checkin_decided_at: Optional[datetime] = None
+    # UX-D4b: NULL = undecided (boxes off + one-time parent-hub card).
+    mystery_box_points: Optional[int] = None
     # Stored value: NULL = all modules on. Clients resolve via the same rule.
     enabled_modules: Optional[List[str]] = None
 

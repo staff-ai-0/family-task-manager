@@ -81,6 +81,7 @@ from app.models import (
     WeeklyQuest,
 )
 from app.models.teen_checkin import TeenCheckin
+from app.models.mystery import MysteryBox, MysterySurprise
 from app.models.budget import (
     BudgetAccount,
     BudgetAllocation,
@@ -171,6 +172,9 @@ EXPORTED_FAMILY_TABLES: frozenset[str] = frozenset(
         WeeklyQuest,
         # Jarvis teen check-ins: a teen's one-tap answers are family data.
         TeenCheckin,
+        # UX-D4b mystery box: the family's jar and each kid's boxes.
+        MysterySurprise,
+        MysteryBox,
         Routine,
         Reward,
         RewardRedemption,
@@ -353,6 +357,8 @@ class FamilyExportService:
         badges = await _rows(db, fam(UserBadge))
         quests = await _rows(db, fam(WeeklyQuest))
         teen_checkins = await _rows(db, fam(TeenCheckin))
+        mystery_surprises = await _rows(db, fam(MysterySurprise))
+        mystery_boxes = await _rows(db, fam(MysteryBox))
         routines = await _rows(db, fam(Routine))
         _routine_ids = [r.id for r in routines]
         routine_steps = (
@@ -514,6 +520,8 @@ class FamilyExportService:
             "bank/savings_goals.json": _dump(savings_goals),
             "progress/badges.json": _dump(badges),
             "progress/quests.json": _dump(quests),
+            "progress/mystery_surprises.json": _dump(mystery_surprises),
+            "progress/mystery_boxes.json": _dump(mystery_boxes),
             "routines/routines.json": _dump(routines),
             "routines/steps.json": _dump(routine_steps),
             "routines/progress.json": _dump(routine_progress),

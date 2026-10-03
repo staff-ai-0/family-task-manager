@@ -50,6 +50,10 @@ class Family(Base):
     # When a parent last answered (on, off, or back to undecided). The record
     # of the consent itself: cheap to keep now, impossible to backfill later.
     teen_checkin_decided_at = Column(DateTime(timezone=True), nullable=True)
+    # UX-D4b mystery box: points maximum for the fallback bonus. NULL = an
+    # existing family that has not decided (boxes off; one-time parent-hub
+    # card), 0 = off by choice, > 0 = on. New families default to 20.
+    mystery_box_points = Column(Integer, nullable=True, default=20, server_default="20")
     # Optional per-family module registry: list of ENABLED togglable module
     # keys (see app.core.modules.TOGGLABLE_MODULES). NULL = all modules on
     # (the pre-feature default). Core surfaces (tasks/rewards/points/bank

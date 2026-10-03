@@ -63,6 +63,7 @@ from app.models.routine import Routine, RoutineStep, RoutineProgress
 from app.models.user_badge import UserBadge
 from app.models.weekly_quest import WeeklyQuest
 from app.models.teen_checkin import TeenCheckin
+from app.models.mystery import MysteryBox, MysterySurprise
 from app.models.operator_audit import OperatorAuditLog  # noqa: F401
 
 __all__ = [
@@ -152,6 +153,8 @@ __all__ = [
     "UserBadge",
     "WeeklyQuest",
     "TeenCheckin",
+    "MysteryBox",
+    "MysterySurprise",
     # Enums
     "UserRole",
     "AssignmentStatus",
