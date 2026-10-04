@@ -1,0 +1,205 @@
+---
+import PageLayout from "@components/ui/PageLayout.astro";
+import UpgradePrompt from "@components/UpgradePrompt.astro";
+import { apiFetch } from "../../../lib/api";
+import { isFreePlan } from "../../../lib/plan";
+import { CHART_COPY } from "../../../lib/chartScan";
+import { buttonClass } from "../../../lib/buttonClasses";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+// Paid-only (ai_features). Fail-open; the backend enforces.
+const aiLocked = await isFreePlan(token);
+const { data: members } = await apiFetch<any[]>(`/api/families/${user.family_id}/members`, { token });
+const kids = (Array.isArray(members) ? members : [])
+    .filter((m: any) => String(m.role).toLowerCase() !== "parent")
+    .map((m: any) => ({ id: String(m.id), name: String(m.name) }));
+const c = CHART_COPY;
+---
+
+<PageLayout
+    title={c.title[lang]}
+    tone="sky"
+    backHref="/parent/tasks"
+    backLabel={lang === "es" ? "Volver a tareas" : "Back to chores"}
+    role={user.role}
+    active="parent"
+    lang={lang}
+    mainClass="flex-1 px-4 py-6 space-y-4"
+>
+    <p slot="header-extra" class="text-brand-ink text-sm mt-1">{c.subtitle[lang]}</p>
+
+    {aiLocked && <UpgradePrompt feature="ai_features" planNeeded="Plus" lang={lang} />}
+
+    <div id="scan-root" data-lang={lang} data-kids={JSON.stringify(kids)}>
+        <p id="error-box" hidden class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl"></p>
+
+        <label id="picker" hidden={aiLocked}
+               class="block bg-brand-cream rounded-2xl border-2 border-dashed border-brand-ink/30 p-10 text-center cursor-pointer hover:border-brand-ink transition-colors">
+            <input type="file" id="scan-file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" class="hidden" />
+            <span class="text-5xl" aria-hidden="true">📷</span>
+            <p class="mt-3 text-sm font-semibold text-brand-ink">{c.pick[lang]}</p>
+            <p class="text-xs text-brand-ink-soft mt-1">JPG · PNG · WebP · PDF</p>
+        </label>
+
+        <div id="scanning" hidden class="bg-brand-cream rounded-2xl p-6 text-center border border-brand-ink/10">
+            <div class="inline-block animate-spin h-8 w-8 border-4 border-brand-ink/20 border-t-brand-ink rounded-full"></div>
+            <p class="mt-3 text-sm text-brand-ink-soft">{c.scanning[lang]}</p>
+        </div>
+
+        <div id="results" hidden class="space-y-3">
+            <h2 id="results-heading" class="font-bold text-brand-ink px-1"></h2>
+            <div id="rows" class="space-y-3"></div>
+            <button type="button" id="create-btn" class={`w-full ${buttonClass("primary", "md")}`}></button>
+            <p id="done-box" hidden class="p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-text text-sm rounded-xl">
+                <span id="done-text"></span> · <a href="/parent/tasks" class="font-bold underline">{c.back[lang]}</a>
+            </p>
+        </div>
+    </div>
+</PageLayout>
+
+<script>
+    import { CHART_COPY, DAY_LABELS, fill, isUnreadable, proposalRows, templateBody, type Kid, type Row } from "../../../lib/chartScan";
+    import { showToast } from "../../../lib/toast";
+
+    const root = document.getElementById("scan-root");
+    if (root) {
+        const lang = root.dataset.lang === "en" ? "en" : "es";
+        const kids: Kid[] = (() => { try { return JSON.parse(root.dataset.kids ?? "[]"); } catch { return []; } })();
+        const c = CHART_COPY;
+        const $ = (id: string) => document.getElementById(id)!;
+        const fileInput = $("scan-file") as HTMLInputElement;
+        const errorBox = $("error-box"), scanning = $("scanning"), results = $("results"), rowsEl = $("rows");
+        const heading = $("results-heading"), createBtn = $("create-btn") as HTMLButtonElement, doneBox = $("done-box"), doneText = $("done-text");
+        let rows: Row[] = [];
+        const created = new Set<string>();
+
+        const fail = (msg: string) => { errorBox.textContent = msg; errorBox.removeAttribute("hidden"); };
+        const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
+            const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n;
+        };
+
+        const render = () => {
+            rowsEl.replaceChildren();
+            const live = rows.filter((r) => !created.has(r.key));
+            for (const row of live) {
+                const card = el("div", "bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)] space-y-2");
+                card.dataset.rowKey = row.key;
+                const top = el("div", "flex items-start gap-3");
+                const check = el("input") as HTMLInputElement; check.type = "checkbox"; check.checked = row.checked; check.className = "mt-2 h-5 w-5 rounded";
+                check.addEventListener("change", () => { row.checked = check.checked; syncButton(); });
+                const title = el("input") as HTMLInputElement; title.type = "text"; title.value = row.title; title.maxLength = 200;
+                title.className = "flex-1 px-2 py-1.5 rounded-lg border border-brand-ink/20 bg-white text-sm text-brand-ink";
+                title.addEventListener("input", () => { row.title = title.value; });
+                top.append(check, title);
+                card.append(top);
+
+                const meta = el("div", "flex flex-wrap items-center gap-2 text-xs text-brand-ink");
+                const pts = el("input") as HTMLInputElement; pts.type = "number"; pts.min = "0"; pts.max = "1000"; pts.value = String(row.points);
+                pts.className = "w-16 px-2 py-1 rounded-lg border border-brand-ink/20 bg-white text-sm";
+                pts.addEventListener("input", () => { row.points = Number(pts.value); });
+                meta.append(pts, el("span", "", c.points[lang]));
+                const bonusLabel = el("label", "flex items-center gap-1 ml-2");
+                const bonus = el("input") as HTMLInputElement; bonus.type = "checkbox"; bonus.checked = row.isBonus;
+                bonus.addEventListener("change", () => { row.isBonus = bonus.checked; });
+                bonusLabel.append(bonus, el("span", "", c.bonus[lang]));
+                meta.append(bonusLabel);
+                card.append(meta);
+
+                const kidsRow = el("div", "flex flex-wrap gap-1");
+                for (const kid of kids) {
+                    const chip = el("button", "", kid.name) as HTMLButtonElement; chip.type = "button";
+                    const paint = () => { chip.className = `px-3 py-1 rounded-full text-xs font-semibold border ${row.kidIds.includes(kid.id) ? "bg-brand-sky text-brand-ink border-brand-ink" : "bg-white text-brand-ink border-brand-ink/20"}`; };
+                    chip.addEventListener("click", () => { row.kidIds = row.kidIds.includes(kid.id) ? row.kidIds.filter((k) => k !== kid.id) : [...row.kidIds, kid.id]; paint(); anyone.toggleAttribute("hidden", row.kidIds.length > 0); });
+                    paint(); kidsRow.append(chip);
+                }
+                const anyone = el("span", "text-xs text-brand-ink-soft self-center", c.anyone[lang]); anyone.toggleAttribute("hidden", row.kidIds.length > 0);
+                kidsRow.append(anyone);
+                card.append(kidsRow);
+
+                const daysRow = el("div", "flex gap-1");
+                DAY_LABELS[lang].forEach((label, d) => {
+                    const b = el("button", "", label) as HTMLButtonElement; b.type = "button"; b.setAttribute("aria-label", `day ${d}`);
+                    const paint = () => { b.className = `h-8 w-8 rounded-full text-xs font-bold border ${row.days.includes(d) ? "bg-brand-sky text-brand-ink border-brand-ink" : "bg-white text-brand-ink-soft border-brand-ink/20"}`; };
+                    b.addEventListener("click", () => { row.days = row.days.includes(d) ? row.days.filter((x) => x !== d) : [...row.days, d]; paint(); });
+                    paint(); daysRow.append(b);
+                });
+                card.append(daysRow);
+
+                if (row.duplicate) card.append(el("p", "text-xs font-bold text-brand-coral-text", c.exists[lang]));
+                if (row.unmatched.length) card.append(el("p", "text-xs text-brand-ink-soft", fill(c.unmatched[lang], { names: row.unmatched.join(", ") })));
+                const err = el("p", "text-xs text-red-700"); err.setAttribute("data-row-error", ""); err.setAttribute("hidden", "");
+                card.append(err);
+                rowsEl.append(card);
+            }
+            syncButton();
+        };
+
+        const syncButton = () => {
+            const n = rows.filter((r) => r.checked && !created.has(r.key)).length;
+            createBtn.textContent = fill(c.create[lang], { n });
+            createBtn.disabled = n === 0;
+        };
+
+        fileInput.addEventListener("change", async () => {
+            const file = fileInput.files?.[0];
+            if (!file) return;
+            errorBox.setAttribute("hidden", ""); results.setAttribute("hidden", ""); doneBox.setAttribute("hidden", "");
+            scanning.removeAttribute("hidden");
+            const fd = new FormData(); fd.append("file", file);
+            try {
+                const r = await fetch("/api/task-templates/scan-chart", { method: "POST", body: fd, credentials: "same-origin" });
+                scanning.setAttribute("hidden", "");
+                if (!r.ok) { fail(r.status === 502 ? c.unreadable[lang] : c.failed[lang]); return; }
+                const data = await r.json();
+                if (isUnreadable(data)) { fail(c.unreadable[lang]); return; }
+                rows = proposalRows(data); created.clear();
+                heading.textContent = fill(c.found[lang], { n: rows.length });
+                render();
+                results.removeAttribute("hidden");
+            } catch {
+                scanning.setAttribute("hidden", "");
+                fail(c.failed[lang]);
+            } finally {
+                fileInput.value = "";
+            }
+        });
+
+        createBtn.addEventListener("click", async () => {
+            createBtn.disabled = true;
+            let ok = 0;
+            for (const row of rows) {
+                if (!row.checked) continue;
+                if (created.has(row.key)) continue;
+                const card = rowsEl.querySelector<HTMLElement>(`[data-row-key="${row.key}"]`);
+                const err = card?.querySelector<HTMLElement>("[data-row-error]");
+                try {
+                    const r = await fetch("/api/task-templates/", {
+                        method: "POST", credentials: "same-origin",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(templateBody(row)),
+                    });
+                    if (!r.ok) {
+                        const body = await r.json().catch(() => null);
+                        const detail = body && typeof body.detail === "string" ? body.detail : c.failed[lang];
+                        if (err) { err.textContent = detail; err.removeAttribute("hidden"); }
+                        continue;
+                    }
+                    created.add(row.key); ok += 1;
+                } catch {
+                    if (err) { err.textContent = c.failed[lang]; err.removeAttribute("hidden"); }
+                }
+            }
+            render();
+            if (ok) { doneText.textContent = fill(c.done[lang], { n: ok }); doneBox.removeAttribute("hidden"); showToast(fill(c.done[lang], { n: ok }), "success"); }
+        });
+    }
+</script>
