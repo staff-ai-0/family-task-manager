@@ -14,7 +14,7 @@ from app.core.exceptions import ValidationError
 from app.core.premium import require_feature
 from app.core.rate_limiter import limiter, AI_LIMIT
 from app.core.type_utils import to_uuid_required
-from app.core.upload_validation import read_upload_capped
+from app.core.upload_validation import ALLOWED_SCAN_TYPES, MAX_SCAN_BYTES, read_upload_capped
 from app.models import User
 from app.schemas.calendar_event import (
     CalendarEventCreate,
@@ -25,14 +25,6 @@ from app.services.calendar_scanner_service import scan_calendar_document
 from app.services.calendar_service import CalendarService
 
 
-ALLOWED_SCAN_TYPES = {
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/gif",
-    "application/pdf",
-}
-MAX_SCAN_BYTES = 8 * 1024 * 1024  # 8 MB
 
 
 router = APIRouter()

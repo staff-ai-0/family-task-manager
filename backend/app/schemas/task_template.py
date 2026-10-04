@@ -223,3 +223,23 @@ class TranslateResponse(BaseModel):
     description: Optional[str] = None
     source_lang: str
     target_lang: str
+
+
+class ScannedChoreOut(BaseModel):
+    """UX-E1: one proposal read off a chore chart. Nothing here is stored —
+    the review page creates the ticked ones with TaskTemplateCreate."""
+    title: str
+    points: int
+    is_bonus: bool
+    days_of_week: List[int]
+    assignee_names: List[str]
+    assigned_user_ids: List[UUID]
+    unmatched_names: List[str]
+    duplicate_of: Optional[UUID] = None
+    description: Optional[str] = None
+
+
+class ScanChartResponse(BaseModel):
+    doc_type: str
+    confidence: float
+    chores: List[ScannedChoreOut]

@@ -6,16 +6,21 @@ Includes auto-translation endpoint for bilingual support.
 """
 
 import logging
-from fastapi import APIRouter, Depends, status, Query, HTTPException, Request
+from fastapi import APIRouter, Depends, File, status, Query, HTTPException, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from uuid import UUID
 
 from app.core.database import get_db
+from app.core.exceptions import ValidationError
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.premium import require_feature
 from app.core.rate_limiter import limiter, AI_LIMIT
 from app.core.type_utils import to_uuid_required
+from app.core.upload_validation import ALLOWED_SCAN_TYPES, MAX_SCAN_BYTES, read_upload_capped
+from app.models.user import APPROVAL_APPROVED
+from app.services.chart_scanner_service import Member, fold, scan_chore_chart
+from app.services.family_service import FamilyService
 from app.services.task_template_service import TaskTemplateService
 from app.services.translation_service import TranslationService
 from app.schemas.task_template import (
@@ -25,6 +30,8 @@ from app.schemas.task_template import (
     TranslateRequest,
     TranslateTextRequest,
     TranslateResponse,
+    ScanChartResponse,
+    ScannedChoreOut,
 )
 from app.models import User
 
@@ -64,6 +71,55 @@ async def create_template(
         created_by=to_uuid_required(current_user.id),
     )
     return template
+
+
+@router.post("/scan-chart", response_model=ScanChartResponse)
+@limiter.limit(AI_LIMIT)
+async def scan_chart(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """UX-E1: read a chore chart (or list) photo into proposed recurring
+    chores. Returns proposals for the parent to review; nothing is stored —
+    the browser creates the ticked ones through POST /api/task-templates/."""
+    # Plan gate BEFORE the upload is read: this burns LLM tokens.
+    await require_feature("ai_features", db, current_user)
+    if file.content_type not in ALLOWED_SCAN_TYPES:
+        raise HTTPException(status_code=415, detail=f"Unsupported file type: {file.content_type}")
+    payload = await read_upload_capped(file, MAX_SCAN_BYTES)
+    if not payload:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    family_id = to_uuid_required(current_user.family_id)
+    # Participating members only: a deactivated account or a join-code signup
+    # still awaiting approval must not be matched (nor shown to the model).
+    members = [
+        Member(m.id, m.name, str(getattr(m.role, "value", m.role)).lower())
+        for m in await FamilyService.get_family_members(db, family_id)
+        if m.is_active and m.approval_status == APPROVAL_APPROVED
+    ]
+    existing = {
+        fold(t.title): t.id
+        for t in await TaskTemplateService.list_templates(db, family_id, is_active=True)
+    }
+    try:
+        result = await scan_chore_chart(payload, file.content_type, members, existing, current_user.preferred_lang or "es")
+    except ValidationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    return ScanChartResponse(
+        doc_type=result.doc_type,
+        confidence=result.confidence,
+        chores=[
+            ScannedChoreOut(
+                title=c.title, points=c.points, is_bonus=c.is_bonus, days_of_week=c.days_of_week,
+                assignee_names=c.assignee_names, assigned_user_ids=c.assigned_user_ids,
+                unmatched_names=c.unmatched_names, duplicate_of=c.duplicate_of, description=c.description,
+            )
+            for c in result.chores
+        ],
+    )
 
 
 @router.get("/{template_id}", response_model=TaskTemplateResponse)

@@ -154,13 +154,20 @@ function freqLabel(tmpl: any): string {
     lang={lang}
     mainClass="flex-1 px-4 py-6 space-y-6"
 >
+    <div slot="actions" class="flex items-center gap-2">
+    <a
+        href="/parent/tasks/scan"
+        class="press h-10 w-10 rounded-full bg-brand-cream border-2 border-brand-ink shadow-[var(--shadow-card)] text-brand-ink flex items-center justify-center text-lg"
+        aria-label={lang === "es" ? "Escanear tablero" : "Scan a chart"}
+        title={lang === "es" ? "Escanear tablero" : "Scan a chart"}
+    >📷</a>
     <button
-        slot="actions"
         id="tcm-trigger"
         data-tour="task-fab"
         class="press h-10 w-10 rounded-full bg-brand-sky-deep border-2 border-brand-ink shadow-[var(--shadow-card)] text-brand-ink flex items-center justify-center text-xl font-bold flex-shrink-0"
         aria-label={lang === "es" ? "Nueva tarea" : "New task"}
     >+</button>
+    </div>
     <p slot="header-extra" class="text-brand-ink text-sm mt-1 font-sans">
         {t(lang, "pt_templates_in_family")(templateList.length)}
     </p>
@@ -268,13 +275,22 @@ function freqLabel(tmpl: any): string {
                 <h2 class="font-bold text-brand-ink mb-3 px-1">{t(lang, "pt_all_templates")}</h2>
                 <div id="template-list-container" class="space-y-3">
                     {templateList.length === 0 ? (
-                        <EmptyState
-                            icon="📋"
-                            title={lang === "es" ? "Ninguna tarea todavía" : "No tasks yet"}
-                            subtitle={lang === "es" ? "Crea la primera para empezar" : "Create the first one to get started"}
-                            ctaLabel={lang === "es" ? "+ Crear tarea" : "+ Create task"}
-                            ctaId="tcm-trigger"
-                        />
+                        <>
+                            <EmptyState
+                                icon="📋"
+                                title={lang === "es" ? "Ninguna tarea todavía" : "No tasks yet"}
+                                subtitle={lang === "es" ? "Crea la primera para empezar" : "Create the first one to get started"}
+                                ctaLabel={lang === "es" ? "+ Crear tarea" : "+ Create task"}
+                                ctaId="tcm-trigger"
+                            />
+                            {templateList.length === 0 && (
+                                <p class="text-center text-sm text-brand-ink-soft mt-2">
+                                    <a href="/parent/tasks/scan" class="font-semibold text-brand-sky-text hover:underline">
+                                        📷 {lang === "es" ? "Escanear tablero del refri" : "Scan the fridge chart"}
+                                    </a>
+                                </p>
+                            )}
+                        </>
                     ) : (
                         templateList.map((tmpl: any) => (
                             <div class={`bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border ${tmpl.is_active ? "border-brand-ink/10" : "border-brand-ink/10 opacity-60"}`}>

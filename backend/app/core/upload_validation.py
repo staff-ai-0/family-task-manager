@@ -127,3 +127,9 @@ async def read_upload_capped(file: UploadFile, max_bytes: int) -> bytes:
             )
         chunks.append(chunk)
     return b"".join(chunks)
+
+
+# Shared by the document scanners (calendar flyers, chore charts): the file
+# types Claude vision accepts here, and a hard cap read in chunks.
+ALLOWED_SCAN_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"}
+MAX_SCAN_BYTES = 8 * 1024 * 1024  # 8 MB
