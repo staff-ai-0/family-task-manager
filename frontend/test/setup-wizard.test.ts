@@ -140,6 +140,14 @@ describe("createAll", () => {
         expect(second).toEqual({ chores: 0, rewards: 1, gigs: 0 });
         expect(r.rewards[0]).toMatchObject({ status: "done", error: null });
     });
+    it("a second run after everything was created posts nothing", async () => {
+        const r = review();
+        await createAll(r, "en", async () => ({ ok: true, detail: null }));
+        const seen: string[] = [];
+        const again = await createAll(r, "en", async (path) => { seen.push(path); return { ok: true, detail: null }; });
+        expect(seen).toEqual([]);
+        expect(again).toEqual({ chores: 0, rewards: 0, gigs: 0 });
+    });
     it("a thrown post becomes the generic error and progress is reported", async () => {
         const r = review();
         const steps: Array<[number, number]> = [];
