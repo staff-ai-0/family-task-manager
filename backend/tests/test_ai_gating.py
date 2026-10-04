@@ -77,6 +77,36 @@ async def test_recipe_import_plus_allowed(
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
+async def test_scan_chart_free_403(client: AsyncClient, auth_headers):
+    r = await client.post(
+        "/api/task-templates/scan-chart",
+        files={"file": ("chart.png", b"\x89PNG fake", "image/png")},
+        headers=auth_headers,
+    )
+    _assert_upgrade_required(r)
+
+
+@pytest.mark.asyncio
+async def test_scan_chart_plus_allowed(client: AsyncClient, auth_headers, plus_subscription, monkeypatch):
+    from unittest.mock import MagicMock, patch
+    from app.core import config
+    monkeypatch.setattr(config.settings, "LITELLM_API_KEY", "test-key")
+    with patch("app.core.llm.OpenAI") as mock_openai:
+        msg = MagicMock(); msg.content = '{"doc_type": "list", "confidence": 0.7, "chores": [{"title": "Make bed"}]}'
+        choice = MagicMock(); choice.message = msg
+        completion = MagicMock(); completion.choices = [choice]
+        c = MagicMock(); c.chat.completions.create.return_value = completion
+        mock_openai.return_value = c
+        r = await client.post(
+            "/api/task-templates/scan-chart",
+            files={"file": ("chart.png", b"\x89PNG fake", "image/png")},
+            headers=auth_headers,
+        )
+    assert r.status_code == 200, r.text
+    assert r.json()["chores"][0]["title"] == "Make bed"
+
+
+@pytest.mark.asyncio
 async def test_auto_categorize_free_403(client: AsyncClient, auth_headers):
     r = await client.post(
         "/api/budget/transactions/auto-categorize", headers=auth_headers
