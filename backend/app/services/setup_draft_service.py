@@ -11,14 +11,27 @@ import logging
 import re
 from datetime import date
 from typing import Any, Optional
+from uuid import UUID
 
+from fastapi.concurrency import run_in_threadpool
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
+from app.core.llm import CATEGORIZER_MODEL, get_llm_client
+from app.core.metrics import record_llm_call
+from app.core.premium import family_tier_allows
 from app.data.starter_packs import STARTER_PACKS
-from app.models.gig import GigCategory
+from app.models.gig import GigCategory, GigOffering
+from app.models.reward import Reward
+from app.models.task_template import TaskTemplate
+from app.models.user import APPROVAL_APPROVED
 from app.schemas.setup_draft import (
-    REWARD_STYLES, ChoreDraft, GigDraft, KidDraft, RewardDraft, SetupDraftRequest,
+    REWARD_STYLES, ChoreDraft, GigDraft, KidDraft, RewardDraft, SetupDraftRequest, SetupDraftResponse,
 )
 from app.services.chart_scanner_service import normalize_days
-from app.services.name_match import fold
+from app.services.family_service import FamilyService
+from app.services.name_match import Member, fold, match_members
 
 logger = logging.getLogger(__name__)
 
@@ -259,3 +272,86 @@ def mark_duplicates(
         r.duplicate_of = reward_titles.get(fold(r.title))
     for g in gigs:
         g.duplicate_of = gig_titles.get(fold(g.title))
+
+
+# ── The service ──────────────────────────────────────────────────────────────
+
+_KID_ROLES = ("child", "teen")
+
+
+async def _ai_draft(req: SetupDraftRequest) -> tuple[list[KidDraft], list[RewardDraft], list[GigDraft]]:
+    client = get_llm_client()
+    prompt = build_prompt(req)
+    record_llm_call()
+    completion = await run_in_threadpool(
+        lambda: client.chat.completions.create(
+            model=CATEGORIZER_MODEL,
+            max_tokens=3072,
+            temperature=0.4,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+        )
+    )
+    return parse_draft((completion.choices[0].message.content or "").strip(), req)
+
+
+class SetupDraftService:
+    @staticmethod
+    async def draft(db: AsyncSession, family_id: UUID, req: SetupDraftRequest) -> SetupDraftResponse:
+        # Only kids who take part: active, approved, CHILD or TEEN. A parent is
+        # never a binding candidate, whatever name or id the client sends.
+        members = [
+            Member(m.id, m.name, str(getattr(m.role, "value", m.role)).lower())
+            for m in await FamilyService.get_family_members(db, family_id)
+            if m.is_active and m.approval_status == APPROVAL_APPROVED
+            and str(getattr(m.role, "value", m.role)).lower() in _KID_ROLES
+        ]
+        by_id = {m.id for m in members}
+        bound = []
+        for kid in req.kids:
+            member_id = kid.member_id if kid.member_id in by_id else None
+            if member_id is None:
+                ids, _ = match_members([kid.name], members)
+                member_id = ids[0] if ids else None
+            bound.append(kid.model_copy(update={"member_id": member_id}))
+        req = req.model_copy(update={"kids": bound})
+
+        ai_available = bool(settings.LITELLM_API_KEY) and await family_tier_allows(db, family_id, "ai_features")
+        source = "pack"
+        ai_failed = False
+        kids = rewards = gigs = None
+        if ai_available:
+            try:
+                kids, rewards, gigs = await _ai_draft(req)
+                source = "ai"
+            except Exception as exc:  # transport, timeout, DraftParseError — the pack is the answer
+                logger.warning("setup draft: AI path failed, using starter packs: %s", exc)
+                ai_failed = True
+        if source == "pack":
+            kids, rewards, gigs = pack_draft(req)
+
+        chore_titles: dict[str, str] = {}
+        for title, title_es in (await db.execute(
+            select(TaskTemplate.title, TaskTemplate.title_es)
+            .where(TaskTemplate.family_id == family_id, TaskTemplate.is_active.is_(True))
+        )).all():
+            for t in (title, title_es):
+                if t:
+                    chore_titles.setdefault(fold(t), t)
+        reward_titles = {
+            fold(t): t for t in (await db.execute(
+                select(Reward.title).where(Reward.family_id == family_id, Reward.is_active.is_(True))
+            )).scalars() if t
+        }
+        gig_titles = {
+            fold(t): t for t in (await db.execute(
+                select(GigOffering.title).where(GigOffering.family_id == family_id, GigOffering.is_active.is_(True))
+            )).scalars() if t
+        }
+        mark_duplicates(kids, rewards, gigs, chore_titles, reward_titles, gig_titles)
+        return SetupDraftResponse(
+            source=source, ai_available=ai_available, ai_failed=ai_failed,
+            kids=kids, rewards=rewards, gigs=gigs,
+        )

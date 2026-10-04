@@ -170,3 +170,135 @@ class TestDuplicates:
         assert kids[0].chores[0].duplicate_of == "Feed the pet"
         assert any(r.duplicate_of == "30 minutes of screen time" for r in rewards)
         assert all(g.duplicate_of is None for g in gigs)
+from unittest.mock import MagicMock, patch
+from uuid import UUID
+
+import pytest_asyncio
+
+from app.models.gig import GigCategory, GigOffering
+from app.models.reward import Reward, RewardCategory
+from app.models.task_template import AssignmentType, TaskTemplate
+from app.models.user import APPROVAL_PENDING, User, UserRole
+from app.schemas.setup_draft import SetupDraftResponse
+from app.services.setup_draft_service import SetupDraftService
+
+
+def _completion(text):
+    msg = MagicMock(); msg.content = text
+    choice = MagicMock(); choice.message = msg
+    completion = MagicMock(); completion.choices = [choice]
+    return completion
+
+
+@pytest_asyncio.fixture
+async def kids(db_session, test_family):
+    from app.core.security import get_password_hash
+    rows = [
+        User(email="sofia@test.com", name="Sofía Martínez", password_hash=get_password_hash("password123"),
+             role=UserRole.CHILD, family_id=test_family.id, is_active=True, email_verified=True),
+        User(email="pending@test.com", name="Pepe", password_hash=get_password_hash("password123"),
+             role=UserRole.CHILD, family_id=test_family.id, is_active=True, email_verified=True,
+             approval_status=APPROVAL_PENDING),
+    ]
+    db_session.add_all(rows)
+    await db_session.commit()
+    for r in rows:
+        await db_session.refresh(r)
+    return rows
+
+
+class TestService:
+    @pytest.mark.asyncio
+    async def test_free_family_gets_pack_and_never_builds_the_client(self, db_session, test_family, kids, monkeypatch):
+        from app.core import config
+        monkeypatch.setattr(config.settings, "LITELLM_API_KEY", "test-key")
+        with patch("app.core.llm.OpenAI") as mock_openai:
+            out = await SetupDraftService.draft(db_session, test_family.id, _req())
+        assert isinstance(out, SetupDraftResponse)
+        assert out.source == "pack" and out.ai_available is False and out.ai_failed is False
+        mock_openai.assert_not_called()
+        assert out.kids[0].chores
+
+    @pytest.mark.asyncio
+    async def test_paid_family_uses_the_ai_reply(self, db_session, test_family, kids, plus_subscription, monkeypatch):
+        from app.core import config
+        monkeypatch.setattr(config.settings, "LITELLM_API_KEY", "test-key")
+        reply = _reply(kids=[{"name": "Sofía", "chores": [{"title": "Walk the dog", "points": 12}]}],
+                       rewards=[{"title": "Movie night", "points_cost": 40, "category": "activities"}])
+        with patch("app.core.llm.OpenAI") as mock_openai:
+            c = MagicMock(); c.chat.completions.create.return_value = _completion(reply)
+            mock_openai.return_value = c
+            out = await SetupDraftService.draft(db_session, test_family.id, _req())
+        assert out.source == "ai" and out.ai_available is True and out.ai_failed is False
+        assert out.kids[0].chores[0].title == "Walk the dog" and out.rewards[0].title == "Movie night"
+        kwargs = c.chat.completions.create.call_args.kwargs
+        assert kwargs["messages"][0]["role"] == "system" and "Sofía" in kwargs["messages"][1]["content"]
+
+    @pytest.mark.asyncio
+    async def test_ai_failure_falls_back_to_pack_with_flag(self, db_session, test_family, kids, plus_subscription, monkeypatch):
+        from app.core import config
+        monkeypatch.setattr(config.settings, "LITELLM_API_KEY", "test-key")
+        with patch("app.core.llm.OpenAI") as mock_openai:
+            c = MagicMock(); c.chat.completions.create.side_effect = RuntimeError("boom")
+            mock_openai.return_value = c
+            out = await SetupDraftService.draft(db_session, test_family.id, _req())
+        assert out.source == "pack" and out.ai_available is True and out.ai_failed is True
+        assert out.kids[0].chores
+        with patch("app.core.llm.OpenAI") as mock_openai:
+            c = MagicMock(); c.chat.completions.create.return_value = _completion("Sorry, no.")
+            mock_openai.return_value = c
+            out = await SetupDraftService.draft(db_session, test_family.id, _req())
+        assert out.source == "pack" and out.ai_failed is True
+
+    @pytest.mark.asyncio
+    async def test_no_llm_key_means_ai_unavailable_even_when_paid(self, db_session, test_family, kids, plus_subscription, monkeypatch):
+        from app.core import config
+        monkeypatch.setattr(config.settings, "LITELLM_API_KEY", "")
+        with patch("app.core.llm.OpenAI") as mock_openai:
+            out = await SetupDraftService.draft(db_session, test_family.id, _req())
+        assert out.source == "pack" and out.ai_available is False
+        mock_openai.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_binds_members_by_name_and_by_id_but_not_foreign_or_pending(self, db_session, test_family, kids):
+        sofia, pepe = kids
+        out = await SetupDraftService.draft(db_session, test_family.id, _req(kids=[
+            {"name": "sofia", "age_band": "6-8"},                                   # by first name
+            {"name": "Nobody", "age_band": "9-12", "member_id": str(sofia.id)},   # by explicit id
+            {"name": "Pepe", "age_band": "9-12"},                                  # pending → unbound
+            {"name": "Ghost", "age_band": "13+", "member_id": str(uuid4())},     # foreign id → unbound
+        ]))
+        assert [k.member_id for k in out.kids] == [sofia.id, sofia.id, None, None]
+
+    @pytest.mark.asyncio
+    async def test_draft_never_binds_a_parent(self, db_session, test_family, test_parent_user, kids):
+        out = await SetupDraftService.draft(db_session, test_family.id, _req(kids=[
+            {"name": test_parent_user.name, "age_band": "13+"},
+            {"name": "x", "age_band": "13+", "member_id": str(test_parent_user.id)},
+        ]))
+        assert [k.member_id for k in out.kids] == [None, None]
+
+    @pytest.mark.asyncio
+    async def test_duplicates_marked_against_active_family_rows_only(self, db_session, test_family, test_parent_user, kids):
+        other = test_family.__class__(name="Other")
+        db_session.add(other); await db_session.commit(); await db_session.refresh(other)
+        db_session.add_all([
+            TaskTemplate(title="Feed the pet", points=5, interval_days=1, assignment_type=AssignmentType.AUTO,
+                         is_bonus=False, is_active=True, family_id=test_family.id),
+            TaskTemplate(title="Do homework without reminders", points=5, interval_days=1, assignment_type=AssignmentType.AUTO,
+                         is_bonus=False, is_active=False, family_id=test_family.id),            # inactive → not a duplicate
+            TaskTemplate(title="Pack your school bag for tomorrow", points=5, interval_days=1, assignment_type=AssignmentType.AUTO,
+                         is_bonus=False, is_active=True, family_id=other.id),                   # other family → not a duplicate
+            Reward(title="30 MINUTES of screen time", points_cost=15, category=RewardCategory.SCREEN_TIME,
+                   family_id=test_family.id, is_active=True),
+            GigOffering(title="Help wash the car", points=30, difficulty=2, category=GigCategory.CHORES,
+                        family_id=test_family.id, created_by=test_parent_user.id, is_active=True),
+        ])
+        await db_session.commit()
+        out = await SetupDraftService.draft(db_session, test_family.id, _req())
+        by_title = {c.title: c.duplicate_of for c in out.kids[0].chores}
+        assert by_title["Feed the pet"] == "Feed the pet"
+        assert by_title["Do homework without reminders"] is None
+        assert by_title["Pack your school bag for tomorrow"] is None
+        assert any(r.duplicate_of == "30 MINUTES of screen time" for r in out.rewards)
+        assert any(g.duplicate_of == "Help wash the car" for g in out.gigs)
