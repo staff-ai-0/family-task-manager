@@ -89,6 +89,29 @@ class TestScan:
         assert c["assigned_user_ids"] == [] and c["unmatched_names"] == ["Zoe"] and c["duplicate_of"] is None
         assert "Zoe" not in llm.chat.completions.create.call_args.kwargs["messages"][0]["content"][1]["text"]
 
+    async def test_inactive_and_unapproved_members_are_never_matched_nor_shown_to_the_model(
+        self, client, db_session, auth_headers, plus_subscription, test_family, monkeypatch,
+    ):
+        from app.core import config
+        from app.models.user import APPROVAL_PENDING
+        monkeypatch.setattr(config.settings, "LITELLM_API_KEY", "test-key")
+        db_session.add_all([
+            User(email="ghost@test.com", password_hash="x", name="Ghost", role=UserRole.CHILD, family_id=test_family.id,
+                 email_verified=True, points=0, is_active=False),
+            User(email="pending@test.com", password_hash="x", name="Pending", role=UserRole.CHILD, family_id=test_family.id,
+                 email_verified=True, points=0, approval_status=APPROVAL_PENDING),
+        ])
+        await db_session.commit()
+        patcher, llm = _vision({"confidence": 0.8, "chores": [{"title": "Sweep", "assignees": ["Ghost", "Pending"]}]})
+        try:
+            r = await client.post(URL, files={"file": ("c.jpg", b"img", "image/jpeg")}, headers=auth_headers)
+        finally:
+            patcher.stop()
+        c = r.json()["chores"][0]
+        assert c["assigned_user_ids"] == [] and sorted(c["unmatched_names"]) == ["Ghost", "Pending"]
+        prompt = llm.chat.completions.create.call_args.kwargs["messages"][0]["content"][1]["text"]
+        assert "Ghost" not in prompt and "Pending" not in prompt
+
     async def test_upload_rules(self, client, auth_headers, plus_subscription, monkeypatch):
         from app.core import config
         monkeypatch.setattr(config.settings, "LITELLM_API_KEY", "test-key")
