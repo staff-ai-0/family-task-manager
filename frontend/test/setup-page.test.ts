@@ -51,3 +51,12 @@ describe("/parent/setup page", () => {
         expect(proxy).toMatch(/Authorization: `Bearer \$\{token\}`/);
     });
 });
+describe("SetupCard entry", () => {
+    const card = read("../src/components/home/SetupCard.astro");
+    it("points the main setup link at the wizard, both languages", () => {
+        expect(card).toMatch(/href="\/parent\/setup"/);
+        expect(card).not.toMatch(/href="\/parent\/starter-packs"/);
+        expect(card).toContain("Configura tu familia en 2 minutos");
+        expect(card).toContain("Set up your family in 2 minutes");
+    });
+});
