@@ -40,6 +40,7 @@ export const SETUP_COPY = {
     noJoinCode: { es: "Generar código", en: "Generate code" },
     rotationHint: { es: "Hasta que {name} se una, sus tareas van a la rotación compartida. Asígnalas desde Tareas cuando esté dentro.", en: "Until {name} joins, these chores go into the shared rotation. Assign them from Tasks once {name} is in." },
     createAccount: { es: "Crear su cuenta ahora", en: "Create the account now" },
+    autoCreated: { es: "{n} tareas ya se crearon en la rotación compartida. Asígnalas a {name} desde Tareas.", en: "{n} chores were already created in the shared rotation. Assign them to {name} from Tasks." },
     email: { es: "Correo", en: "Email" },
     password: { es: "Contraseña (mínimo 8)", en: "Password (8+ characters)" },
     createAccountBtn: { es: "Crear cuenta", en: "Create account" },
@@ -136,7 +137,9 @@ export function draftRequest(state: WizardState, lang: Lang) {
 
 export type RowStatus = "idle" | "creating" | "done" | "error";
 type RowBase = { key: string; title: string; duplicateOf: string | null; included: boolean; status: RowStatus; error: string | null };
-export type ChoreRow = RowBase & { points: number; days: number[]; isBonus: boolean; description: string | null };
+export type ChoreRow = RowBase & { points: number; days: number[]; isBonus: boolean; description: string | null;
+    /** Created while the kid had no account: it went to the shared rotation, not to her. */
+    createdAuto: boolean };
 export type RewardRow = RowBase & { pointsCost: number; category: string; description: string | null };
 export type GigRow = RowBase & { points: number; difficulty: number; category: string };
 export type KidReview = { key: string; name: string; band: Band; memberId: string | null; chores: ChoreRow[] };
@@ -161,7 +164,7 @@ export function reviewRows(draft: unknown): Review {
             if (!b) return;
             chores.push({ ...b, points: num(c.points, 10), isBonus: c.is_bonus === true,
                 days: Array.isArray(c.days) ? c.days.filter((x): x is number => Number.isInteger(x) && x >= 0 && x <= 6) : [],
-                description: str(c.description).trim() || null });
+                description: str(c.description).trim() || null, createdAuto: false });
         });
         kids.push({ key: `k${ki}`, name: k.name, band: (BANDS.includes(k.age_band as Band) ? k.age_band : "6-8") as Band,
             memberId: typeof k.member_id === "string" ? k.member_id : null, chores });
@@ -221,9 +224,9 @@ export type Counts = { chores: number; rewards: number; gigs: number };
  *  keeps `error`/`status = "error"` and is re-posted next time; a done row is
  *  never posted again. */
 export async function createAll(review: Review, lang: Lang, post: Poster, onProgress?: (i: number, n: number) => void): Promise<Counts> {
-    type Job = { row: RowBase; path: string; body: Record<string, unknown>; kind: keyof Counts };
+    type Job = { row: RowBase; path: string; body: Record<string, unknown>; kind: keyof Counts; auto?: boolean };
     const jobs: Job[] = [];
-    for (const kid of review.kids) for (const c of kid.chores) if (c.included && c.status !== "done") jobs.push({ row: c, path: "/api/task-templates/", body: choreBody(c, kid.memberId, lang), kind: "chores" });
+    for (const kid of review.kids) for (const c of kid.chores) if (c.included && c.status !== "done") jobs.push({ row: c, path: "/api/task-templates/", body: choreBody(c, kid.memberId, lang), kind: "chores", auto: !kid.memberId });
     for (const r of review.rewards) if (r.included && r.status !== "done") jobs.push({ row: r, path: "/api/rewards/", body: rewardBody(r), kind: "rewards" });
     for (const g of review.gigs) if (g.included && g.status !== "done") jobs.push({ row: g, path: "/api/gigs/offerings", body: gigBody(g), kind: "gigs" });
     const counts: Counts = { chores: 0, rewards: 0, gigs: 0 };
@@ -233,7 +236,10 @@ export async function createAll(review: Review, lang: Lang, post: Poster, onProg
         job.row.status = "creating";
         try {
             const result = await post(job.path, job.body);
-            if (result.ok) { job.row.status = "done"; job.row.error = null; counts[job.kind] += 1; }
+            if (result.ok) {
+                job.row.status = "done"; job.row.error = null; counts[job.kind] += 1;
+                if (job.kind === "chores") (job.row as ChoreRow).createdAuto = job.auto === true;
+            }
             else { job.row.status = "error"; job.row.error = result.detail || SETUP_COPY.createFailed[lang]; }
         } catch {
             job.row.status = "error"; job.row.error = SETUP_COPY.createFailed[lang];

@@ -27,7 +27,9 @@ class UserCreate(UserBase):
 
     password: str = Field(..., min_length=8, max_length=100)
     role: UserRole = UserRole.CHILD
-    family_id: UUID  # Required - must belong to a family
+    # Ignored by the parent-only register route, which always binds the
+    # caller's own family (UX-E3 wizard sends none; older clients still do).
+    family_id: Optional[UUID] = None
 
 
 class UserUpdate(BaseModel):

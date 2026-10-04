@@ -123,6 +123,7 @@ const c = SETUP_COPY;
         let aiAvailable = false;
         let step = 1;
         let seq = 0;
+        let building = false;
         const total: Counts = { chores: 0, rewards: 0, gigs: 0 };
 
         const $ = (id: string) => document.getElementById(id)!;
@@ -201,15 +202,25 @@ const c = SETUP_COPY;
                 d.className = `h-2.5 w-2.5 rounded-full ${on ? "bg-brand-ink" : "bg-brand-ink/20"}`;
                 if (Number(d.dataset.dot) === n) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current");
             });
-            $("nav").toggleAttribute("hidden", n === 4);
+            nextBtn.toggleAttribute("hidden", n === 4);
             nextBtn.textContent = n === 3 ? c.build[lang] : c.next[lang];
             backBtn.toggleAttribute("hidden", n === 1);
             syncNav();
             window.scrollTo({ top: 0 });
         };
         const syncNav = () => { nextBtn.disabled = step === 1 && !canAdvanceKids(state); };
-        backBtn.addEventListener("click", () => show(Math.max(1, step - 1)));
+        backBtn.addEventListener("click", async () => {
+            if (step === 4) {
+                // Rows already created stay; only the answers are revisited.
+                if (total.chores + total.rewards + total.gigs > 0
+                    && !(await confirmSheet({ title: c.leaveTitle[lang], body: c.leaveBody[lang], confirmLabel: c.leaveConfirm[lang] }))) return;
+                show(3);
+                return;
+            }
+            show(Math.max(1, step - 1));
+        });
         nextBtn.addEventListener("click", async () => {
+            if (building) return;
             if (step < 3) { show(step + 1); return; }
             await buildDraft();
         });
@@ -217,6 +228,7 @@ const c = SETUP_COPY;
         // ── Draft ───────────────────────────────────────────────────────
         const buildDraft = async () => {
             const mine = ++seq;
+            building = true;
             nextBtn.disabled = true;
             show(4);
             $("building").removeAttribute("hidden");
@@ -238,7 +250,7 @@ const c = SETUP_COPY;
                 showToast(c.draftFailed[lang], "error");
                 show(3);
             } finally {
-                if (mine === seq) { $("building").setAttribute("hidden", ""); nextBtn.disabled = false; }
+                if (mine === seq) { building = false; $("building").setAttribute("hidden", ""); nextBtn.disabled = false; }
             }
         };
 
@@ -280,6 +292,10 @@ const c = SETUP_COPY;
                 head.append(el("h3", "font-bold text-brand-ink", `${kid.name} · ${BAND_LABELS[kid.band][lang]}`));
                 head.append(el("span", "text-xs font-semibold " + (kid.memberId ? "text-brand-mint-text" : "text-brand-coral-text"), kid.memberId ? c.joined[lang] : c.notJoined[lang]));
                 card.append(head);
+                // Chores created before the kid had an account went to the shared
+                // rotation; say so even after the account exists.
+                const auto = kid.chores.filter((r) => r.createdAuto).length;
+                if (auto) card.append(el("p", "text-xs font-semibold text-brand-coral-text", fill(c.autoCreated[lang], { n: auto, name: kid.name })));
                 if (!kid.memberId) card.append(unjoinedBlock(kid));
                 for (const row of kid.chores) {
                     const line = el("div", "space-y-1 pt-2 border-t border-brand-ink/10" + doneClass(row.status));
@@ -352,6 +368,10 @@ const c = SETUP_COPY;
             }
             box.append(codeLine);
             box.append(el("p", "text-xs text-brand-ink-soft", fill(c.rotationHint[lang], { name: kid.name })));
+            // Once any of this kid's rows is creating or created, an account can
+            // no longer re-home them — the form closes rather than mislead.
+            const started = kid.chores.some((r) => r.status !== "idle");
+            if (started) return box;
             const details = el("details"); details.append(el("summary", "cursor-pointer text-xs font-semibold text-brand-sky-text", c.createAccount[lang]));
             const form = el("form", "mt-2 space-y-2");
             const email = el("input") as HTMLInputElement; email.type = "email"; email.required = true; email.placeholder = c.email[lang]; email.className = `w-full ${inputClass}`; email.setAttribute("aria-label", c.email[lang]);
@@ -363,7 +383,7 @@ const c = SETUP_COPY;
                 e.preventDefault();
                 submit.disabled = true; err.setAttribute("hidden", "");
                 try {
-                    const r = await fetch("/api/auth/register", {
+                    const r = await fetch("/api/families/members", {
                         method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
                         body: JSON.stringify(registerBody({ name: kid.name, band: kid.band }, email.value, pw.value)),
                     });

@@ -140,6 +140,13 @@ describe("createAll", () => {
         expect(second).toEqual({ chores: 0, rewards: 1, gigs: 0 });
         expect(r.rewards[0]).toMatchObject({ status: "done", error: null });
     });
+    it("marks chores created without a bound kid as createdAuto", async () => {
+        const r = review();
+        expect(r.kids[1].chores[0].createdAuto).toBe(false);
+        await createAll(r, "en", async () => ({ ok: true, detail: null }));
+        expect(r.kids[0].chores[1].createdAuto).toBe(false);
+        expect(r.kids[1].chores[0].createdAuto).toBe(true);
+    });
     it("a second run after everything was created posts nothing", async () => {
         const r = review();
         await createAll(r, "en", async () => ({ ok: true, detail: null }));

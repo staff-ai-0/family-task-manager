@@ -193,12 +193,20 @@ def _completion(text):
 @pytest_asyncio.fixture
 async def kids(db_session, test_family):
     from app.core.security import get_password_hash
+    other = test_family.__class__(name="Other family")
+    db_session.add(other)
+    await db_session.commit()
+    await db_session.refresh(other)
     rows = [
         User(email="sofia@test.com", name="Sofía Martínez", password_hash=get_password_hash("password123"),
              role=UserRole.CHILD, family_id=test_family.id, is_active=True, email_verified=True),
         User(email="pending@test.com", name="Pepe", password_hash=get_password_hash("password123"),
              role=UserRole.CHILD, family_id=test_family.id, is_active=True, email_verified=True,
              approval_status=APPROVAL_PENDING),
+        User(email="inactive@test.com", name="Inactivo", password_hash=get_password_hash("password123"),
+             role=UserRole.CHILD, family_id=test_family.id, is_active=False, email_verified=True),
+        User(email="foreign@test.com", name="Ghost", password_hash=get_password_hash("password123"),
+             role=UserRole.CHILD, family_id=other.id, is_active=True, email_verified=True),
     ]
     db_session.add_all(rows)
     await db_session.commit()
@@ -261,14 +269,18 @@ class TestService:
 
     @pytest.mark.asyncio
     async def test_binds_members_by_name_and_by_id_but_not_foreign_or_pending(self, db_session, test_family, kids):
-        sofia, pepe = kids
+        sofia, pepe, inactive, ghost = kids
         out = await SetupDraftService.draft(db_session, test_family.id, _req(kids=[
             {"name": "sofia", "age_band": "6-8"},                                   # by first name
             {"name": "Nobody", "age_band": "9-12", "member_id": str(sofia.id)},   # by explicit id
             {"name": "Pepe", "age_band": "9-12"},                                  # pending → unbound
-            {"name": "Ghost", "age_band": "13+", "member_id": str(uuid4())},     # foreign id → unbound
+            {"name": "Ghost", "age_band": "13+", "member_id": str(ghost.id)},    # real kid of ANOTHER family → unbound
+            {"name": "Ghost", "age_band": "13+"},                                  # same, by name
+            {"name": "Inactivo", "age_band": "9-12"},                              # deactivated → unbound
+            {"name": "x", "age_band": "9-12", "member_id": str(inactive.id)},    # deactivated, by id
+            {"name": "y", "age_band": "9-12", "member_id": str(uuid4())},        # unknown id → unbound
         ]))
-        assert [k.member_id for k in out.kids] == [sofia.id, sofia.id, None, None]
+        assert [k.member_id for k in out.kids] == [sofia.id, sofia.id, None, None, None, None, None, None]
 
     @pytest.mark.asyncio
     async def test_draft_never_binds_a_parent(self, db_session, test_family, test_parent_user, kids):
@@ -339,6 +351,16 @@ class TestRoute:
         ):
             r = await client.post("/api/families/onboarding/setup-draft", json=bad, headers=auth_headers)
             assert r.status_code == 422, bad
+
+    @pytest.mark.asyncio
+    async def test_parent_registers_a_kid_without_sending_family_id(self, client: AsyncClient, auth_headers, test_family):
+        """The wizard's account form sends name/email/password/role only; the
+        backend binds the caller's family (it never trusted the body anyway)."""
+        r = await client.post("/api/auth/register", json={
+            "name": "Nuevo", "email": "nuevo@test.com", "password": "secret123", "role": "teen",
+        }, headers=auth_headers)
+        assert r.status_code == 201, r.text
+        assert r.json()["family_id"] == str(test_family.id) and r.json()["role"] == "teen"
 
     @pytest.mark.asyncio
     async def test_child_403(self, client: AsyncClient, test_child_user):

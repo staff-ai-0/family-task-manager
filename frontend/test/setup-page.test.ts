@@ -24,16 +24,35 @@ describe("/parent/setup page", () => {
         expect(page).toMatch(/fetch\("\/api\/families\/onboarding\/setup-draft"/);
         expect(page).toMatch(/await createAll\(review, lang, post, \(i, n\) =>/);
         expect(page).toMatch(/registerBody\(/);
-        expect(page).toMatch(/fetch\("\/api\/auth\/register"/);
         expect(page).toMatch(/modulesBodyWithoutGigs\(/);
         expect(page).toMatch(/fetch\("\/api\/families\/me", \{\s*method: "PATCH"/);
         expect(page).toMatch(/jarvisPrefill\(/);
         expect(page).toMatch(/\/parent\/jarvis\?q=/);
         expect(page).toMatch(/if \(row\.error\) \{[\s\S]*?err\.textContent = row\.error;/);
         expect(existsSync(path("../src/pages/api/families/onboarding/setup-draft.ts"))).toBe(true);
-        expect(existsSync(path("../src/pages/api/auth/register.ts"))).toBe(true);
         expect(existsSync(path("../src/pages/api/gigs/[...path].ts"))).toBe(true);
         expect(existsSync(path("../src/pages/api/rewards/[...path].ts"))).toBe(true);
+    });
+    it("creates a kid account through a parent-only proxy, never the public signup route", () => {
+        expect(page).toMatch(/fetch\("\/api\/families\/members"/);
+        expect(page).not.toMatch(/fetch\("\/api\/auth\/register"/);
+        const proxy = read("../src/pages/api/families/members.ts");
+        expect(proxy).toMatch(/export const POST: APIRoute/);
+        expect(proxy).toMatch(/\/api\/auth\/register`/);
+        expect(proxy).not.toMatch(/register-family/);
+        expect(proxy).toMatch(/Authorization: `Bearer \$\{token\}`/);
+        expect(proxy).not.toMatch(/cookies\.set/);
+    });
+    it("keeps Back on the review step and confirms once something was created", () => {
+        expect(page).not.toMatch(/\$\("nav"\)\.toggleAttribute\("hidden", n === 4\)/);
+        expect(page).toMatch(/nextBtn\.toggleAttribute\("hidden", n === 4\)/);
+        expect(page).toMatch(/if \(step === 4\) \{[\s\S]*?confirmSheet\(/);
+        expect(page).toMatch(/if \(building\) return;/);
+    });
+    it("tells the parent about chores already sent to the rotation and freezes the account form once creating", () => {
+        expect(page).toMatch(/c\.autoCreated\[lang\]/);
+        expect(page).toMatch(/r\.createdAuto/);
+        expect(page).toMatch(/const started = kid\.chores\.some\(/);
     });
     it("asks before leaving the review through a sheet, never a native dialog", () => {
         expect(page).toMatch(/confirmSheet\(/);
