@@ -118,6 +118,15 @@ class TestParse:
             else:
                 assert parse_chart(raw, MEMBERS, {}).chores == []
 
+    def test_is_bonus_must_be_a_real_true(self):
+        raw = json.dumps({"chores": [{"title": "a", "is_bonus": "false"}, {"title": "b", "is_bonus": 1}, {"title": "c", "is_bonus": True}]})
+        assert [c.is_bonus for c in parse_chart(raw, MEMBERS, {}).chores] == [False, False, True]
+
+    def test_assignee_names_are_bounded_in_length_and_count(self):
+        raw = json.dumps({"chores": [{"title": "a", "assignees": ["x" * 300] + [f"n{i}" for i in range(30)]}]})
+        c = parse_chart(raw, MEMBERS, {}).chores[0]
+        assert len(c.assignee_names) == 10 and len(c.unmatched_names) == 10 and all(len(n) <= 60 for n in c.assignee_names)
+
     def test_titles_are_bounded_and_description_too(self):
         raw = json.dumps({"chores": [{"title": "x" * 300, "notes": "y" * 2000, "days": "weekdays"}]})
         c = parse_chart(raw, MEMBERS, {}).chores[0]

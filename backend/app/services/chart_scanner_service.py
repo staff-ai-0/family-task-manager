@@ -24,6 +24,8 @@ from app.services.budget.receipt_scanner_service import _pdf_first_page_to_png
 
 MAX_PROPOSALS = 40
 TITLE_MAX = 200
+NAME_MAX = 60       # an assignee name as read off the chart
+NAMES_MAX = 10      # names per row
 DESCRIPTION_MAX = 1000
 DEFAULT_POINTS = 10
 
@@ -189,15 +191,17 @@ def parse_chart(response_text: str, members: list[Member], existing_titles: dict
         if not title:
             continue
         names = raw.get("assignees") if isinstance(raw.get("assignees"), list) else []
-        ids, missing = match_members([n for n in names if isinstance(n, str)], members)
+        # Bounded: the model could echo anything written on the photo.
+        names = [n.strip()[:NAME_MAX] for n in names if isinstance(n, str) and n.strip()][:NAMES_MAX]
+        ids, missing = match_members(names, members)
         notes = raw.get("notes")
         description = " ".join(str(notes).split())[:DESCRIPTION_MAX] if isinstance(notes, str) and notes.strip() else None
         chores.append(ScannedChore(
             title=title,
             points=clamp_points(raw.get("points")),
-            is_bonus=bool(raw.get("is_bonus", False)),
+            is_bonus=raw.get("is_bonus") is True,        # the string "false" must not count
             days_of_week=normalize_days(raw.get("days")),
-            assignee_names=[n.strip() for n in names if isinstance(n, str) and n.strip()],
+            assignee_names=names,
             assigned_user_ids=ids,
             unmatched_names=missing,
             duplicate_of=existing_titles.get(fold(title)),

@@ -404,7 +404,7 @@ Las plantillas son tareas reutilizables que sirven como moldes para generar asig
 
 En vez de escribir cada tarea, toma una foto del tablero del refri, de una lista escrita a mano o de una captura: en **Mas → Tareas**, toca **📷** (o "Escanear tablero del refri" cuando la lista esta vacia) y elige la foto.
 
-La app la lee y propone una tarea recurrente por renglon: titulo, puntos, a que hijos (los reconoce por nombre entre los miembros de tu familia) y que dias de la semana. Revisa la lista: corrige un titulo, cambia los puntos, toca el nombre de un hijo para agregarlo o quitarlo (sin nadie seleccionado, la app reparte), toca los dias para activarlos o no, desmarca lo que no quieras. Una tarea que ya existe aparece marcada como tal y desmarcada. Despues, **Crear N tareas**: cada una se crea exactamente como si la hubieras escrito, y entra al calendario semanal desde ese momento.
+La app la lee y propone una tarea recurrente por renglon: titulo, puntos, a que hijos (los reconoce por nombre entre los miembros de tu familia) y que dias de la semana. Revisa la lista: corrige un titulo, cambia los puntos, toca el nombre de un miembro de la familia para agregarlo o quitarlo (los papas aparecen marcados como tales; sin nadie seleccionado, la app reparte), toca los dias para activarlos o no, edita la nota opcional que vera el hijo, desmarca lo que no quieras. Una tarea que ya existe aparece marcada como tal y desmarcada. Despues, **Crear N tareas**: cada una se crea exactamente como si la hubieras escrito, y entra al calendario semanal desde ese momento.
 
 > Requiere un plan con IA (**Plus** o superior). La foto se lee una vez y no se guarda. Si no se puede leer, recibes un solo mensaje y no se crea nada.
 

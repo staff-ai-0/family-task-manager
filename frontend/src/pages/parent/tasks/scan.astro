@@ -3,7 +3,7 @@ import PageLayout from "@components/ui/PageLayout.astro";
 import UpgradePrompt from "@components/UpgradePrompt.astro";
 import { apiFetch } from "../../../lib/api";
 import { isFreePlan } from "../../../lib/plan";
-import { CHART_COPY } from "../../../lib/chartScan";
+import { CHART_COPY, memberChips } from "../../../lib/chartScan";
 import { buttonClass } from "../../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
@@ -19,9 +19,9 @@ if (user.role !== "parent") return Astro.redirect("/dashboard");
 // Paid-only (ai_features). Fail-open; the backend enforces.
 const aiLocked = await isFreePlan(token);
 const { data: members } = await apiFetch<any[]>(`/api/families/${user.family_id}/members`, { token });
-const kids = (Array.isArray(members) ? members : [])
-    .filter((m: any) => String(m.role).toLowerCase() !== "parent")
-    .map((m: any) => ({ id: String(m.id), name: String(m.name) }));
+// Every participating member, parents labelled — the server can match any of
+// them, so each must be visible (and removable) on the row.
+const chips = memberChips(members, lang);
 const c = CHART_COPY;
 ---
 
@@ -39,7 +39,7 @@ const c = CHART_COPY;
 
     {aiLocked && <UpgradePrompt feature="ai_features" planNeeded="Plus" lang={lang} />}
 
-    <div id="scan-root" data-lang={lang} data-kids={JSON.stringify(kids)}>
+    <div id="scan-root" data-lang={lang} data-chips={JSON.stringify(chips)}>
         <p id="error-box" hidden class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl"></p>
 
         <label id="picker" hidden={aiLocked}
@@ -47,7 +47,7 @@ const c = CHART_COPY;
             <input type="file" id="scan-file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" class="hidden" />
             <span class="text-5xl" aria-hidden="true">📷</span>
             <p class="mt-3 text-sm font-semibold text-brand-ink">{c.pick[lang]}</p>
-            <p class="text-xs text-brand-ink-soft mt-1">JPG · PNG · WebP · PDF</p>
+            <p class="text-xs text-brand-ink-soft mt-1">JPG · PNG · WebP · PDF · 8 MB</p>
         </label>
 
         <div id="scanning" hidden class="bg-brand-cream rounded-2xl p-6 text-center border border-brand-ink/10">
@@ -67,13 +67,16 @@ const c = CHART_COPY;
 </PageLayout>
 
 <script>
-    import { CHART_COPY, DAY_LABELS, fill, isUnreadable, proposalRows, templateBody, type Kid, type Row } from "../../../lib/chartScan";
+    import {
+        CHART_COPY, DAY_LABELS, DAY_NAMES, createRows, errorDetail, fill, isUnreadable, proposalRows,
+        type Chip, type PostResult, type Row,
+    } from "../../../lib/chartScan";
     import { showToast } from "../../../lib/toast";
 
     const root = document.getElementById("scan-root");
     if (root) {
         const lang = root.dataset.lang === "en" ? "en" : "es";
-        const kids: Kid[] = (() => { try { return JSON.parse(root.dataset.kids ?? "[]"); } catch { return []; } })();
+        const chips: Chip[] = (() => { try { return JSON.parse(root.dataset.chips ?? "[]"); } catch { return []; } })();
         const c = CHART_COPY;
         const $ = (id: string) => document.getElementById(id)!;
         const fileInput = $("scan-file") as HTMLInputElement;
@@ -87,10 +90,12 @@ const c = CHART_COPY;
             const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n;
         };
 
+        // Everything the model or the parent typed reaches the DOM through
+        // textContent / value — never innerHTML.
         const render = () => {
             rowsEl.replaceChildren();
-            const live = rows.filter((r) => !created.has(r.key));
-            for (const row of live) {
+            for (const row of rows) {
+                if (created.has(row.key)) continue;
                 const card = el("div", "bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)] space-y-2");
                 card.dataset.rowKey = row.key;
                 const top = el("div", "flex items-start gap-3");
@@ -114,29 +119,47 @@ const c = CHART_COPY;
                 meta.append(bonusLabel);
                 card.append(meta);
 
-                const kidsRow = el("div", "flex flex-wrap gap-1");
-                for (const kid of kids) {
-                    const chip = el("button", "", kid.name) as HTMLButtonElement; chip.type = "button";
-                    const paint = () => { chip.className = `px-3 py-1 rounded-full text-xs font-semibold border ${row.kidIds.includes(kid.id) ? "bg-brand-sky text-brand-ink border-brand-ink" : "bg-white text-brand-ink border-brand-ink/20"}`; };
-                    chip.addEventListener("click", () => { row.kidIds = row.kidIds.includes(kid.id) ? row.kidIds.filter((k) => k !== kid.id) : [...row.kidIds, kid.id]; paint(); anyone.toggleAttribute("hidden", row.kidIds.length > 0); });
-                    paint(); kidsRow.append(chip);
+                const kidsRow = el("div", "flex flex-wrap gap-1 items-center");
+                const anyone = el("span", "text-xs text-brand-ink-soft", c.anyone[lang]);
+                for (const chip of chips) {
+                    const b = el("button", "", chip.label) as HTMLButtonElement; b.type = "button";
+                    const paint = () => { b.className = `px-3 py-1 rounded-full text-xs font-semibold border ${row.kidIds.includes(chip.id) ? "bg-brand-sky text-brand-ink border-brand-ink" : "bg-white text-brand-ink border-brand-ink/20"}`; };
+                    b.addEventListener("click", () => {
+                        row.kidIds = row.kidIds.includes(chip.id) ? row.kidIds.filter((k) => k !== chip.id) : [...row.kidIds, chip.id];
+                        paint(); anyone.toggleAttribute("hidden", row.kidIds.length > 0);
+                    });
+                    paint(); kidsRow.append(b);
                 }
-                const anyone = el("span", "text-xs text-brand-ink-soft self-center", c.anyone[lang]); anyone.toggleAttribute("hidden", row.kidIds.length > 0);
+                // An id with no chip (member gone since the scan) must not pin invisibly.
+                row.kidIds = row.kidIds.filter((id) => chips.some((ch) => ch.id === id));
+                anyone.toggleAttribute("hidden", row.kidIds.length > 0);
                 kidsRow.append(anyone);
                 card.append(kidsRow);
 
                 const daysRow = el("div", "flex gap-1");
                 DAY_LABELS[lang].forEach((label, d) => {
-                    const b = el("button", "", label) as HTMLButtonElement; b.type = "button"; b.setAttribute("aria-label", `day ${d}`);
-                    const paint = () => { b.className = `h-8 w-8 rounded-full text-xs font-bold border ${row.days.includes(d) ? "bg-brand-sky text-brand-ink border-brand-ink" : "bg-white text-brand-ink-soft border-brand-ink/20"}`; };
+                    const b = el("button", "", label) as HTMLButtonElement; b.type = "button"; b.setAttribute("aria-label", DAY_NAMES[lang][d]);
+                    const paint = () => { b.className = `h-8 w-8 rounded-full text-xs font-bold border ${row.days.includes(d) ? "bg-brand-sky text-brand-ink border-brand-ink" : "bg-white text-brand-ink-soft border-brand-ink/20"}`; b.setAttribute("aria-pressed", String(row.days.includes(d))); };
                     b.addEventListener("click", () => { row.days = row.days.includes(d) ? row.days.filter((x) => x !== d) : [...row.days, d]; paint(); });
                     paint(); daysRow.append(b);
                 });
                 card.append(daysRow);
 
+                // The note becomes the chore's description the kid reads — always visible, always editable.
+                const note = el("input") as HTMLInputElement; note.type = "text"; note.maxLength = 1000; note.value = row.description ?? ""; note.placeholder = c.note[lang];
+                note.setAttribute("aria-label", c.note[lang]);
+                note.className = "w-full px-2 py-1.5 rounded-lg border border-brand-ink/20 bg-white text-xs text-brand-ink";
+                note.addEventListener("input", () => { row.description = note.value.trim() || null; });
+                card.append(note);
+
                 if (row.duplicate) card.append(el("p", "text-xs font-bold text-brand-coral-text", c.exists[lang]));
                 if (row.unmatched.length) card.append(el("p", "text-xs text-brand-ink-soft", fill(c.unmatched[lang], { names: row.unmatched.join(", ") })));
-                const err = el("p", "text-xs text-red-700"); err.setAttribute("data-row-error", ""); err.setAttribute("hidden", "");
+                const err = el("p", "text-xs text-red-700"); err.setAttribute("data-row-error", "");
+                if (row.error) {
+                    err.textContent = row.error;
+                } else {
+                    err.setAttribute("hidden", "");
+                }
                 card.append(err);
                 rowsEl.append(card);
             }
@@ -158,7 +181,7 @@ const c = CHART_COPY;
             try {
                 const r = await fetch("/api/task-templates/scan-chart", { method: "POST", body: fd, credentials: "same-origin" });
                 scanning.setAttribute("hidden", "");
-                if (!r.ok) { fail(r.status === 502 ? c.unreadable[lang] : c.failed[lang]); return; }
+                if (!r.ok) { fail(r.status === 413 ? c.tooBig[lang] : r.status === 502 ? c.unreadable[lang] : c.failed[lang]); return; }
                 const data = await r.json();
                 if (isUnreadable(data)) { fail(c.unreadable[lang]); return; }
                 rows = proposalRows(data); created.clear();
@@ -173,31 +196,24 @@ const c = CHART_COPY;
             }
         });
 
+        // One ordinary create per ticked row. The row keeps its own error until
+        // a later attempt succeeds; a created row is never posted again.
+        const post = async (body: Record<string, unknown>): Promise<PostResult> => {
+            const r = await fetch("/api/task-templates/", {
+                method: "POST", credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            if (r.ok) return { ok: true, detail: null };
+            const parsed = await r.json().catch(() => null);
+            return { ok: false, detail: errorDetail(parsed, c.createFailed[lang]) };
+        };
+
         createBtn.addEventListener("click", async () => {
             createBtn.disabled = true;
-            let ok = 0;
-            for (const row of rows) {
-                if (!row.checked) continue;
-                if (created.has(row.key)) continue;
-                const card = rowsEl.querySelector<HTMLElement>(`[data-row-key="${row.key}"]`);
-                const err = card?.querySelector<HTMLElement>("[data-row-error]");
-                try {
-                    const r = await fetch("/api/task-templates/", {
-                        method: "POST", credentials: "same-origin",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(templateBody(row)),
-                    });
-                    if (!r.ok) {
-                        const body = await r.json().catch(() => null);
-                        const detail = body && typeof body.detail === "string" ? body.detail : c.failed[lang];
-                        if (err) { err.textContent = detail; err.removeAttribute("hidden"); }
-                        continue;
-                    }
-                    created.add(row.key); ok += 1;
-                } catch {
-                    if (err) { err.textContent = c.failed[lang]; err.removeAttribute("hidden"); }
-                }
-            }
+            const ok = await createRows(rows, created, post, lang, (i, n) => {
+                createBtn.textContent = fill(c.creating[lang], { i, n });
+            });
             render();
             if (ok) { doneText.textContent = fill(c.done[lang], { n: ok }); doneBox.removeAttribute("hidden"); showToast(fill(c.done[lang], { n: ok }), "success"); }
         });
