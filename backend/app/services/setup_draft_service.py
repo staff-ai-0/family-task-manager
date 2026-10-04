@@ -47,6 +47,7 @@ DESCRIPTION_MAX = 1000
 CHORE_POINTS = (1, 100, 10)
 REWARD_POINTS = (5, 500, 50)
 GIG_POINTS = (10, 500, 20)
+AI_MAX_TOKENS = 8192
 _GIG_CATEGORIES = {c.value for c in GigCategory}
 
 
@@ -286,7 +287,10 @@ async def _ai_draft(req: SetupDraftRequest) -> tuple[list[KidDraft], list[Reward
     completion = await run_in_threadpool(
         lambda: client.chat.completions.create(
             model=CATEGORIZER_MODEL,
-            max_tokens=3072,
+            # The answer is ~2k tokens, but gemini-2.5-flash spends another
+            # 1.4k–3.3k on thinking out of the same budget (prod, 2026-10-04):
+            # at 3072 the JSON was cut mid-document about half the time.
+            max_tokens=AI_MAX_TOKENS,
             temperature=0.4,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
@@ -294,7 +298,10 @@ async def _ai_draft(req: SetupDraftRequest) -> tuple[list[KidDraft], list[Reward
             ],
         )
     )
-    return parse_draft((completion.choices[0].message.content or "").strip(), req)
+    choice = completion.choices[0]
+    if getattr(choice, "finish_reason", None) == "length":
+        raise DraftParseError("answer truncated (finish_reason=length)")
+    return parse_draft((choice.message.content or "").strip(), req)
 
 
 class SetupDraftService:

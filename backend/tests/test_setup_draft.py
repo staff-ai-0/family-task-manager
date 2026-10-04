@@ -243,6 +243,33 @@ class TestService:
         assert kwargs["messages"][0]["role"] == "system" and "Sofía" in kwargs["messages"][1]["content"]
 
     @pytest.mark.asyncio
+    async def test_ai_call_leaves_room_for_reasoning_tokens(self, db_session, test_family, kids, plus_subscription, monkeypatch):
+        """gemini-2.5-flash spends 1.4k–3.3k thinking tokens per draft (prod,
+        2026-10-04); at max_tokens=3072 the visible JSON was cut mid-document
+        about half the time. 8192 leaves headroom for the ~2k-token answer."""
+        from app.core import config
+        monkeypatch.setattr(config.settings, "LITELLM_API_KEY", "test-key")
+        reply = _reply(kids=[{"name": "Sofía", "chores": [{"title": "Walk the dog"}]}])
+        with patch("app.core.llm.OpenAI") as mock_openai:
+            c = MagicMock(); c.chat.completions.create.return_value = _completion(reply)
+            mock_openai.return_value = c
+            await SetupDraftService.draft(db_session, test_family.id, _req())
+        assert c.chat.completions.create.call_args.kwargs["max_tokens"] >= 8192
+
+    @pytest.mark.asyncio
+    async def test_truncated_ai_answer_is_a_failed_draft(self, db_session, test_family, kids, plus_subscription, monkeypatch):
+        """finish_reason == "length" means the JSON was cut: never half-parse it."""
+        from app.core import config
+        monkeypatch.setattr(config.settings, "LITELLM_API_KEY", "test-key")
+        reply = _reply(kids=[{"name": "Sofía", "chores": [{"title": "Walk the dog"}]}])
+        completion = _completion(reply); completion.choices[0].finish_reason = "length"
+        with patch("app.core.llm.OpenAI") as mock_openai:
+            c = MagicMock(); c.chat.completions.create.return_value = completion
+            mock_openai.return_value = c
+            out = await SetupDraftService.draft(db_session, test_family.id, _req())
+        assert out.source == "pack" and out.ai_failed is True
+
+    @pytest.mark.asyncio
     async def test_ai_failure_falls_back_to_pack_with_flag(self, db_session, test_family, kids, plus_subscription, monkeypatch):
         from app.core import config
         monkeypatch.setattr(config.settings, "LITELLM_API_KEY", "test-key")
