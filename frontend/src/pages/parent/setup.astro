@@ -1,0 +1,456 @@
+---
+import PageLayout from "@components/ui/PageLayout.astro";
+import { apiFetch } from "../../lib/api";
+import { SETUP_COPY, kidRowsFromMembers } from "../../lib/setupWizard";
+import { buttonClass } from "../../lib/buttonClasses";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+const [{ data: family }, { data: codeData }] = await Promise.all([
+    apiFetch<any>("/api/families/me", { token }),
+    apiFetch<any>("/api/families/join-code/current", { token }),
+]);
+// Kids who already joined start as locked rows; the parent adds the rest.
+const kidRows = kidRowsFromMembers(family?.members ?? []);
+const joinCode: string | null = codeData?.join_code ?? null;
+const c = SETUP_COPY;
+---
+
+<PageLayout
+    title={c.title[lang]}
+    tone="sky"
+    backHref="/parent"
+    backLabel={c.goHub[lang]}
+    role={user.role}
+    active="parent"
+    lang={lang}
+    mainClass="flex-1 px-4 py-6 space-y-4"
+>
+    <p slot="header-extra" class="text-brand-ink text-sm mt-1">{c.subtitle[lang]}</p>
+
+    <div id="setup-root" data-lang={lang} data-kids={JSON.stringify(kidRows)} data-join-code={joinCode ?? ""}
+         data-modules={JSON.stringify(family?.enabled_modules ?? null)}>
+        <ol id="progress" class="flex items-center justify-center gap-2 mb-4" aria-label="progress">
+            {[1, 2, 3, 4].map((n) => (
+                <li data-dot={n} class="h-2.5 w-2.5 rounded-full bg-brand-ink/20"></li>
+            ))}
+        </ol>
+
+        <section data-step="1" class="space-y-3">
+            <h2 class="font-bold text-brand-ink text-lg">{c.stepKids[lang]}</h2>
+            <p class="text-sm text-brand-ink-soft">{c.stepKidsHint[lang]}</p>
+            <div id="kid-rows" class="space-y-2"></div>
+            <button type="button" id="add-kid" class={buttonClass("secondary", "sm")}>{c.addKid[lang]}</button>
+            <p class="text-xs text-brand-ink-soft pt-2">
+                <a href="/parent/starter-packs" class="font-semibold text-brand-sky-text hover:underline">{c.browsePacks[lang]}</a>
+            </p>
+        </section>
+
+        <section data-step="2" hidden class="space-y-3">
+            <h2 class="font-bold text-brand-ink text-lg">{c.stepPriorities[lang]}</h2>
+            <p class="text-sm text-brand-ink-soft">{c.stepPrioritiesHint[lang]}</p>
+            <div id="priority-chips" class="flex flex-wrap gap-2"></div>
+            <label class="block text-sm text-brand-ink">
+                <span class="font-semibold">{c.noteLabel[lang]}</span>
+                <textarea id="note" maxlength="300" rows="2" class="mt-1 w-full px-3 py-2 rounded-xl border border-brand-ink/20 bg-white text-sm text-brand-ink"></textarea>
+            </label>
+        </section>
+
+        <section data-step="3" hidden class="space-y-3">
+            <h2 class="font-bold text-brand-ink text-lg">{c.stepRewards[lang]}</h2>
+            <p class="text-sm text-brand-ink-soft">{c.stepRewardsHint[lang]}</p>
+            <div id="style-chips" class="flex flex-wrap gap-2"></div>
+            <label class="flex items-center gap-3 bg-brand-cream rounded-2xl p-4 border border-brand-ink/10">
+                <input type="checkbox" id="wants-gigs" checked class="h-5 w-5 rounded" />
+                <span class="text-sm font-semibold text-brand-ink">{c.wantsGigs[lang]}</span>
+            </label>
+        </section>
+
+        <section data-step="4" hidden class="space-y-4">
+            <h2 class="font-bold text-brand-ink text-lg">{c.stepReview[lang]}</h2>
+            <div id="building" hidden class="bg-brand-cream rounded-2xl p-6 text-center border border-brand-ink/10">
+                <div class="inline-block animate-spin h-8 w-8 border-4 border-brand-ink/20 border-t-brand-ink rounded-full"></div>
+                <p class="mt-3 text-sm text-brand-ink-soft">{c.building[lang]}</p>
+            </div>
+            <p id="ai-failed" hidden class="p-3 bg-brand-sun/20 border border-brand-sun text-brand-ink text-sm rounded-xl">{c.aiFailed[lang]}</p>
+            <div id="review-kids" class="space-y-4"></div>
+            <div id="review-rewards" class="space-y-2"></div>
+            <div id="review-gigs" class="space-y-2"></div>
+            <button type="button" id="create-btn" class={`w-full ${buttonClass("primary", "md")}`}></button>
+            <div id="done-box" hidden class="p-4 bg-brand-mint/20 border border-brand-mint rounded-2xl space-y-3">
+                <p id="done-text" class="text-sm font-semibold text-brand-mint-text"></p>
+                <div class="flex flex-wrap gap-2">
+                    <a id="refine-link" hidden class={buttonClass("secondary", "sm")}>{c.refine[lang]}</a>
+                    <a href="/parent" class={buttonClass("primary", "sm")}>{c.goHub[lang]}</a>
+                </div>
+            </div>
+        </section>
+
+        <div id="nav" class="flex items-center justify-between gap-3 pt-4 pb-safe">
+            <button type="button" id="back-btn" class={buttonClass("secondary", "md")}>{c.back[lang]}</button>
+            <button type="button" id="next-btn" class={buttonClass("primary", "md")}>{c.next[lang]}</button>
+        </div>
+    </div>
+</PageLayout>
+
+<script>
+    import {
+        BANDS, BAND_LABELS, PRIORITIES, PRIORITY_LABELS, REWARD_STYLES, REWARD_STYLE_LABELS, SETUP_COPY,
+        canAdvanceKids, createAll, draftRequest, errorDetail, fill, jarvisPrefill, modulesBodyWithoutGigs,
+        registerBody, reviewRows, type Counts, type KidRow, type Poster, type Review, type WizardState,
+    } from "../../lib/setupWizard";
+    import { confirmSheet } from "../../lib/dialogs";
+    import { showToast } from "../../lib/toast";
+    import { buttonClass } from "../../lib/buttonClasses";
+
+    const root = document.getElementById("setup-root");
+    if (root) {
+        const lang = root.dataset.lang === "en" ? "en" : "es";
+        const c = SETUP_COPY;
+        const parse = <T,>(s: string | undefined, d: T): T => { try { return s ? JSON.parse(s) : d; } catch { return d; } };
+        const state: WizardState = { kids: parse<KidRow[]>(root.dataset.kids, []), priorities: [], note: "", rewardStyles: [], wantsGigs: true };
+        let joinCode = root.dataset.joinCode || "";
+        const modules = parse<string[] | null>(root.dataset.modules, null);
+        let review: Review = { kids: [], rewards: [], gigs: [] };
+        let aiAvailable = false;
+        let step = 1;
+        let seq = 0;
+        let building = false;
+        const total: Counts = { chores: 0, rewards: 0, gigs: 0 };
+
+        const $ = (id: string) => document.getElementById(id)!;
+        const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
+            const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n;
+        };
+        const backBtn = $("back-btn") as HTMLButtonElement, nextBtn = $("next-btn") as HTMLButtonElement, createBtn = $("create-btn") as HTMLButtonElement;
+        const chipClass = (on: boolean) => `px-3 py-1.5 rounded-full text-sm font-semibold border ${on ? "bg-brand-sky text-brand-ink border-brand-ink" : "bg-white text-brand-ink border-brand-ink/20"}`;
+        const inputClass = "px-2 py-1.5 rounded-lg border border-brand-ink/20 bg-white text-sm text-brand-ink";
+
+        // ── Step 1: kids ────────────────────────────────────────────────
+        const kidRowsEl = $("kid-rows");
+        const renderKids = () => {
+            kidRowsEl.replaceChildren();
+            for (const kid of state.kids) {
+                const card = el("div", "bg-brand-cream rounded-2xl p-3 border border-brand-ink/10 space-y-2");
+                const top = el("div", "flex items-center gap-2");
+                const include = el("input") as HTMLInputElement; include.type = "checkbox"; include.checked = kid.included; include.className = "h-5 w-5 rounded";
+                include.setAttribute("aria-label", c.skipKid[lang]);
+                include.addEventListener("change", () => { kid.included = include.checked; syncNav(); });
+                const name = el("input") as HTMLInputElement; name.type = "text"; name.value = kid.name; name.maxLength = 60; name.placeholder = c.kidName[lang];
+                name.className = `flex-1 ${inputClass}`; name.disabled = kid.locked; name.setAttribute("aria-label", c.kidName[lang]);
+                name.addEventListener("input", () => { kid.name = name.value; syncNav(); });
+                top.append(include, name);
+                if (!kid.locked) {
+                    const rm = el("button", "text-xs font-semibold text-brand-coral-text", c.removeKid[lang]) as HTMLButtonElement; rm.type = "button";
+                    rm.addEventListener("click", () => { state.kids = state.kids.filter((k) => k !== kid); renderKids(); });
+                    top.append(rm);
+                }
+                card.append(top);
+                const bands = el("div", "flex flex-wrap gap-1 items-center");
+                bands.append(el("span", "text-xs text-brand-ink-soft mr-1", c.kidBand[lang]));
+                for (const b of BANDS) {
+                    const btn = el("button", chipClass(kid.band === b), BAND_LABELS[b][lang]) as HTMLButtonElement; btn.type = "button";
+                    btn.setAttribute("aria-pressed", String(kid.band === b));
+                    btn.addEventListener("click", () => { kid.band = b; renderKids(); });
+                    bands.append(btn);
+                }
+                card.append(bands);
+                kidRowsEl.append(card);
+            }
+            syncNav();
+        };
+        $("add-kid").addEventListener("click", () => {
+            if (state.kids.length >= 10) return;
+            state.kids.push({ key: `n-${Date.now()}`, name: "", band: null, memberId: null, locked: false, included: true });
+            renderKids();
+            (kidRowsEl.lastElementChild?.querySelector("input[type=text]") as HTMLInputElement | null)?.focus();
+        });
+        if (state.kids.length === 0) state.kids.push({ key: "n-0", name: "", band: null, memberId: null, locked: false, included: true });
+
+        // ── Steps 2–3: chips ────────────────────────────────────────────
+        const chips = (host: HTMLElement, ids: readonly string[], labels: Record<string, { es: string; en: string }>, list: string[]) => {
+            host.replaceChildren();
+            for (const id of ids) {
+                const on = list.includes(id);
+                const b = el("button", chipClass(on), labels[id][lang]) as HTMLButtonElement; b.type = "button"; b.setAttribute("aria-pressed", String(on));
+                b.addEventListener("click", () => {
+                    const i = list.indexOf(id); if (i >= 0) list.splice(i, 1); else list.push(id);
+                    chips(host, ids, labels, list);
+                });
+                host.append(b);
+            }
+        };
+        chips($("priority-chips"), PRIORITIES, PRIORITY_LABELS, state.priorities);
+        chips($("style-chips"), REWARD_STYLES, REWARD_STYLE_LABELS, state.rewardStyles);
+        ($("note") as HTMLTextAreaElement).addEventListener("input", (e) => { state.note = (e.target as HTMLTextAreaElement).value; });
+        ($("wants-gigs") as HTMLInputElement).addEventListener("change", (e) => { state.wantsGigs = (e.target as HTMLInputElement).checked; });
+
+        // ── Navigation ──────────────────────────────────────────────────
+        const show = (n: number) => {
+            step = n;
+            document.querySelectorAll<HTMLElement>("[data-step]").forEach((s) => s.toggleAttribute("hidden", s.dataset.step !== String(n)));
+            document.querySelectorAll<HTMLElement>("[data-dot]").forEach((d) => {
+                const on = Number(d.dataset.dot) <= n;
+                d.className = `h-2.5 w-2.5 rounded-full ${on ? "bg-brand-ink" : "bg-brand-ink/20"}`;
+                if (Number(d.dataset.dot) === n) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current");
+            });
+            nextBtn.toggleAttribute("hidden", n === 4);
+            nextBtn.textContent = n === 3 ? c.build[lang] : c.next[lang];
+            backBtn.toggleAttribute("hidden", n === 1);
+            syncNav();
+            window.scrollTo({ top: 0 });
+        };
+        const syncNav = () => { nextBtn.disabled = step === 1 && !canAdvanceKids(state); };
+        backBtn.addEventListener("click", async () => {
+            if (step === 4) {
+                // Rows already created stay; only the answers are revisited.
+                if (total.chores + total.rewards + total.gigs > 0
+                    && !(await confirmSheet({ title: c.leaveTitle[lang], body: c.leaveBody[lang], confirmLabel: c.leaveConfirm[lang] }))) return;
+                show(3);
+                return;
+            }
+            show(Math.max(1, step - 1));
+        });
+        nextBtn.addEventListener("click", async () => {
+            if (building) return;
+            if (step < 3) { show(step + 1); return; }
+            await buildDraft();
+        });
+
+        // ── Draft ───────────────────────────────────────────────────────
+        const buildDraft = async () => {
+            const mine = ++seq;
+            building = true;
+            nextBtn.disabled = true;
+            show(4);
+            $("building").removeAttribute("hidden");
+            $("ai-failed").setAttribute("hidden", "");
+            try {
+                const r = await fetch("/api/families/onboarding/setup-draft", {
+                    method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(draftRequest(state, lang)),
+                });
+                if (mine !== seq) return;
+                if (!r.ok) throw new Error(String(r.status));
+                const data = await r.json();
+                aiAvailable = data?.ai_available === true;
+                if (data?.ai_failed === true) $("ai-failed").removeAttribute("hidden");
+                review = reviewRows(data);
+                renderReview();
+            } catch {
+                if (mine !== seq) return;
+                showToast(c.draftFailed[lang], "error");
+                show(3);
+            } finally {
+                if (mine === seq) { building = false; $("building").setAttribute("hidden", ""); nextBtn.disabled = false; }
+            }
+        };
+
+        // ── Review ──────────────────────────────────────────────────────
+        const rowError = (row: { error: string | null }) => {
+            const err = el("p", "text-xs text-red-700"); err.setAttribute("data-row-error", "");
+            if (row.error) {
+                err.textContent = row.error;
+            } else {
+                err.setAttribute("hidden", "");
+            }
+            return err;
+        };
+        const tick = (row: { included: boolean; status: string }) => {
+            const check = el("input") as HTMLInputElement; check.type = "checkbox"; check.checked = row.included; check.className = "mt-2 h-5 w-5 rounded";
+            check.disabled = row.status === "done";
+            check.addEventListener("change", () => { row.included = check.checked; syncCreate(); });
+            return check;
+        };
+        const titleInput = (row: { title: string; status: string }) => {
+            const t = el("input") as HTMLInputElement; t.type = "text"; t.value = row.title; t.maxLength = 200; t.className = `flex-1 ${inputClass}`; t.disabled = row.status === "done";
+            t.addEventListener("input", () => { row.title = t.value; });
+            return t;
+        };
+        const numInput = (get: () => number, set: (v: number) => void, min: number, max: number, done: boolean) => {
+            const n = el("input") as HTMLInputElement; n.type = "number"; n.min = String(min); n.max = String(max); n.value = String(get()); n.className = `w-20 ${inputClass}`; n.disabled = done;
+            n.addEventListener("input", () => set(Number(n.value)));
+            return n;
+        };
+        const doneClass = (status: string) => status === "done" ? " opacity-60" : "";
+
+        const renderReview = () => {
+            const kidsEl = $("review-kids"), rewardsEl = $("review-rewards"), gigsEl = $("review-gigs");
+            kidsEl.replaceChildren(); rewardsEl.replaceChildren(); gigsEl.replaceChildren();
+            for (const kid of review.kids) {
+                const card = el("section", "bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)] space-y-3");
+                card.dataset.kidKey = kid.key;
+                const head = el("div", "flex items-center justify-between gap-2");
+                head.append(el("h3", "font-bold text-brand-ink", `${kid.name} · ${BAND_LABELS[kid.band][lang]}`));
+                head.append(el("span", "text-xs font-semibold " + (kid.memberId ? "text-brand-mint-text" : "text-brand-coral-text"), kid.memberId ? c.joined[lang] : c.notJoined[lang]));
+                card.append(head);
+                // Chores created before the kid had an account went to the shared
+                // rotation; say so even after the account exists.
+                const auto = kid.chores.filter((r) => r.createdAuto).length;
+                if (auto) card.append(el("p", "text-xs font-semibold text-brand-coral-text", fill(c.autoCreated[lang], { n: auto, name: kid.name })));
+                if (!kid.memberId) card.append(unjoinedBlock(kid));
+                for (const row of kid.chores) {
+                    const line = el("div", "space-y-1 pt-2 border-t border-brand-ink/10" + doneClass(row.status));
+                    const top = el("div", "flex items-start gap-2"); top.append(tick(row), titleInput(row)); line.append(top);
+                    const meta = el("div", "flex flex-wrap items-center gap-2 text-xs text-brand-ink");
+                    meta.append(numInput(() => row.points, (v) => { row.points = v; }, 0, 1000, row.status === "done"), el("span", "", c.points[lang]));
+                    if (row.isBonus) meta.append(el("span", "px-2 py-0.5 rounded-full bg-brand-sun/30 font-semibold", c.bonus[lang]));
+                    line.append(meta);
+                    const days = el("div", "flex gap-1");
+                    (lang === "es" ? ["L", "M", "X", "J", "V", "S", "D"] : ["M", "T", "W", "T", "F", "S", "S"]).forEach((label, d) => {
+                        const b = el("button", "", label) as HTMLButtonElement; b.type = "button"; b.disabled = row.status === "done";
+                        const paint = () => { b.className = `h-7 w-7 rounded-full text-xs font-bold border ${row.days.includes(d) ? "bg-brand-sky text-brand-ink border-brand-ink" : "bg-white text-brand-ink border-brand-ink/20"}`; };
+                        b.addEventListener("click", () => { row.days = row.days.includes(d) ? row.days.filter((x) => x !== d) : [...row.days, d]; paint(); });
+                        paint(); days.append(b);
+                    });
+                    line.append(days);
+                    if (row.duplicateOf) line.append(el("p", "text-xs font-bold text-brand-coral-text", fill(c.exists[lang], { title: row.duplicateOf })));
+                    line.append(rowError(row));
+                    card.append(line);
+                }
+                kidsEl.append(card);
+            }
+            if (review.rewards.length) {
+                rewardsEl.append(el("h3", "font-bold text-brand-ink px-1", c.rewards[lang]));
+                for (const row of review.rewards) {
+                    const line = el("div", "bg-brand-cream rounded-2xl p-3 border border-brand-ink/10 space-y-1" + doneClass(row.status));
+                    const top = el("div", "flex items-start gap-2"); top.append(tick(row), titleInput(row)); line.append(top);
+                    const meta = el("div", "flex items-center gap-2 text-xs text-brand-ink");
+                    meta.append(numInput(() => row.pointsCost, (v) => { row.pointsCost = v; }, 1, 10000, row.status === "done"), el("span", "", c.points[lang]), el("span", "text-brand-ink-soft", REWARD_STYLE_LABELS[row.category as keyof typeof REWARD_STYLE_LABELS]?.[lang] ?? row.category));
+                    line.append(meta);
+                    if (row.duplicateOf) line.append(el("p", "text-xs font-bold text-brand-coral-text", fill(c.exists[lang], { title: row.duplicateOf })));
+                    line.append(rowError(row));
+                    rewardsEl.append(line);
+                }
+            }
+            if (review.gigs.length) {
+                gigsEl.append(el("h3", "font-bold text-brand-ink px-1", c.gigs[lang]));
+                for (const row of review.gigs) {
+                    const line = el("div", "bg-brand-cream rounded-2xl p-3 border border-brand-ink/10 space-y-1" + doneClass(row.status));
+                    const top = el("div", "flex items-start gap-2"); top.append(tick(row), titleInput(row)); line.append(top);
+                    const meta = el("div", "flex items-center gap-2 text-xs text-brand-ink");
+                    meta.append(numInput(() => row.points, (v) => { row.points = v; }, 1, 10000, row.status === "done"), el("span", "", c.pesos[lang]), el("span", "text-brand-ink-soft", c.difficulty[lang][row.difficulty - 1] ?? ""));
+                    line.append(meta);
+                    if (row.duplicateOf) line.append(el("p", "text-xs font-bold text-brand-coral-text", fill(c.exists[lang], { title: row.duplicateOf })));
+                    line.append(rowError(row));
+                    gigsEl.append(line);
+                }
+            }
+            syncCreate();
+        };
+
+        // Join code + optional account creation for a kid who has not joined.
+        const unjoinedBlock = (kid: Review["kids"][number]) => {
+            const box = el("div", "rounded-xl bg-white border border-brand-ink/10 p-3 space-y-2 text-sm text-brand-ink");
+            const codeLine = el("div", "flex items-center gap-2 flex-wrap");
+            const codeText = el("span", "", fill(c.joinCodeHint[lang], { name: kid.name }));
+            const code = el("span", "font-mono text-lg font-bold tracking-[0.2em] text-brand-coral-text", joinCode);
+            codeLine.append(codeText, code);
+            if (!joinCode) {
+                const gen = el("button", buttonClass("secondary", "sm"), c.noJoinCode[lang]) as HTMLButtonElement; gen.type = "button";
+                gen.addEventListener("click", async () => {
+                    gen.disabled = true;
+                    try {
+                        const r = await fetch("/api/families/join-code/generate", { method: "POST", credentials: "same-origin" });
+                        const d = r.ok ? await r.json() : null;
+                        if (d?.join_code) { joinCode = d.join_code; renderReview(); } else { gen.disabled = false; }
+                    } catch { gen.disabled = false; }
+                });
+                codeLine.append(gen);
+            }
+            box.append(codeLine);
+            box.append(el("p", "text-xs text-brand-ink-soft", fill(c.rotationHint[lang], { name: kid.name })));
+            // Once any of this kid's rows is creating or created, an account can
+            // no longer re-home them — the form closes rather than mislead.
+            const started = kid.chores.some((r) => r.status !== "idle");
+            if (started) return box;
+            const details = el("details"); details.append(el("summary", "cursor-pointer text-xs font-semibold text-brand-sky-text", c.createAccount[lang]));
+            const form = el("form", "mt-2 space-y-2");
+            const email = el("input") as HTMLInputElement; email.type = "email"; email.required = true; email.placeholder = c.email[lang]; email.className = `w-full ${inputClass}`; email.setAttribute("aria-label", c.email[lang]);
+            const pw = el("input") as HTMLInputElement; pw.type = "password"; pw.required = true; pw.minLength = 8; pw.placeholder = c.password[lang]; pw.className = `w-full ${inputClass}`; pw.setAttribute("aria-label", c.password[lang]);
+            const submit = el("button", buttonClass("primary", "sm"), c.createAccountBtn[lang]) as HTMLButtonElement; submit.type = "submit";
+            const err = el("p", "text-xs text-red-700"); err.setAttribute("hidden", "");
+            form.append(email, pw, submit, err);
+            form.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                submit.disabled = true; err.setAttribute("hidden", "");
+                try {
+                    const r = await fetch("/api/families/members", {
+                        method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(registerBody({ name: kid.name, band: kid.band }, email.value, pw.value)),
+                    });
+                    const d = await r.json().catch(() => null);
+                    if (r.ok && d?.id) {
+                        kid.memberId = String(d.id);
+                        showToast(c.accountCreated[lang], "success");
+                        renderReview();
+                    } else {
+                        err.textContent = errorDetail(d, c.accountFailed[lang]); err.removeAttribute("hidden"); submit.disabled = false;
+                    }
+                } catch {
+                    err.textContent = c.accountFailed[lang]; err.removeAttribute("hidden"); submit.disabled = false;
+                }
+            });
+            details.append(form);
+            box.append(details);
+            return box;
+        };
+
+        const pending = () => {
+            let n = 0;
+            for (const k of review.kids) for (const r of k.chores) if (r.included && r.status !== "done") n += 1;
+            for (const r of review.rewards) if (r.included && r.status !== "done") n += 1;
+            for (const r of review.gigs) if (r.included && r.status !== "done") n += 1;
+            return n;
+        };
+        const anyError = () => [...review.kids.flatMap((k) => k.chores), ...review.rewards, ...review.gigs].some((r) => r.status === "error");
+        const syncCreate = () => {
+            const n = pending();
+            createBtn.textContent = anyError() ? c.retry[lang] : fill(c.create[lang], { n });
+            createBtn.disabled = n === 0;
+        };
+
+        const post: Poster = async (path, body) => {
+            const r = await fetch(path, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            if (r.ok) return { ok: true, detail: null };
+            const parsed = await r.json().catch(() => null);
+            return { ok: false, detail: errorDetail(parsed, c.createFailed[lang]) };
+        };
+
+        createBtn.addEventListener("click", async () => {
+            createBtn.disabled = true;
+            const counts = await createAll(review, lang, post, (i, n) => { createBtn.textContent = fill(c.creating[lang], { i, n }); });
+            total.chores += counts.chores; total.rewards += counts.rewards; total.gigs += counts.gigs;
+            if (!state.wantsGigs) {
+                try {
+                    await fetch("/api/families/me", { method: "PATCH", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(modulesBodyWithoutGigs(modules)) });
+                } catch { /* best effort — the gig board is UX-only gating */ }
+            }
+            renderReview();
+            const done = $("done-box"), text = $("done-text"), refine = $("refine-link") as HTMLAnchorElement;
+            text.textContent = fill(c.done[lang], total);
+            refine.href = `/parent/jarvis?q=${encodeURIComponent(jarvisPrefill(state, total, lang))}`;
+            refine.toggleAttribute("hidden", !aiAvailable);
+            done.removeAttribute("hidden");
+            if (counts.chores + counts.rewards + counts.gigs > 0) showToast(fill(c.done[lang], counts), "success");
+        });
+
+        // Leaving the review after something was created: a sheet, never a native confirm.
+        document.querySelectorAll<HTMLAnchorElement>('a[href="/parent"]').forEach((a) => a.addEventListener("click", async (e) => {
+            if (step !== 4 || total.chores + total.rewards + total.gigs === 0) return;
+            e.preventDefault();
+            if (await confirmSheet({ title: c.leaveTitle[lang], body: c.leaveBody[lang], confirmLabel: c.leaveConfirm[lang] })) window.location.href = "/parent";
+        }));
+
+        renderKids();
+        show(1);
+    }
+</script>

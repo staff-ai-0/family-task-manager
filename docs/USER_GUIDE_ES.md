@@ -213,6 +213,19 @@ Para comenzar a usar Family Task Manager, el primer padre o madre de la familia 
 
 Una vez registrado, puede invitar a los demas miembros de la familia.
 
+### Configuración guiada (2 minutos)
+
+La tarjeta de configuración del inicio abre **Configura tu familia** (`/parent/setup`): cuatro pasos cortos que terminan con un conjunto de tareas, premios y chambitas listo para crear.
+
+1. **Hijos** — los que ya se unieron aparecen; agrega a los que faltan (nombre + rango de edad).
+2. **Qué es lo más importante** — rutinas, escuela, casa, cocina, mascotas, cuidado personal, y una nota.
+3. **Premios y dinero** — los tipos de premio que te gustan y si quieres un tablero de chambitas con dinero.
+4. **Revisar** — marca, edita y pulsa **Crear**. Nada existe hasta que lo hagas.
+
+En Plus/Pro la IA arma el conjunto a partir de tus respuestas; en el plan gratis sale de los paquetes por edad, filtrados por tus respuestas. En ambos casos puedes ver los paquetes tú mismo.
+
+Un hijo que aún no se ha unido recibe sus tareas en la **rotación compartida** hasta que entre — asígnalas desde Tareas después — o crea su cuenta ahí mismo (correo + contraseña). Al terminar, **Afinar con Jarvis** abre un chat con lo que configuraste.
+
 ### Invitar por correo electronico
 
 1. Abra **Más** → **Miembros** (`/parent/members`)
