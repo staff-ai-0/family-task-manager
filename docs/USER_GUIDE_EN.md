@@ -400,6 +400,14 @@ Templates are reusable tasks that serve as blueprints for generating weekly assi
    - **Bonus task** — Check if this is an extra task that only unlocks after completing required ones
 3. Click **"Create Template"**
 
+### Scan a chore chart (AI)
+
+Instead of typing every chore, photograph the chart on your fridge, a handwritten list, or a screenshot: on **More → Tasks**, tap **📷** (or "Scan the fridge chart" when the list is empty) and pick the photo.
+
+The app reads it and proposes one recurring chore per row — title, points, which kids (matched to your family members by name) and which days of the week. Review the list: fix a title, change the points, tap a kid's name to add or remove them (nobody selected = the app balances it), tap days to toggle them, untick what you do not want. A chore that already exists is marked and unticked. Then **Create N chores** — each one is created exactly as if you had typed it, and enters the weekly schedule from then on.
+
+> Requires an AI plan (**Plus** or above). The photo is read once and not stored. If the picture cannot be read, you get one message and nothing is created.
+
 ### Bilingual translations
 
 Each template can have translations in Spanish and English:
