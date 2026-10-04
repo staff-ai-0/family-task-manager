@@ -213,6 +213,19 @@ To start using Family Task Manager, the first parent in the family must create a
 
 Once registered, you can invite the rest of your family members.
 
+### Guided setup (2 minutes)
+
+The parent hub's setup card opens **Set up your family** (`/parent/setup`): four short steps that end with a ready-to-create set of chores, rewards and gigs.
+
+1. **Kids** — the kids who already joined are listed; add the ones who haven't (name + age band).
+2. **What matters** — pick any of routines, school, home, kitchen, pets, self-care, and leave a note.
+3. **Rewards & cash** — the reward styles you like, and whether you want a cash gig board.
+4. **Review** — tick, edit and press **Create**. Nothing exists until you do.
+
+On Plus/Pro the set is drafted by the AI from your answers; on the free plan it comes from the age starter packs, filtered by your answers. Either way you can still browse the packs yourself.
+
+A kid who hasn't joined gets their chores in the **shared rotation** until they do — assign them from Tasks later — or create their account right there (email + password). After creating, **Refine with Jarvis** opens a chat prefilled with what you set up.
+
 ### Invite by email
 
 1. Open **More** → **Members** (`/parent/members`)

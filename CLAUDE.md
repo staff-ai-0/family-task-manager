@@ -325,6 +325,10 @@ Two layers, with separate state:
 - **Tour ids live in two places and must stay in sync**: `MODULE_TOUR_IDS` in `tourSteps.ts` and `TOUR_IDS` in `backend/app/api/routes/onboarding.py`. An id missing from the backend allowlist gets a 422 nobody sees, so that tour re-runs on every visit forever.
 - Steps point at `[data-tour="…"]` anchors. `runTour` drops steps whose element is missing or invisible, so a tour degrades instead of spotlighting empty space — which also means a renamed anchor fails silently.
 
+### Guided setup (UX-E3)
+
+`/parent/setup` is a four-step wizard (kids + age band → priorities → reward styles + cash toggle → review). `POST /api/families/onboarding/setup-draft` returns the draft and **stores nothing**; the page creates every ticked row through the ordinary create endpoints (E1 pattern: `createAll` in `lib/setupWizard.ts` with an injected `post`, errors kept on the row, retry re-posts only failed rows). The AI gate is **silent** — `family_tier_allows("ai_features")` + `LITELLM_API_KEY` decide; a free family gets `source: "pack"` (starter packs filtered by `CHORE_TAGS` priorities) with HTTP 200, and any AI failure degrades to the pack with `ai_failed: true`. Kid names bind to active+approved CHILD/TEEN members only (shared `name_match.py`, same rule as the chart scanner); an unbound kid's chores are created AUTO (shared rotation) and the review step shows the join code or creates the account via `POST /api/auth/register`. Copy lives only in `lib/setupWizard.ts`.
+
 ### Per-family module registry
 
 `families.enabled_modules` (JSONB, NULL = all on) lets a family switch optional surfaces off: `meals`, `shopping`, `calendar`, `pet`, `chat`, `budget`, `gigs` (`backend/app/core/modules.py`). Core (tasks/rewards/consequences/points) is never togglable. Gating is UX-only: `/auth/me` denormalizes the list, BottomNav/MoreSheet filter links, and `frontend/src/middleware.ts` bounces deep links into a disabled module to `/dashboard?module_off=1` — backend APIs stay live. Toggles + starter presets live in parent settings → family ("Módulos").
