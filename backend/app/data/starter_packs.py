@@ -43,6 +43,10 @@ THEMED_PACKS = ("tdah",)
 # Every valid band key the apply endpoint accepts (age presets + themed).
 PACK_KEYS = AGE_BANDS + THEMED_PACKS
 
+# UX-E3 guided setup: the six "what matters" chips. Every chore carries one or
+# more so the free-plan draft can filter a band by the family's answers.
+PRIORITY_TAGS = ("routine", "school", "home", "kitchen", "pets", "self_care")
+
 STARTER_PACKS: dict = {
     "3-5": {
         "label_es": "3 a 5 años",
@@ -210,3 +214,58 @@ STARTER_PACKS: dict = {
         ],
     },
 }
+
+# Chore id → priority tags (UX-E3). Kept as one table rather than inline keys
+# so the catalog above stays readable; the loop below folds them in. The
+# invariant test asserts the two sets of ids are identical and that every age
+# band answers every tag (3-5 and 13+ are the thin ones — mind them).
+CHORE_TAGS: dict[str, tuple[str, ...]] = {
+    "3-5.chore.juguetes": ("home",),
+    "3-5.chore.ropa-cesto": ("home", "routine"),
+    "3-5.chore.zapatos": ("home", "routine"),
+    "3-5.chore.dientes": ("self_care", "routine"),
+    "3-5.chore.cama-ayuda": ("routine", "home"),
+    "3-5.chore.servilletas": ("kitchen",),
+    "3-5.chore.libros": ("home", "school"),
+    "3-5.chore.mascota-ayuda": ("pets",),
+    "3-5.chore.pijama": ("routine", "self_care"),
+    "6-8.chore.cama": ("routine", "home"),
+    "6-8.chore.cuarto": ("home",),
+    "6-8.chore.mesa": ("kitchen",),
+    "6-8.chore.mascota": ("pets",),
+    "6-8.chore.tarea": ("school",),
+    "6-8.chore.plato": ("kitchen",),
+    "6-8.chore.mochila": ("school", "routine"),
+    "6-8.chore.doblar-ropa": ("home", "self_care"),
+    "6-8.chore.plantas": ("home",),
+    "9-12.chore.cama-cuarto": ("routine", "home"),
+    "9-12.chore.platos": ("kitchen",),
+    "9-12.chore.basura": ("home",),
+    "9-12.chore.tarea": ("school",),
+    "9-12.chore.ropa": ("home", "self_care"),
+    "9-12.chore.cocina": ("kitchen", "home"),
+    "9-12.chore.cena-ayuda": ("kitchen",),
+    "9-12.chore.perro": ("pets",),
+    "9-12.chore.bano": ("home", "self_care"),
+    "13+.chore.cuarto": ("home", "routine"),
+    "13+.chore.lavar-ropa": ("self_care", "home"),
+    "13+.chore.cocinar": ("kitchen",),
+    "13+.chore.trastes": ("kitchen",),
+    "13+.chore.basura": ("home",),
+    "13+.chore.aspirar": ("home", "pets"),
+    "13+.chore.despensa": ("kitchen",),
+    "13+.chore.estudio": ("school",),
+    "tdah.chore.rutina-manana": ("routine", "self_care"),
+    "tdah.chore.mochila-noche": ("school", "routine"),
+    "tdah.chore.ropa-lista": ("routine",),
+    "tdah.chore.tablero-visual": ("routine",),
+    "tdah.chore.escritorio-tarea": ("school",),
+    "tdah.chore.descanso-movimiento": ("self_care",),
+    "tdah.chore.rutina-noche": ("routine",),
+    "tdah.chore.una-cosa": ("home",),
+    "tdah.chore.plan-semana": ("routine", "school"),
+}
+
+for _pack in STARTER_PACKS.values():
+    for _chore in _pack["chores"]:
+        _chore["tags"] = list(CHORE_TAGS.get(_chore["id"], ()))
