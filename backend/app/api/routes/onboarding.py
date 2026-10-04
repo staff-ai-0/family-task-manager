@@ -1,8 +1,9 @@
 """Onboarding routes — checklist state/dismiss + age-preset starter packs."""
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, get_current_user, require_parent_role
+from app.core.rate_limiter import limiter, AI_LIMIT
 from app.core.type_utils import to_uuid_required
 from app.models.user import User
 from app.schemas.onboarding import (
@@ -13,7 +14,9 @@ from app.schemas.onboarding import (
     StarterPackApplyResult,
     StarterPackList,
 )
+from app.schemas.setup_draft import SetupDraftRequest, SetupDraftResponse
 from app.services.onboarding_service import OnboardingService
+from app.services.setup_draft_service import SetupDraftService
 from app.services.starter_pack_service import StarterPackService
 
 router = APIRouter()
@@ -52,6 +55,23 @@ async def apply_starter_pack(
     return await StarterPackService.apply(
         db, family_id, to_uuid_required(current_user.id), payload
     )
+
+
+@router.post("/setup-draft", response_model=SetupDraftResponse)
+@limiter.limit(AI_LIMIT)
+async def setup_draft(
+    request: Request,
+    payload: SetupDraftRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """UX-E3 guided setup: the wizard's answers → a draft of chores per kid,
+    rewards and gigs. STORES NOTHING — the browser creates the ticked rows
+    through the ordinary create endpoints. The AI gate is silent: a free
+    family gets the starter-pack draft (200), never a 403; AI_LIMIT because
+    the paid path spends LLM budget."""
+    family_id = to_uuid_required(current_user.family_id)
+    return await SetupDraftService.draft(db, family_id, payload)
 
 
 @router.get("", response_model=OnboardingState)

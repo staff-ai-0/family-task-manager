@@ -302,3 +302,47 @@ class TestService:
         assert by_title["Pack your school bag for tomorrow"] is None
         assert any(r.duplicate_of == "30 MINUTES of screen time" for r in out.rewards)
         assert any(g.duplicate_of == "Help wash the car" for g in out.gigs)
+from httpx import AsyncClient
+from sqlalchemy import func, select
+
+
+PAYLOAD = {
+    "kids": [{"name": "Sofía", "age_band": "6-8"}], "priorities": ["pets"], "note": None,
+    "reward_styles": [], "wants_gigs": True, "lang": "en",
+}
+
+
+class TestRoute:
+    @pytest.mark.asyncio
+    async def test_parent_gets_a_draft_and_nothing_is_stored(self, client: AsyncClient, auth_headers, db_session, test_family):
+        async def counts():
+            out = []
+            for m in (TaskTemplate, Reward, GigOffering):
+                out.append((await db_session.execute(select(func.count()).select_from(m).where(m.family_id == test_family.id))).scalar())
+            return tuple(out)
+        before = await counts()
+        r = await client.post("/api/families/onboarding/setup-draft", json=PAYLOAD, headers=auth_headers)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["source"] == "pack" and body["kids"][0]["name"] == "Sofía" and body["kids"][0]["chores"]
+        assert body["gigs"] and body["rewards"]
+        assert await counts() == before
+
+    @pytest.mark.asyncio
+    async def test_bounds_422(self, client: AsyncClient, auth_headers):
+        for bad in (
+            {**PAYLOAD, "kids": []},
+            {**PAYLOAD, "kids": [{"name": "k", "age_band": "6-8"}] * 11},
+            {**PAYLOAD, "kids": [{"name": "k", "age_band": "2-4"}]},
+            {**PAYLOAD, "priorities": ["homework"]},
+            {**PAYLOAD, "note": "n" * 301},
+        ):
+            r = await client.post("/api/families/onboarding/setup-draft", json=bad, headers=auth_headers)
+            assert r.status_code == 422, bad
+
+    @pytest.mark.asyncio
+    async def test_child_403(self, client: AsyncClient, test_child_user):
+        login = await client.post("/api/auth/login", json={"email": "child@test.com", "password": "password123"})
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        r = await client.post("/api/families/onboarding/setup-draft", json=PAYLOAD, headers=headers)
+        assert r.status_code == 403

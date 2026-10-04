@@ -576,3 +576,35 @@ async def test_a_revoked_credit_re_locks_the_feature(
         await require_feature("ai_features", db_session, test_parent_user)
     assert exc.value.status_code == 403
     assert exc.value.detail["error"] == "upgrade_required"
+SETUP_DRAFT = {"kids": [{"name": "Sofía", "age_band": "6-8"}], "priorities": [], "reward_styles": [], "wants_gigs": False, "lang": "en"}
+
+
+@pytest.mark.asyncio
+async def test_setup_draft_free_is_pack_and_never_calls_the_llm(client: AsyncClient, auth_headers, monkeypatch):
+    """UX-E3 is a SILENT gate: the free plan gets the starter-pack draft (200),
+    not a 403 — but the LLM client must never be built for it."""
+    from unittest.mock import patch
+    from app.core import config
+    monkeypatch.setattr(config.settings, "LITELLM_API_KEY", "test-key")
+    with patch("app.core.llm.OpenAI") as mock_openai:
+        r = await client.post("/api/families/onboarding/setup-draft", json=SETUP_DRAFT, headers=auth_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["source"] == "pack" and r.json()["ai_available"] is False
+    mock_openai.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_setup_draft_plus_calls_the_llm(client: AsyncClient, auth_headers, plus_subscription, monkeypatch):
+    from unittest.mock import MagicMock, patch
+    from app.core import config
+    monkeypatch.setattr(config.settings, "LITELLM_API_KEY", "test-key")
+    with patch("app.core.llm.OpenAI") as mock_openai:
+        msg = MagicMock(); msg.content = '{"kids": [{"name": "Sofía", "chores": [{"title": "Make bed"}]}], "rewards": [], "gigs": []}'
+        choice = MagicMock(); choice.message = msg
+        completion = MagicMock(); completion.choices = [choice]
+        c = MagicMock(); c.chat.completions.create.return_value = completion
+        mock_openai.return_value = c
+        r = await client.post("/api/families/onboarding/setup-draft", json=SETUP_DRAFT, headers=auth_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["source"] == "ai" and r.json()["kids"][0]["chores"][0]["title"] == "Make bed"
+    mock_openai.assert_called_once()
