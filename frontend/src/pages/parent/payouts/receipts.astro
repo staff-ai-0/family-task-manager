@@ -1,0 +1,220 @@
+---
+import PageLayout from "@components/ui/PageLayout.astro";
+import UpgradePrompt from "@components/UpgradePrompt.astro";
+import { apiFetch } from "../../../lib/api";
+import { isFreePlan } from "../../../lib/plan";
+import { RECEIPT_COPY, kidChips } from "../../../lib/payoutReceipts";
+import { buttonClass } from "../../../lib/buttonClasses";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+// Paid-only (ai_features). Fail-open; the backend enforces.
+const aiLocked = await isFreePlan(token);
+const { data: members } = await apiFetch<any[]>(`/api/families/${user.family_id}/members`, { token });
+const kids = kidChips(members);
+const c = RECEIPT_COPY;
+---
+
+<PageLayout
+    title={c.title[lang]}
+    tone="mint"
+    backHref="/parent/payouts"
+    backLabel={c.back[lang]}
+    role={user.role}
+    active="parent"
+    lang={lang}
+    mainClass="flex-1 px-4 py-6 space-y-4"
+>
+    <p slot="header-extra" class="text-brand-ink text-sm mt-1">{c.subtitle[lang]}</p>
+
+    {aiLocked && <UpgradePrompt feature="ai_features" planNeeded="Plus" lang={lang} />}
+
+    <div id="receipts-root" data-lang={lang} data-kids={JSON.stringify(kids)}>
+        <p id="error-box" hidden class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl"></p>
+
+        <label id="picker" hidden={aiLocked}
+               class="block bg-brand-cream rounded-2xl border-2 border-dashed border-brand-ink/30 p-10 text-center cursor-pointer hover:border-brand-ink transition-colors">
+            <input type="file" id="receipt-files" multiple accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" class="hidden" />
+            <span class="text-5xl" aria-hidden="true">🧾</span>
+            <p class="mt-3 text-sm font-semibold text-brand-ink">{c.pick[lang]}</p>
+            <p class="text-xs text-brand-ink-soft mt-1">JPG · PNG · WebP · PDF · 8 MB</p>
+        </label>
+
+        <div id="scanning" hidden class="bg-brand-cream rounded-2xl p-6 text-center border border-brand-ink/10">
+            <div class="inline-block animate-spin h-8 w-8 border-4 border-brand-ink/20 border-t-brand-ink rounded-full"></div>
+            <p class="mt-3 text-sm text-brand-ink-soft">{c.scanning[lang]}</p>
+        </div>
+
+        <div id="results" hidden class="space-y-3">
+            <h2 id="results-heading" class="font-bold text-brand-ink px-1"></h2>
+            <p id="unreadable-box" hidden class="p-3 bg-amber-100 border border-amber-300 text-amber-800 text-sm rounded-xl"></p>
+            <div id="rows" class="space-y-3"></div>
+            <button type="button" id="record-btn" class={`w-full ${buttonClass("primary", "md")}`}></button>
+            <p id="done-box" hidden class="p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-text text-sm rounded-xl">
+                <span id="done-text"></span> · <a href="/parent/payouts" class="font-bold underline">{c.back[lang]}</a>
+            </p>
+        </div>
+    </div>
+</PageLayout>
+
+<script>
+    import {
+        RECEIPT_COPY, errorDetail, fill, fmtMoney, pesosToCents, proposalRows, recordRows, rowProblem,
+        type Kid, type PostResult, type Row,
+    } from "../../../lib/payoutReceipts";
+    import { showToast } from "../../../lib/toast";
+
+    const root = document.getElementById("receipts-root");
+    if (root) {
+        const lang = root.dataset.lang === "en" ? "en" : "es";
+        const kids: Kid[] = (() => { try { return JSON.parse(root.dataset.kids ?? "[]"); } catch { return []; } })();
+        const c = RECEIPT_COPY;
+        const $ = (id: string) => document.getElementById(id)!;
+        const fileInput = $("receipt-files") as HTMLInputElement;
+        const errorBox = $("error-box"), scanning = $("scanning"), results = $("results"), rowsEl = $("rows");
+        const heading = $("results-heading"), unreadableBox = $("unreadable-box");
+        const recordBtn = $("record-btn") as HTMLButtonElement, doneBox = $("done-box"), doneText = $("done-text");
+        let rows: Row[] = [];
+        const recorded = new Set<string>();
+
+        const fail = (msg: string) => { errorBox.textContent = msg; errorBox.removeAttribute("hidden"); };
+        const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") => {
+            const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n;
+        };
+        const inputCls = "px-2 py-1.5 rounded-lg border border-brand-ink/20 bg-white text-sm text-brand-ink";
+
+        // Everything the model or the parent typed reaches the DOM through
+        // textContent / value — never innerHTML.
+        const render = () => {
+            rowsEl.replaceChildren();
+            for (const row of rows) {
+                if (recorded.has(row.key)) continue;
+                const card = el("div", "bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)] space-y-2");
+                card.dataset.rowKey = row.key;
+
+                const top = el("div", "flex items-start gap-3");
+                const check = el("input") as HTMLInputElement; check.type = "checkbox"; check.checked = row.checked; check.className = "mt-1 h-5 w-5 rounded";
+                check.addEventListener("change", () => { row.checked = check.checked; syncButton(); });
+                const head = el("div", "flex-1");
+                head.append(
+                    el("p", "text-2xl font-extrabold text-brand-mint-text", fmtMoney(row.amountCents)),
+                    el("p", "text-xs text-brand-ink-soft", [row.receiptDate, row.concept && `“${row.concept}”`, `Folio ${row.folio}`].filter(Boolean).join(" · ")),
+                    el("p", "text-xs text-brand-ink-soft", row.beneficiary),
+                );
+                top.append(check, head);
+                card.append(top);
+
+                const kidRow = el("div", "flex flex-wrap gap-1 items-center");
+                kidRow.append(el("span", "text-xs font-semibold text-brand-ink mr-1", c.kid[lang]));
+                if (!row.userId) kidRow.append(el("span", "text-xs text-brand-coral-text", c.chooseKid[lang]));
+                for (const kid of kids) {
+                    const b = el("button", "", kid.label) as HTMLButtonElement; b.type = "button";
+                    const paint = () => { b.className = `px-3 py-1 rounded-full text-xs font-semibold border ${row.userId === kid.id ? "bg-brand-mint text-brand-ink border-brand-ink" : "bg-white text-brand-ink border-brand-ink/20"}`; b.setAttribute("aria-pressed", String(row.userId === kid.id)); };
+                    b.addEventListener("click", () => { row.userId = kid.id; row.error = null; render(); });
+                    paint(); kidRow.append(b);
+                }
+                card.append(kidRow);
+
+                card.append(el("p", "text-xs font-semibold text-brand-ink", c.weeks[lang]));
+                row.allocations.forEach((a, idx) => {
+                    const line = el("div", "flex flex-wrap items-center gap-2");
+                    line.dataset.weekLine = String(idx);
+                    line.append(el("span", "text-xs text-brand-ink-soft", c.weekOf[lang]));
+                    const date = el("input", inputCls) as HTMLInputElement; date.type = "date"; date.value = a.weekOf;
+                    date.addEventListener("change", () => { a.weekOf = date.value; a.alreadyPaid = false; });
+                    const amt = el("input", `${inputCls} w-24`) as HTMLInputElement; amt.type = "number"; amt.step = "1"; amt.min = "0"; amt.value = String(a.amountCents / 100);
+                    amt.addEventListener("input", () => { a.amountCents = pesosToCents(amt.value); });
+                    const rm = el("button", "text-xs underline text-brand-ink-soft", c.removeWeek[lang]) as HTMLButtonElement; rm.type = "button";
+                    rm.addEventListener("click", () => { row.allocations.splice(idx, 1); render(); });
+                    line.append(date, el("span", "text-sm", "$"), amt, rm);
+                    card.append(line);
+                    if (a.alreadyPaid) card.append(el("p", "text-xs text-brand-coral-text", c.alreadyPaid[lang]));
+                });
+                const add = el("button", "text-xs font-semibold text-brand-mint-text underline", c.addWeek[lang]) as HTMLButtonElement; add.type = "button";
+                add.addEventListener("click", () => {
+                    const last = row.allocations[row.allocations.length - 1]?.weekOf;
+                    const next = last ? new Date(`${last}T00:00:00`) : new Date();
+                    if (last) next.setDate(next.getDate() + 7);
+                    row.allocations.push({ weekOf: next.toISOString().slice(0, 10), amountCents: 0, alreadyPaid: false, projectedCents: 0 });
+                    render();
+                });
+                card.append(add);
+
+                if (row.duplicate) card.append(el("p", "text-xs font-bold text-brand-coral-text", c.duplicate[lang]));
+                if (row.guessedWeeks) card.append(el("p", "text-xs text-brand-ink-soft", c.guessed[lang]));
+                if (row.mismatch) {
+                    const projected = row.allocations.reduce((n, a) => n + a.projectedCents, 0);
+                    card.append(el("p", "text-xs text-brand-ink-soft", fill(c.mismatch[lang], { projected: fmtMoney(projected) })));
+                }
+                const err = el("p", "text-xs text-red-700"); err.setAttribute("data-row-error", "");
+                if (row.error) err.textContent = row.error; else err.setAttribute("hidden", "");
+                card.append(err);
+                rowsEl.append(card);
+            }
+            syncButton();
+        };
+
+        const syncButton = () => {
+            const n = rows.filter((r) => r.checked && !recorded.has(r.key)).length;
+            recordBtn.textContent = fill(c.record[lang], { n });
+            recordBtn.disabled = n === 0;
+        };
+
+        fileInput.addEventListener("change", async () => {
+            const files = Array.from(fileInput.files ?? []);
+            if (files.length === 0) return;
+            errorBox.setAttribute("hidden", ""); results.setAttribute("hidden", ""); doneBox.setAttribute("hidden", ""); unreadableBox.setAttribute("hidden", "");
+            if (files.length > 10) { fail(c.tooMany[lang]); fileInput.value = ""; return; }
+            scanning.removeAttribute("hidden");
+            const fd = new FormData(); for (const f of files) fd.append("files", f);
+            try {
+                const r = await fetch("/api/bank/payout-receipts/scan", { method: "POST", body: fd, credentials: "same-origin" });
+                scanning.setAttribute("hidden", "");
+                if (!r.ok) { fail(r.status === 413 ? c.tooMany[lang] : c.failed[lang]); return; }
+                const parsed = proposalRows(await r.json());
+                if (parsed.rows.length === 0) { fail(c.unreadable[lang]); return; }
+                rows = parsed.rows; recorded.clear();
+                if (parsed.unreadable.length) {
+                    unreadableBox.textContent = `${c.unreadable[lang]} ${parsed.unreadable.join(", ")}`;
+                    unreadableBox.removeAttribute("hidden");
+                }
+                heading.textContent = fill(c.found[lang], { n: rows.length });
+                render();
+                results.removeAttribute("hidden");
+            } catch {
+                scanning.setAttribute("hidden", "");
+                fail(c.failed[lang]);
+            } finally {
+                fileInput.value = "";
+            }
+        });
+
+        const post = async (body: Record<string, unknown>): Promise<PostResult> => {
+            const r = await fetch("/api/bank/payout-receipts/confirm", {
+                method: "POST", credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            if (r.ok) return { ok: true, detail: null };
+            const parsed = await r.json().catch(() => null);
+            return { ok: false, detail: errorDetail(parsed, c.recordFailed[lang]) };
+        };
+
+        recordBtn.addEventListener("click", async () => {
+            recordBtn.disabled = true;
+            const ok = await recordRows(rows, recorded, post, lang, (i, n) => {
+                recordBtn.textContent = fill(c.recording[lang], { i, n });
+            });
+            render();
+            if (ok) { doneText.textContent = fill(c.done[lang], { n: ok }); doneBox.removeAttribute("hidden"); showToast(fill(c.done[lang], { n: ok }), "success"); }
+        });
+    }
+</script>

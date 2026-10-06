@@ -608,3 +608,13 @@ async def test_setup_draft_plus_calls_the_llm(client: AsyncClient, auth_headers,
     assert r.status_code == 200, r.text
     assert r.json()["source"] == "ai" and r.json()["kids"][0]["chores"][0]["title"] == "Make bed"
     mock_openai.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_scan_payout_receipts_free_403(client: AsyncClient, auth_headers):
+    r = await client.post(
+        "/api/bank/payout-receipts/scan",
+        files=[("files", ("slip.png", b"\x89PNG\r\n\x1a\nfake", "image/png"))],
+        headers=auth_headers,
+    )
+    _assert_upgrade_required(r)

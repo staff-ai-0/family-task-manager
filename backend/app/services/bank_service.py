@@ -826,6 +826,7 @@ class BankService:
         db: AsyncSession, target_user: User, family_id: UUID,
         week_of: date, entitled: bool, adjustment_cents: int = 0,
         released_by: Optional[UUID] = None, top_up: bool = False,
+        reference: Optional[str] = None,
     ) -> dict:
         """Parent releases a teen's weekly chore paycheck: allowance_cents scaled
         by completed-&-approved chore points (plus an optional signed parent
@@ -907,7 +908,10 @@ class BankService:
         CashService.credit_split_rows(
             db, user, acct, family_id, amount,
             CashTransactionType.ALLOWANCE, entitled=entitled,
-            description=f"Domingo por tareas (semana {week_monday.isoformat()})",
+            description=(
+                f"Domingo por tareas (semana {week_monday.isoformat()})"
+                + (f" · Folio {reference}" if reference else "")
+            ),
             week_of=week_monday,
         )
         if amount > 0 and points_converted > 0:

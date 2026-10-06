@@ -224,3 +224,61 @@ class PayoutRequestBody(BaseModel):
 class BankRequestResponse(BaseModel):
     success: bool
     notified_parents: int
+
+
+class PayoutReceiptWeek(BaseModel):
+    week_of: date
+    amount_cents: int = Field(ge=0, le=10_000_000)
+    already_paid: bool = False
+    projected_cents: int = 0
+
+
+class PayoutReceiptProposal(BaseModel):
+    """One scanned slip, ready for the parent to review. Nothing is stored."""
+
+    filename: Optional[str] = None
+    readable: bool
+    error: Optional[str] = None
+    folio: Optional[str] = None
+    receipt_date: Optional[date] = None
+    concept: str = ""
+    amount_cents: Optional[int] = None
+    beneficiary: str = ""
+    dest_last4: Optional[str] = None
+    user_id: Optional[UUID] = None
+    duplicate_folio: bool = False
+    weeks_from_concept: bool = False
+    mismatch: bool = False
+    allocations: list[PayoutReceiptWeek] = []
+
+
+class PayoutReceiptScanResponse(BaseModel):
+    receipts: list[PayoutReceiptProposal]
+
+
+class PayoutReceiptAllocation(BaseModel):
+    week_of: date
+    amount_cents: int = Field(ge=0, le=10_000_000)
+
+
+class PayoutReceiptConfirm(BaseModel):
+    folio: str = Field(min_length=1, max_length=40)
+    user_id: UUID
+    receipt_date: Optional[date] = None
+    concept: str = Field(default="", max_length=200)
+    amount_cents: int = Field(gt=0, le=10_000_000)
+    allocations: list[PayoutReceiptAllocation] = Field(min_length=1, max_length=8)
+
+
+class PayoutReceiptRecordedWeek(BaseModel):
+    week_of: date
+    amount_cents: int
+    top_up: bool
+    points_converted: int = 0
+
+
+class PayoutReceiptRecorded(BaseModel):
+    folio: str
+    user_id: UUID
+    amount_cents: int
+    weeks: list[PayoutReceiptRecordedWeek]

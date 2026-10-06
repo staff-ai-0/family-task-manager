@@ -317,7 +317,7 @@ The app has a bottom navigation bar (**Bottom Nav**) that appears on every scree
 1. **Set up your family** — only while setup steps are missing.
 2. **To review** — the 3 oldest submissions (chores awaiting approval, gigs and reward redemptions). **✓ Approve** decides in one tap; **Almost** gives partial credit (25/50/75 %) and **Missed** lets you leave a note. "See all" opens **Approve**.
 3. **Today** — one row per kid: today's chores done, overdue ones, the weekly pay bar and their goal. **⏰ Remind** sends them a notice; it works once every 3 hours per kid (shared by both parents).
-4. **To pay** — money owed (gigs and chore paychecks).
+4. **To pay** — money owed (gigs and chore paychecks). Tap **Pay** to open Payouts. To pay a chore week, transfer the money as usual, then tap **Upload transfer receipt(s)** and pick the bank screenshots (several at once is fine): the app reads the folio, amount, name and week, shows one row per receipt to double-check, and **Record** credits exactly the amount you transferred. The same receipt (folio) can never be recorded twice. Needs the Plus plan.
 5. **My tasks today** — your own chores.
 6. **Budget** — this month's spending against the budget and receipts to review. To scan a receipt, use the budget's **Scan** button.
 7. **Family Cup** — this week's boss.
