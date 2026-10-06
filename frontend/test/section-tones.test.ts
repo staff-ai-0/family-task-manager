@@ -19,6 +19,7 @@ const PAGE_LAYOUT_TONES: Record<string, HeaderTone> = {
     "pages/parent/tasks/[id]/edit.astro": "sky",
     "pages/parent/setup.astro": "sky",
     "pages/parent/payouts.astro": "mint",
+    "pages/parent/payouts/receipts.astro": "mint",
     "pages/parent/settings/envelopes.astro": "mint",
     "pages/parent/settings/family-bank.astro": "mint",
     "pages/gigs/my-gigs.astro": "sun",

@@ -317,7 +317,7 @@ La aplicacion tiene una barra de navegacion inferior (**Bottom Nav**) que aparec
 1. **Configura tu familia** — solo mientras falten pasos de configuración.
 2. **Por revisar** — las 3 entregas más antiguas (tareas por aprobar, gigs y canjes de premios). **✓ Aprobar** decide con un toque; **Casi** da crédito parcial (25/50/75 %) y **No hecha** permite dejar una nota. "Ver todas" abre **Aprobar**.
 3. **Hoy** — una fila por hijo: tareas hechas de hoy, atrasadas, la barra del pago semanal y su meta. **⏰ Recordar** le manda un aviso; solo se puede una vez cada 3 horas por hijo (entre ambos padres).
-4. **Por pagar** — dinero pendiente (gigs y cheques de tareas).
+4. **Por pagar** — dinero pendiente (gigs y cheques de tareas). Toque **Pagar** para abrir Pagos. Para pagar una semana de tareas, haga la transferencia como siempre y toque **Subir comprobante(s) de transferencia**: elija las capturas del banco (puede ser varias a la vez); la app lee el folio, el monto, el nombre y la semana, muestra una fila por comprobante para revisar y **Registrar** abona exactamente lo que transfirió. Un mismo comprobante (folio) nunca se registra dos veces. Requiere el plan Plus.
 5. **Mis tareas de hoy** — sus propias tareas.
 6. **Presupuesto** — lo gastado del mes contra lo presupuestado y los tickets por revisar. Para escanear un ticket use el botón **Escanear** del presupuesto.
 7. **Family Cup** — el jefe de la semana.

@@ -9,7 +9,7 @@ verify the target kid shares the parent's family_id.
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -18,10 +18,18 @@ from app.core.dependencies import (
     require_kid_role,
     require_parent_role,
 )
+from app.core.exceptions import ValidationError
 from app.core.premium import require_feature
+from app.core.rate_limiter import AI_LIMIT, limiter
+from app.core.upload_validation import (
+    ALLOWED_SCAN_TYPES,
+    MAX_SCAN_BYTES,
+    assert_allowed_type,
+    read_upload_capped,
+)
 from app.core.type_utils import to_uuid_required
 from app.models import User
-from app.models.user import UserRole
+from app.models.user import APPROVAL_APPROVED, UserRole
 from app.schemas.bank import (
     BankRequestResponse,
     BankSettingsUpdate,
@@ -33,6 +41,11 @@ from app.schemas.bank import (
     JarBalances,
     KidBankView,
     PayoutHistoryResponse,
+    PayoutReceiptConfirm,
+    PayoutReceiptProposal,
+    PayoutReceiptRecorded,
+    PayoutReceiptScanResponse,
+    PayoutReceiptWeek,
     PayoutRequestBody,
     PayoutSummary,
     SaveWithdrawalRequest,
@@ -42,6 +55,15 @@ from app.schemas.savings_goal import SavingsGoalCreate, SavingsGoalProgress
 from app.services.bank_service import BankService
 from app.services.base_service import verify_user_in_family
 from app.services.envelope_service import EnvelopeService
+from app.services.family_service import FamilyService
+from app.services.name_match import Member
+from app.services.payout_receipt_scanner_service import scan_receipt_image
+from app.services.payout_receipt_service import (
+    folio_exists,
+    match_beneficiary,
+    propose as propose_receipt,
+    record_receipt,
+)
 from app.services.savings_goal_service import SavingsGoalService
 
 router = APIRouter()
@@ -469,3 +491,105 @@ async def cancel_goal(
     """Cancel a goal. A kid may cancel only their own; a parent any kid's."""
     await SavingsGoalService.cancel_goal(db, current_user, goal_id)
     return None
+
+
+# ── Pay the week from a bank-transfer receipt ──────────────────────────────
+
+MAX_RECEIPTS_PER_SCAN = 10
+
+
+@router.post("/payout-receipts/scan", response_model=PayoutReceiptScanResponse)
+@limiter.limit(AI_LIMIT)
+async def scan_payout_receipts(
+    request: Request,
+    files: List[UploadFile] = File(...),
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Read BBVA "Comprobante de la operación" screenshots into proposals: which
+    kid, which week(s), how much. Stores NOTHING — the browser confirms each one
+    through POST /payout-receipts/confirm. One bad image never fails the batch."""
+    # Plan gate BEFORE any upload is read: this burns LLM tokens.
+    await require_feature("ai_features", db, current_user)
+    if len(files) > MAX_RECEIPTS_PER_SCAN:
+        raise HTTPException(status_code=413, detail=f"At most {MAX_RECEIPTS_PER_SCAN} receipts at a time")
+
+    fam = to_uuid_required(current_user.family_id)
+    kids = [
+        m for m in await FamilyService.get_family_members(db, fam)
+        if m.is_active and m.approval_status == APPROVAL_APPROVED
+        and m.role in (UserRole.CHILD, UserRole.TEEN)
+    ]
+    members = [Member(k.id, k.name, str(getattr(k.role, "value", k.role)).lower()) for k in kids]
+    kids_by_id = {k.id: k for k in kids}
+
+    out: list[PayoutReceiptProposal] = []
+    for upload in files:
+        name = upload.filename
+        try:
+            payload = await read_upload_capped(upload, MAX_SCAN_BYTES)
+            if not payload:
+                raise ValueError("Empty file")
+            media_type = assert_allowed_type(payload, ALLOWED_SCAN_TYPES)
+        except HTTPException as exc:
+            out.append(PayoutReceiptProposal(filename=name, readable=False, error=str(exc.detail)))
+            continue
+        except ValueError as exc:
+            out.append(PayoutReceiptProposal(filename=name, readable=False, error=str(exc)))
+            continue
+        try:
+            scanned = await scan_receipt_image(payload, media_type)
+        except ValidationError as exc:
+            out.append(PayoutReceiptProposal(filename=name, readable=False, error=str(exc)))
+            continue
+        if not scanned.readable:
+            out.append(PayoutReceiptProposal(filename=name, readable=False, error="Not a readable transfer receipt"))
+            continue
+
+        kid_id = match_beneficiary(scanned.beneficiary, members)
+        proposal = PayoutReceiptProposal(
+            filename=name, readable=True, folio=scanned.folio, receipt_date=scanned.receipt_date,
+            concept=scanned.concept, amount_cents=scanned.amount_cents,
+            beneficiary=scanned.beneficiary, dest_last4=scanned.dest_last4, user_id=kid_id,
+            duplicate_folio=await folio_exists(db, fam, scanned.folio),
+        )
+        if kid_id is not None:
+            kid = kids_by_id[kid_id]
+            suggestion = await propose_receipt(
+                db, kid, fam, amount_cents=scanned.amount_cents,
+                concept=scanned.concept, receipt_date=scanned.receipt_date,
+            )
+            proposal.weeks_from_concept = suggestion.weeks_from_concept
+            proposal.mismatch = suggestion.mismatch
+            proposal.allocations = [
+                PayoutReceiptWeek(
+                    week_of=a.week_of, amount_cents=a.amount_cents,
+                    already_paid=a.already_paid, projected_cents=a.projected_cents,
+                )
+                for a in suggestion.allocations
+            ]
+        out.append(proposal)
+    return PayoutReceiptScanResponse(receipts=out)
+
+
+@router.post("/payout-receipts/confirm", response_model=PayoutReceiptRecorded)
+async def confirm_payout_receipt(
+    body: PayoutReceiptConfirm,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record ONE reviewed receipt: the transfer amount becomes the kid's
+    paycheck for the allocated week(s). Idempotent per folio (409 on a repeat),
+    so a double-submitted or re-uploaded slip can never pay twice."""
+    fam = to_uuid_required(current_user.family_id)
+    target = await verify_user_in_family(db, body.user_id, fam)
+    if target.role not in (UserRole.CHILD, UserRole.TEEN):
+        raise HTTPException(status_code=400, detail="Chore paycheck applies to CHILD/TEEN members only")
+    await require_feature("family_bank_automation", db, current_user)
+    result = await record_receipt(
+        db, target, fam, folio=body.folio.strip(), receipt_date=body.receipt_date,
+        concept=body.concept, amount_cents=body.amount_cents,
+        allocations=[a.model_dump() for a in body.allocations],
+        released_by=to_uuid_required(current_user.id),
+    )
+    return PayoutReceiptRecorded(**result)

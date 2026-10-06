@@ -92,51 +92,45 @@ test.describe('Family Bank — parent payouts', () => {
     );
   });
 
-  test('parent releases an outstanding chore paycheck week', async ({ page }) => {
-    // Only kids on a chore-based allowance mode have outstanding weeks; on flat
-    // mode outstanding_weeks is empty by construction (schemas/bank.py).
-    const summaryRes = await page.request.get(`${BASE_URL}/api/bank/payout-summary`);
-    test.skip(!summaryRes.ok(), `payout summary unavailable (HTTP ${summaryRes.status()})`);
-    const summary = await summaryRes.json();
-    const kid = (summary.kids ?? []).find((k) =>
-      (k.outstanding_weeks ?? []).some((w) => !w.already_released)
+  test('parent pays the week by uploading a transfer receipt', async ({ page }) => {
+    // The per-week Release / Adj / Top-up controls are gone: the parent uploads
+    // the bank receipt and the app records it. Scan + confirm are mocked — this
+    // checks the flow, not Gemini.
+    await expect(page.locator('[data-upload-receipts]')).toBeVisible();
+    await page.locator('[data-upload-receipts]').click();
+    await expect(page).toHaveURL(/\/parent\/payouts\/receipts/);
+
+    const kidId = '00000000-0000-0000-0000-0000000000aa';
+    await page.route('**/api/bank/payout-receipts/scan', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          receipts: [{
+            filename: 'slip.png', readable: true, folio: '0011968514', receipt_date: '2026-09-04',
+            concept: 'semana 36', amount_cents: 25000, beneficiary: 'Ariana Michelle M', user_id: kidId,
+            duplicate_folio: false, weeks_from_concept: true, mismatch: false,
+            allocations: [{ week_of: '2026-08-31', amount_cents: 25000, already_paid: false, projected_cents: 25000 }],
+          }],
+        }),
+      })
     );
-    test.skip(
-      !kid,
-      'no kid has an unreleased chore-paycheck week (every kid is on flat allowance, or every week is already released)'
-    );
-    const week = kid.outstanding_weeks.find((w) => !w.already_released);
+    let confirmed = null;
+    await page.route('**/api/bank/payout-receipts/confirm', (route) => {
+      confirmed = route.request().postDataJSON();
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ folio: '0011968514', user_id: kidId, amount_cents: 25000, weeks: [] }),
+      });
+    });
 
-    const rowSel = `[data-paycheck-row][data-kid-id="${kid.user_id}"][data-week-of="${week.week_of}"]`;
-    await expect(page.locator(rowSel)).toHaveCount(1);
-
-    const posted = page.waitForResponse(
-      (r) =>
-        r.url().includes(`/api/bank/chore-paycheck/${kid.user_id}/release`) &&
-        r.request().method() === 'POST'
-    );
-    await page.locator(`${rowSel} [data-release]`).click();
-    const res = await posted;
-    // Releasing is premium-gated (family_bank_automation → Plus). A free-tier
-    // family gets 403 upgrade_required; that is an entitlement fact about the
-    // environment, not a broken release flow.
-    test.skip(res.status() === 403, 'Family Bank automation requires a Plus plan on this family');
-    expect(res.ok()).toBeTruthy();
-
-    // Either way the release control is gone: the CURRENT week's row stays and
-    // flips to "Released ✓", a PAST week's row is dropped (parent/payouts.astro).
-    await expect(page.locator(`${rowSel} [data-release]`)).toHaveCount(0);
-    if (week.is_current_week) {
-      await expect(page.locator(`${rowSel} [data-release-slot]`)).toContainText(/Liberado|Released/);
-    } else {
-      await expect(page.locator(rowSel)).toHaveCount(0);
-    }
-
-    // Server-side truth, not just the optimistic DOM update: the week must come
-    // back released (release is idempotent per kid+week).
-    const after = await (await page.request.get(`${BASE_URL}/api/bank/payout-summary`)).json();
-    const kidAfter = (after.kids ?? []).find((k) => k.user_id === kid.user_id);
-    const weekAfter = (kidAfter?.outstanding_weeks ?? []).find((w) => w.week_of === week.week_of);
-    expect(weekAfter === undefined || weekAfter.already_released).toBeTruthy();
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+    await page.setInputFiles('#receipt-files', { name: 'slip.png', mimeType: 'image/png', buffer: png });
+    await expect(page.locator('[data-row-key]')).toHaveCount(1);
+    await expect(page.locator('#record-btn')).toBeEnabled();
+    await page.locator('#record-btn').click();
+    await expect(page.locator('#done-box')).toBeVisible();
+    expect(confirmed).toMatchObject({ folio: '0011968514', user_id: kidId, amount_cents: 25000 });
   });
 });

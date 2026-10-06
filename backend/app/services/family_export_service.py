@@ -82,6 +82,7 @@ from app.models import (
 )
 from app.models.teen_checkin import TeenCheckin
 from app.models.mystery import MysteryBox, MysterySurprise
+from app.models.payout_receipt import PayoutReceipt
 from app.models.budget import (
     BudgetAccount,
     BudgetAllocation,
@@ -175,6 +176,8 @@ EXPORTED_FAMILY_TABLES: frozenset[str] = frozenset(
         # UX-D4b mystery box: the family's jar and each kid's boxes.
         MysterySurprise,
         MysteryBox,
+        # Bank-transfer receipts that paid a chore paycheck.
+        PayoutReceipt,
         Routine,
         Reward,
         RewardRedemption,
@@ -359,6 +362,7 @@ class FamilyExportService:
         teen_checkins = await _rows(db, fam(TeenCheckin))
         mystery_surprises = await _rows(db, fam(MysterySurprise))
         mystery_boxes = await _rows(db, fam(MysteryBox))
+        payout_receipts = await _rows(db, fam(PayoutReceipt))
         routines = await _rows(db, fam(Routine))
         _routine_ids = [r.id for r in routines]
         routine_steps = (
@@ -522,6 +526,7 @@ class FamilyExportService:
             "progress/quests.json": _dump(quests),
             "progress/mystery_surprises.json": _dump(mystery_surprises),
             "progress/mystery_boxes.json": _dump(mystery_boxes),
+            "bank/payout_receipts.json": _dump(payout_receipts),
             "routines/routines.json": _dump(routines),
             "routines/steps.json": _dump(routine_steps),
             "routines/progress.json": _dump(routine_progress),
