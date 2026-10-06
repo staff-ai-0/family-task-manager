@@ -3,7 +3,7 @@
 The scanner (payout_receipt_scanner_service) only reads the slip. Here the
 parent-facing proposal is built deterministically (kid, weeks, split) and, on
 confirm, the receipt amount — the real money that left the account — becomes
-the paycheck: each week goes through BankService.release_chore_paycheck with
+the paycheck and is also paid out (credit + payout net to zero on the kid's balance): each week goes through BankService.release_chore_paycheck with
 ``adjustment = amount − computed base`` so points_rate conversion, the kid
 notification and per-(kid, week) idempotency all stay in their one place.
 """
@@ -23,6 +23,7 @@ from app.models.cash_transaction import CashTransaction, CashTransactionType
 from app.models.payout_receipt import PayoutReceipt
 from app.models.user import User
 from app.services.bank_service import CHORE_PAYCHECK_MODES, BankService
+from app.services.cash_service import CashService
 from app.services.payout_receipt_scanner_service import week_numbers_from_concept
 
 MAX_WEEKS = 8
@@ -181,16 +182,27 @@ async def record_receipt(
 
     results = []
     for monday, share, is_top_up in plan:
+        # entitled=False: the transfer already left the account in full, so the
+        # credit lands 100% in the spend jar and the payout below can settle it
+        # exactly — a save/share split would leave part of it "owed" to the kid.
         if is_top_up:
             res = await BankService.release_chore_paycheck(
-                db, kid, family_id, monday, entitled=True, adjustment_cents=share,
+                db, kid, family_id, monday, entitled=False, adjustment_cents=share,
                 released_by=released_by, top_up=True,
             )
         else:
             base = (await BankService.chore_paycheck_preview(db, kid, family_id, monday))["projected_cents"]
             res = await BankService.release_chore_paycheck(
-                db, kid, family_id, monday, entitled=True, adjustment_cents=share - base,
+                db, kid, family_id, monday, entitled=False, adjustment_cents=share - base,
                 released_by=released_by, reference=folio,
+            )
+        # The receipt is real money already sent: credit the week AND record the
+        # payout, exactly like the manual release + payout it replaces. Without
+        # the payout the kid's balance would show the transfer as still owed.
+        if share > 0:
+            await CashService.record_payout(
+                db, kid.id, family_id, share, created_by=released_by,
+                description=f"Transferencia bancaria folio {folio} (semana {monday.isoformat()})",
             )
         results.append({"week_of": monday, "amount_cents": share, "top_up": is_top_up,
                         "points_converted": res.get("points_converted", 0)})
