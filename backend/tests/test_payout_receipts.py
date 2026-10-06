@@ -184,11 +184,17 @@ class TestConfirm:
         r = await client.post(CONFIRM, json=self._body(test_child_user, week), headers=auth_headers)
         assert r.status_code == 200, r.text
         assert r.json()["weeks"][0]["top_up"] is False
-        assert await _balance(db_session, test_child_user) == 25000      # exactly the receipt, not the chore math
+        # Credited exactly the receipt (not the chore math) AND paid out: the
+        # transfer already left the account, so nothing is left "owed".
+        assert await _balance(db_session, test_child_user) == 0
+        payouts = (await db_session.execute(select(CashTransaction).where(
+            CashTransaction.user_id == test_child_user.id, CashTransaction.type == CashTransactionType.PAYOUT,
+        ))).scalars().all()
+        assert [p.amount_cents for p in payouts] == [-25000] and "0011968514" in (payouts[0].description or "")
         rows = (await db_session.execute(select(CashTransaction).where(
             CashTransaction.user_id == test_child_user.id, CashTransaction.type == CashTransactionType.ALLOWANCE,
         ))).scalars().all()
-        assert rows and all(t.week_of == week for t in rows)
+        assert rows and sum(t.amount_cents for t in rows) == 25000 and all(t.week_of == week for t in rows)
         assert any("0011968514" in (t.description or "") for t in rows)
         assert (await db_session.execute(select(func.count()).select_from(PayoutReceipt))).scalar() == 1
 
@@ -201,7 +207,9 @@ class TestConfirm:
         other = await _week(db_session, test_family.id, back=2)
         r = await client.post(CONFIRM, json=self._body(test_child_user, other), headers=auth_headers)
         assert r.status_code == 409
-        assert await _balance(db_session, test_child_user) == 25000
+        payouts = (await db_session.execute(select(func.count()).select_from(CashTransaction).where(
+            CashTransaction.user_id == test_child_user.id, CashTransaction.type == CashTransactionType.PAYOUT))).scalar()
+        assert payouts == 1 and await _balance(db_session, test_child_user) == 0
 
     async def test_two_weeks_in_one_receipt(
         self, client, db_session, auth_headers, plus_subscription, test_family, test_child_user,
@@ -213,7 +221,10 @@ class TestConfirm:
                                 {"week_of": w2.isoformat(), "amount_cents": 25000}]}
         r = await client.post(CONFIRM, json=body, headers=auth_headers)
         assert r.status_code == 200, r.text
-        assert await _balance(db_session, test_child_user) == 50000
+        assert await _balance(db_session, test_child_user) == 0     # 2 weeks credited and paid out
+        credited = (await db_session.execute(select(func.coalesce(func.sum(CashTransaction.amount_cents), 0)).where(
+            CashTransaction.user_id == test_child_user.id, CashTransaction.type == CashTransactionType.ALLOWANCE))).scalar()
+        assert int(credited) == 50000
 
     async def test_already_paid_week_is_topped_up_not_blocked(
         self, client, db_session, auth_headers, plus_subscription, test_family, test_child_user, test_parent_user,
@@ -228,7 +239,23 @@ class TestConfirm:
         r = await client.post(CONFIRM, json=self._body(test_child_user, week, amount=5000, folio="0000000001"), headers=auth_headers)
         assert r.status_code == 200, r.text
         assert r.json()["weeks"][0]["top_up"] is True
-        assert await _balance(db_session, test_child_user) == before + 5000
+        assert await _balance(db_session, test_child_user) == before   # extra credited and paid out
+
+    async def test_a_save_share_split_does_not_leave_money_owed(
+        self, client, db_session, auth_headers, plus_subscription, test_family, test_child_user,
+    ):
+        # A kid with auto-split on must still net to zero: the receipt credit is
+        # 100% spend (the money already left the account), so the payout settles it.
+        await _kid_on_chore_mode(db_session, test_child_user)
+        acct = await BankService.ensure_account(db_session, test_child_user)
+        acct.split_spend_pct, acct.split_save_pct, acct.split_share_pct = 50, 30, 20
+        await db_session.commit()
+        week = await _week(db_session, test_family.id)
+        r = await client.post(CONFIRM, json=self._body(test_child_user, week), headers=auth_headers)
+        assert r.status_code == 200, r.text
+        assert await _balance(db_session, test_child_user) == 0
+        await db_session.refresh(acct)
+        assert (acct.spend_cents, acct.save_cents, acct.share_cents) == (0, 0, 0)
 
     async def test_allocations_must_add_up(
         self, client, db_session, auth_headers, plus_subscription, test_family, test_child_user,

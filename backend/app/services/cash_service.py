@@ -375,6 +375,7 @@ class CashService:
         amount_cents: int,
         created_by: UUID,
         jar: str = JAR_SPEND,
+        description: Optional[str] = None,
     ) -> CashTransaction:
         """Parent records a payout (full or partial) against a jar. Debits that
         jar + the total. Default jar='spend'; jar='share' settles the Share
@@ -402,7 +403,7 @@ class CashService:
             balance_before=before,
             balance_after=before - amount_cents,
             created_by=created_by,
-            description=f"Paid ${amount_cents / 100:.2f} MXN",
+            description=description or f"Paid ${amount_cents / 100:.2f} MXN",
         )
         _add_jar(acct, jar, -amount_cents)
         user.cash_cents = before - amount_cents
