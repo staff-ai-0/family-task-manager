@@ -7,6 +7,7 @@ Reuses the LiteLLM/Claude Vision pipeline from receipt_scanner_service so we
 inherit the proxy's budget caps and centralized spend tracking.
 """
 
+import asyncio
 import base64
 import json
 import os
@@ -21,6 +22,15 @@ from app.core import async_fs
 from app.core.config import settings
 from app.core.llm import RECEIPT_MODEL, get_llm_client
 from app.core.metrics import record_llm_call
+from app.core.thumbnails import downscale_for_vision
+
+# Hard ceiling on the whole review. The kid's "done" tap can wait on this
+# (bonus tasks auto-approve inline), so a slow provider must degrade to the
+# manual parent queue instead of hanging the request.
+PROOF_LLM_TIMEOUT_SECONDS = 25.0
+# gemini-2.5-flash spends part of max_tokens on hidden thinking; 256 left
+# nothing for the JSON answer (see the receipt scanner's 4x fix).
+PROOF_MAX_TOKENS = 4096
 
 
 PROOF_PROMPT = """You are validating photo proof that a household chore or task was completed by a child or teen.
@@ -107,6 +117,11 @@ async def validate_proof_photo(
 
     client = get_llm_client()
 
+    # Shrink before base64: a raw phone photo is 4-11MB and made this call slow.
+    shrunk = await run_in_threadpool(downscale_for_vision, image_bytes)
+    if shrunk is not None:
+        image_bytes, media_type = shrunk
+
     image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
     data_uri = f"data:{media_type};base64,{image_b64}"
 
@@ -114,22 +129,25 @@ async def validate_proof_photo(
         # Sync OpenAI client (blocking I/O) — offload to a worker thread so a
         # slow provider can't stall the async event loop.
         record_llm_call()  # best-effort outbound-LLM counter
-        completion = await run_in_threadpool(
-            lambda: client.chat.completions.create(
-                model=RECEIPT_MODEL,
-                max_tokens=256,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "image_url", "image_url": {"url": data_uri}},
-                            {"type": "text", "text": prompt},
-                        ],
-                    }
-                ],
-            )
+        completion = await asyncio.wait_for(
+            run_in_threadpool(
+                lambda: client.chat.completions.create(
+                    model=RECEIPT_MODEL,
+                    max_tokens=PROOF_MAX_TOKENS,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "image_url", "image_url": {"url": data_uri}},
+                                {"type": "text", "text": prompt},
+                            ],
+                        }
+                    ],
+                )
+            ),
+            timeout=PROOF_LLM_TIMEOUT_SECONDS,
         )
-    except Exception:
+    except Exception:  # includes asyncio.TimeoutError
         return None
 
     text = (completion.choices[0].message.content or "").strip()
