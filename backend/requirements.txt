@@ -93,7 +93,7 @@ pymupdf==1.28.2
 # Image processing — generates ~200px WebP thumbnails for uploaded gig/task
 # proof + receipt-draft images at upload time (app/core/thumbnails.py). Ships
 # prebuilt wheels for Linux x86_64 and aarch64, so no system libs needed.
-Pillow==12.3.0
+Pillow==13.0.0
 
 # Scheduler
 apscheduler==3.11.3
