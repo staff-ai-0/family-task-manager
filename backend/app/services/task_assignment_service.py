@@ -4,6 +4,7 @@ TaskAssignment Service
 Business logic for task assignments, weekly shuffle, completion, and bonus gating.
 """
 
+import logging
 import random
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, delete as sql_delete
@@ -31,6 +32,8 @@ from app.services.base_service import (
     get_user_by_id,
 )
 
+
+logger = logging.getLogger(__name__)
 
 class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
     """Service for task assignment operations including shuffle and gating"""
@@ -1673,6 +1676,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             assignment.proof_text = proof_text.strip()
             if proof_image_url:
                 assignment.proof_image_url = proof_image_url
+                # A resubmitted photo must not inherit the old photo's AI verdict.
+                assignment.ai_validation_score = None
+                assignment.ai_validation_notes = None
 
             # Auto-approval has two independent paths:
             #   1. Trust streak — user has earned N consecutive approvals.
@@ -1772,6 +1778,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             assignment.completed_at = datetime.now(timezone.utc)
             assignment.proof_text = (proof_text or "").strip() or None
             assignment.proof_image_url = proof_image_url
+            # Resubmitted after a send-back: drop the previous photo's AI verdict.
+            assignment.ai_validation_score = None
+            assignment.ai_validation_notes = None
             assignment.approval_status = ApprovalStatus.PENDING
         else:
             # Mandatory path — silent completion, awards privilege points
@@ -2561,6 +2570,70 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 "approval_notes": r.approval_notes,
             })
         return out
+
+    @staticmethod
+    async def review_chore_proof(db: AsyncSession, assignment_id: UUID) -> None:
+        """Advisory Gemini check of a proof-required CHORE's photo.
+
+        Stores ``ai_validation_score`` / ``ai_validation_notes`` for the parent
+        reviewing the queue. It never approves and never credits points: chores
+        are graded full/partial/missed by a parent. Bonus tasks are skipped —
+        they have their own inline auto-approve path in ``complete_assignment``.
+
+        Meant to run AFTER the kid's request has returned, so a slow or failing
+        provider can never block "done". Never raises. Same gates as the gig
+        path: the family's AI-processing opt-in AND a paid plan.
+        """
+        try:
+            from app.core.premium import family_tier_allows
+            from app.services.family_service import FamilyService
+            from app.services.task_proof_validator import validate_proof_photo
+
+            assignment = (
+                await db.execute(
+                    select(TaskAssignment)
+                    .options(selectinload(TaskAssignment.template))
+                    .where(TaskAssignment.id == assignment_id)
+                )
+            ).scalar_one_or_none()
+            if (
+                assignment is None
+                or assignment.template is None
+                or assignment.template.is_bonus
+                or not assignment.template.requires_proof
+                or not assignment.proof_image_url
+                or assignment.ai_validation_score is not None
+                or assignment.status != AssignmentStatus.COMPLETED
+            ):
+                return
+            family_id = assignment.family_id
+            if not await FamilyService.has_ai_processing_consent(db, family_id):
+                return
+            if not await family_tier_allows(db, family_id, "ai_features"):
+                return
+
+            validation = await validate_proof_photo(
+                assignment.proof_image_url,
+                assignment.template.title,
+                assignment.template.description,
+            )
+            if validation is None:
+                return
+            assignment.ai_validation_score = validation.score
+            assignment.ai_validation_notes = validation.explanation
+            await db.commit()
+        except Exception:
+            logger.warning("chore proof AI review failed", exc_info=True)
+            await db.rollback()
+
+    @staticmethod
+    async def review_chore_proof_background(assignment_id: UUID) -> None:
+        """Entry point for ``BackgroundTasks``: owns a short-lived session (the
+        request's session is closed once the response is sent)."""
+        from app.core.database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            await TaskAssignmentService.review_chore_proof(db, assignment_id)
 
     @staticmethod
     async def list_pending_approvals(

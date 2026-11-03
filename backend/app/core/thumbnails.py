@@ -77,3 +77,36 @@ def make_webp_thumbnail(
         # Malformed / unsupported / truncated image — caller keeps the original
         # and simply serves that when no thumb exists.
         return None
+
+
+# Longest side sent to a vision model. 1280px is plenty to tell whether a bed
+# is made; a raw 12MP phone photo (4–11MB) only slows the call down.
+VISION_MAX_DIM = 1280
+VISION_QUALITY = 85
+
+
+def downscale_for_vision(
+    data: bytes,
+    *,
+    max_dim: int = VISION_MAX_DIM,
+    quality: int = VISION_QUALITY,
+) -> tuple[bytes, str] | None:
+    """Return ``(jpeg_bytes, "image/jpeg")`` shrunk for a vision-model call.
+
+    Same contract as ``make_webp_thumbnail``: CPU-bound (use
+    ``run_in_threadpool``), never raises, ``None`` means "send the original".
+    EXIF orientation is applied so the model sees the photo upright.
+    """
+    try:
+        from PIL import Image, ImageOps
+
+        with Image.open(io.BytesIO(data)) as im:
+            im = ImageOps.exif_transpose(im)
+            im.thumbnail((max_dim, max_dim))  # keeps aspect ratio, never upscales
+            if im.mode != "RGB":
+                im = im.convert("RGB")
+            out = io.BytesIO()
+            im.save(out, format="JPEG", quality=quality, optimize=True)
+            return out.getvalue(), "image/jpeg"
+    except Exception:
+        return None

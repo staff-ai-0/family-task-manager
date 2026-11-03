@@ -42,6 +42,8 @@ const i18n = {
     bonusUnlocked: es ? "Bonus desbloqueado" : "Bonus unlocked",
     failed: es ? "No se pudo guardar. Intenta de nuevo." : "Couldn't save. Try again.",
     network: es ? "Sin conexión. Intenta de nuevo." : "No connection. Try again.",
+    slow: es ? "Está tardando demasiado. Revisa tu conexión e intenta de nuevo." : "That's taking too long. Check your connection and try again.",
+    preparing: es ? "Preparando foto…" : "Preparing photo…",
     photoRequired: es ? "📸 Foto del trabajo terminado (requerida)" : "📸 Photo of the finished work (required)",
     photoOptional: es ? "📸 Foto (opcional)" : "📸 Photo (optional)",
     noteBonus: es ? "¿Qué hiciste? (requerido)" : "What did you do? (required)",
@@ -165,6 +167,14 @@ const stackHeight = variant === "compact" ? "h-40" : "h-44";
     import { showToast } from "../../lib/toast";
     import { celebrate } from "../../lib/celebrate";
     import { afterComplete } from "../../lib/deck";
+    import { compressImage } from "../../lib/imageCompress";
+    import { FetchTimeoutError, fetchWithTimeout } from "../../lib/fetchTimeout";
+
+    // Deadlines so a stalled mobile connection fails loudly instead of leaving
+    // the card frozen. `complete` may wait on the server's photo check for a
+    // bonus task (capped at 25 s there), hence the longer budget.
+    const UPLOAD_TIMEOUT_MS = 45_000;
+    const COMPLETE_TIMEOUT_MS = 40_000;
 
     const SWIPE_RATIO = 0.3;
 
@@ -295,11 +305,11 @@ const stackHeight = variant === "compact" ? "h-40" : "h-44";
                 fd.append("assignment_id", card.dataset.id ?? "");
                 fd.append("proof_text", proofText);
                 fd.append("proof_image_url", proofImageUrl);
-                const r = await fetch("/api/assignments/complete", {
-                    method: "POST",
-                    body: fd,
-                    headers: { Accept: "application/json" },
-                });
+                const r = await fetchWithTimeout(
+                    "/api/assignments/complete",
+                    { method: "POST", body: fd, headers: { Accept: "application/json" } },
+                    COMPLETE_TIMEOUT_MS,
+                );
                 const body = await r.json().catch(() => ({}) as any);
                 if (!r.ok || !body.ok) {
                     springBack(card);
@@ -307,9 +317,9 @@ const stackHeight = variant === "compact" ? "h-40" : "h-44";
                     return;
                 }
                 message = body.message || "";
-            } catch {
+            } catch (e) {
                 springBack(card);
-                showToast(t.network, "error");
+                showToast(e instanceof FetchTimeoutError ? t.slow : t.network, "error");
                 return;
             } finally {
                 busy = false;
@@ -396,19 +406,28 @@ const stackHeight = variant === "compact" ? "h-40" : "h-44";
             let imageUrl = "";
             if (fileInput?.files?.length) {
                 if (status) {
-                    status.textContent = t.uploading;
+                    status.textContent = t.preparing;
                     status.classList.remove("text-red-600");
                 }
                 try {
+                    // Camera photos are 3-6 MB; shrink first so the upload is
+                    // quick even on a weak connection (falls back to the
+                    // original file if the browser can't).
+                    const photo = await compressImage(fileInput.files[0]);
+                    if (status) status.textContent = t.uploading;
                     const up = new FormData();
-                    up.append("file", fileInput.files[0]);
-                    const r = await fetch("/api/assignments/proof-upload", { method: "POST", body: up });
+                    up.append("file", photo);
+                    const r = await fetchWithTimeout(
+                        "/api/assignments/proof-upload",
+                        { method: "POST", body: up },
+                        UPLOAD_TIMEOUT_MS,
+                    );
                     if (!r.ok) {
                         return fail(r.status === 413 ? t.tooBig : r.status === 415 ? t.badType : `${t.uploadFailed} (${r.status})`);
                     }
                     imageUrl = (await r.json()).proof_image_url ?? "";
-                } catch {
-                    return fail(t.network);
+                } catch (e) {
+                    return fail(e instanceof FetchTimeoutError ? t.slow : t.network);
                 }
             }
             // The upload (if any) has settled. If the sheet was cancelled

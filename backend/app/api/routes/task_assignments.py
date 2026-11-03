@@ -5,7 +5,7 @@ Handles weekly shuffle, assignment queries, completion with bonus gating,
 and daily progress tracking.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, File, UploadFile
 from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
@@ -356,6 +356,7 @@ async def patch_assignment(
 @router.patch("/{assignment_id}/complete", response_model=TaskAssignmentWithDetails)
 async def complete_assignment(
     assignment_id: UUID,
+    background_tasks: BackgroundTasks,
     payload: Optional[CompleteAssignmentRequest] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -381,6 +382,13 @@ async def complete_assignment(
     assignment = await TaskAssignmentService.get_assignment(
         db, assignment_id, family_id
     )
+    # Proof-required chores get an advisory Gemini look at the photo AFTER the
+    # response is sent, so a slow provider can never hold up the kid's "done".
+    # (Bonus tasks are checked inline by the service; this no-ops for them.)
+    if assignment.proof_image_url and assignment.ai_validation_score is None:
+        background_tasks.add_task(
+            TaskAssignmentService.review_chore_proof_background, assignment_id
+        )
     return _assignment_to_detail(assignment)
 
 
