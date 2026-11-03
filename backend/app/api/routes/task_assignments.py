@@ -385,7 +385,7 @@ async def complete_assignment(
     # Proof-required chores get an advisory Gemini look at the photo AFTER the
     # response is sent, so a slow provider can never hold up the kid's "done".
     # (Bonus tasks are checked inline by the service; this no-ops for them.)
-    if assignment.proof_image_url and not assignment.ai_validation_score:
+    if assignment.proof_image_url and assignment.ai_validation_score is None:
         background_tasks.add_task(
             TaskAssignmentService.review_chore_proof_background, assignment_id
         )

@@ -1676,6 +1676,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             assignment.proof_text = proof_text.strip()
             if proof_image_url:
                 assignment.proof_image_url = proof_image_url
+                # A resubmitted photo must not inherit the old photo's AI verdict.
+                assignment.ai_validation_score = None
+                assignment.ai_validation_notes = None
 
             # Auto-approval has two independent paths:
             #   1. Trust streak — user has earned N consecutive approvals.
@@ -1775,6 +1778,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             assignment.completed_at = datetime.now(timezone.utc)
             assignment.proof_text = (proof_text or "").strip() or None
             assignment.proof_image_url = proof_image_url
+            # Resubmitted after a send-back: drop the previous photo's AI verdict.
+            assignment.ai_validation_score = None
+            assignment.ai_validation_notes = None
             assignment.approval_status = ApprovalStatus.PENDING
         else:
             # Mandatory path — silent completion, awards privilege points

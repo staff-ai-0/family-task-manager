@@ -349,3 +349,24 @@ class TestCompleteRouteSchedulesReview:
         )
         assert r.status_code == 200, r.text
         assert scheduled == []
+
+
+class TestResubmitDropsStaleVerdict:
+    async def test_new_photo_after_send_back_clears_old_score(
+        self, db_session, test_family, test_child_user
+    ):
+        _, a = await _seed_chore(db_session, test_family, test_child_user)
+        a.ai_validation_score = 0.05
+        a.ai_validation_notes = "Es un selfie"
+        a.status = AssignmentStatus.PENDING  # parent sent it back
+        a.approval_status = ApprovalStatus.NONE
+        await db_session.commit()
+
+        await TaskAssignmentService.complete_assignment(
+            db_session, a.id, test_family.id, test_child_user.id,
+            proof_text="otra vez",
+            proof_image_url="/uploads/gig-proofs/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg",
+        )
+        await db_session.refresh(a)
+        assert a.ai_validation_score is None
+        assert a.ai_validation_notes is None
