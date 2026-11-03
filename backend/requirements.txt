@@ -126,4 +126,4 @@ slowapi==0.1.10
 sentry-sdk[fastapi]==2.8.0
 
 # MCP server — Jarvis AI copilot tool registry
-mcp==2.1.1  # PYSEC-2026-1617, -3482 (SSE/HTTP), -3483 (WebSocket)
+mcp==2.2.0
