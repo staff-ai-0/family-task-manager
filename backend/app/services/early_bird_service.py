@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -25,10 +25,16 @@ from app.models.task_template import TaskTemplate
 from app.models.user import User, UserRole
 from app.services.early_bird_rules import (
     CoveredRow,
+    PENDING_GRACE_DAYS,
     EarlyBirdConfig,
+    chore_state,
+    day_result,
     day_times,
     early_bonus_points,
     is_active_day,
+    week_bonus,
+    week_eligible,
+    week_result,
 )
 
 log = logging.getLogger(__name__)
@@ -101,6 +107,56 @@ class EarlyBirdService:
             for a in rows
             if is_active_day(cfg, a.assigned_date)
         ]
+
+    # ------------------------------------------------------------ week result
+
+    @staticmethod
+    async def week_status(
+        db: AsyncSession,
+        cfg: EarlyBirdConfig,
+        family_id: UUID,
+        user_id: UUID,
+        monday: date,
+        now: datetime,
+    ) -> tuple[str, dict[date, str]]:
+        """(week_result, {day: day_result}) for Mon..Sun of ``monday``. THE
+        single place a week's result is computed. Days without covered rows are
+        absent (neutral). A review still pending counts once the week is
+        PENDING_GRACE_DAYS past its end."""
+        sunday = monday + timedelta(days=6)
+        today = now.astimezone(cfg.tz).date()
+        week_over = today > sunday
+        grace = today > sunday + timedelta(days=PENDING_GRACE_DAYS)
+        rows = await EarlyBirdService.covered_rows(db, cfg, family_id, user_id, monday, sunday)
+        by_day: dict[date, list[str]] = {}
+        for r in rows:
+            by_day.setdefault(r.assigned_date, []).append(
+                chore_state(r, cfg, now, grace=grace)
+            )
+        days = {d: day_result(states) for d, states in by_day.items()}
+        result = week_result(
+            list(days.values()), eligible=week_eligible(cfg, monday), week_over=week_over
+        )
+        return result, days
+
+    @staticmethod
+    async def week_bonus_cents(
+        db: AsyncSession,
+        family_id: UUID,
+        user_id: UUID,
+        monday: date,
+        base_cents: int,
+        now: Optional[datetime] = None,
+    ) -> int:
+        """The +week_pct % on a chore paycheck of ``base_cents`` (0 unless the
+        week is a clean early week)."""
+        cfg = await EarlyBirdService.config(db, family_id)
+        if not cfg.enabled or cfg.week_pct <= 0 or base_cents <= 0:
+            return 0
+        result, _ = await EarlyBirdService.week_status(
+            db, cfg, family_id, user_id, monday, EarlyBirdService._now(now)
+        )
+        return week_bonus(base_cents, cfg.week_pct, result)
 
     # ------------------------------------------------------------ up for grabs
 
