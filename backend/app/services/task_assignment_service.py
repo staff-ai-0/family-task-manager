@@ -1791,6 +1791,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             await PointsService.award_assignment_completion(
                 db, user_id, family_id, assignment.id, template.effective_points
             )
+            from app.services.early_bird_service import EarlyBirdService
+            await EarlyBirdService.maybe_award_early_bonus(db, assignment, template)
             from app.services.pet_service import PetService
             await PetService.on_task_completed(db, user_id, is_bonus=False)
 
@@ -2415,6 +2417,10 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 )
                 await PointsService.award_assignment_completion(
                     db, assignment.assigned_to, family_id, assignment.id, pts
+                )
+                from app.services.early_bird_service import EarlyBirdService
+                await EarlyBirdService.maybe_award_early_bonus(
+                    db, assignment, assignment.template, credit_pct=award_pct
                 )
             from app.services.notification_service import NotificationService
             from app.services.pet_service import PetService
