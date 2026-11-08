@@ -30,6 +30,7 @@ class EarlyBirdMe(BaseModel):
     week: list[WeekDay]
     week_result: str
     run_weeks: int
+    weeks_to_payout: int
     streak_weeks: int
     streak_cents: int
     week_pct: int
@@ -46,3 +47,4 @@ class FamilyTeen(BaseModel):
     week: list[WeekDay]
     week_result: str
     run_weeks: int
+    weeks_to_payout: int

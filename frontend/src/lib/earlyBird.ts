@@ -177,7 +177,7 @@ export function earlyBirdView(me: any, lang: Lang, now: Date): EarlyBirdView | n
         return { date: String(w?.date ?? ""), state: s, glyph: c.dayGlyph[s], label: c.dayLabel[s] };
     });
 
-    const run = Math.max(0, Math.min(RUN_TARGET, Math.trunc(Number(me?.run_weeks) || 0)));
+    const run = Math.max(0, Math.trunc(Number(me?.run_weeks) || 0)) % RUN_TARGET;
     const streakCents = Math.max(0, Math.trunc(Number(me?.streak_cents) || 0));
 
     return {

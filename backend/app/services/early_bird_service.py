@@ -135,7 +135,9 @@ class EarlyBirdService:
         PENDING_GRACE_DAYS past its end."""
         sunday = monday + timedelta(days=6)
         today = now.astimezone(cfg.tz).date()
-        week_over = today > sunday
+        # Controller ruling: a week is "over" for early-bird purposes at
+        # Sunday's R1 (the early cutoff) — nothing earlier can still change.
+        week_over = now >= day_times(cfg, sunday).r1
         grace = today > sunday + timedelta(days=PENDING_GRACE_DAYS)
         rows = await EarlyBirdService.covered_rows(db, cfg, family_id, user_id, monday, sunday)
         by_day: dict[date, list[str]] = {}
@@ -267,7 +269,8 @@ class EarlyBirdService:
         if reason is not None:
             raise ForbiddenException(reason)
 
-        owner_id, title, taker_name = owner_row.assigned_to, template.title, taker.name
+        owner_id, taker_name = owner_row.assigned_to, taker.name
+        title = {"en": template.title, "es": template.title_es or template.title}
         new_row = TaskAssignment(
             family_id=family_id,
             template_id=owner_row.template_id,
@@ -323,6 +326,7 @@ class EarlyBirdService:
             "week": week,
             "week_result": result,
             "run_weeks": int(last or 0),
+            "weeks_to_payout": STREAK_WEEKS - (int(last or 0) % STREAK_WEEKS),
         }
 
     @staticmethod
@@ -340,6 +344,7 @@ class EarlyBirdService:
             "week": [],
             "week_result": "ineligible",
             "run_weeks": 0,
+            "weeks_to_payout": STREAK_WEEKS,
             "streak_weeks": STREAK_WEEKS,
             "streak_cents": int(cfg.streak_cents),
             "week_pct": int(cfg.week_pct),
@@ -643,13 +648,30 @@ class EarlyBirdService:
             )
         except Exception:
             log.exception("early bird payout kid notification failed")
+        # Per-parent rows (a user_id=None family broadcast is never pushed and
+        # would also show the teen's payout to the teen and siblings).
         try:
-            await NotificationService.create_localized(
-                db, family_id, "early_bird_payout_parent", user_id=None,
-                params={**params, "kid": kid_name}, link="/parent/payouts",
-            )
+            from app.services.task_assignment_service import TaskAssignmentService as TAS
+
+            parent_ids = (await db.execute(
+                select(User.id).where(
+                    User.family_id == family_id,
+                    User.role == UserRole.PARENT,
+                    TAS._participating_member_clause(),
+                )
+            )).scalars().all()
         except Exception:
-            log.exception("early bird payout parent notification failed")
+            log.exception("early bird payout parent lookup failed")
+            parent_ids = []
+        for pid in parent_ids:
+            try:
+                await NotificationService.create_localized(
+                    db, family_id, "early_bird_payout_parent", user_id=pid,
+                    params={**params, "kid": kid_name}, link="/parent/payouts",
+                )
+            except Exception:
+                log.exception("early bird payout parent notification failed")
+                await db.rollback()
         return True
 
     @staticmethod
@@ -700,7 +722,8 @@ class EarlyBirdService:
         for uid, role in members:
             try:
                 if uid in owner_n:
-                    key, n = "grabs_owner", owner_n[uid]
+                    n = owner_n[uid]
+                    key = "grabs_owner_one" if n == 1 else "grabs_owner"
                 else:
                     n = sum(
                         1 for g in grabs

@@ -465,7 +465,7 @@ graph TD
 A way to reward teens for getting their chores done in the morning. Turn it on in **Settings > Family > Early bird** (it is off by default).
 
 - **Deadline and reminders**: you pick the deadline (default 11:00, between 07:00 and 22:00) and the days it applies (default every day). Your teens get a reminder 1 hour and 30 minutes before, as long as they still have chores open.
-- **Up for grabs**: once the deadline passes, a teen's chores still open that day go up for grabs, **for that same day only**. Another kid can take one, but only after finishing their own chores. The one who takes it earns its points; the teen who left it loses them (it shows as "Taken by...").
+- **Up for grabs**: once the deadline passes, a teen's chores still open that day go up for grabs, **for that same day only**. Another kid can take one, but only after finishing their own chores. The one who takes it earns its points; the teen who left it loses them (it shows as "Taken").
 - **Three rewards**, each adjustable (or set to 0 to turn off):
   1. **More points per early chore**: +20% of the chore's points when it is done before the first reminder (1 hour before the deadline).
   2. **Weekly paycheck**: +5% on the weekly chore paycheck for a week where every covered day was early. You see it on the payouts page as "incl. +5% early bird".

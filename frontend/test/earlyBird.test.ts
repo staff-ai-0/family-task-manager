@@ -91,8 +91,12 @@ describe("earlyBirdView", () => {
         expect(v.applies).toBe(false);
         expect(v.grabs).toHaveLength(1);
     });
-    it("run text caps at 3", () => {
-        expect(earlyBirdView(me({ run_weeks: 5 }), "es", d("2026-11-09T09:00:00-06:00"))!.runText).toBe("3/3");
+    it("run text is progress toward the next payout (run % 3)", () => {
+        const t = (r: number) => earlyBirdView(me({ run_weeks: r }), "es", d("2026-11-09T09:00:00-06:00"))!.runText;
+        expect(t(2)).toBe("2/3");
+        expect(t(3)).toBe("0/3");
+        expect(t(4)).toBe("1/3");
+        expect(t(5)).toBe("2/3");
     });
 });
 

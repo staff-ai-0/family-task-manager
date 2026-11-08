@@ -17,6 +17,13 @@ R2_BEFORE = timedelta(minutes=30)
 GRABS_PUSH_WINDOW = timedelta(minutes=60)
 SETTLE_LOOKBACK_WEEKS = 3
 PENDING_GRACE_DAYS = 7
+# Settlement stops at the first week still "pending" and resumes next sweep.
+# That is only safe if the lookback window outlasts the grace period (the week
+# that stops the walk must still be inside the window when grace expires);
+# otherwise an unresolved week would age out of the window and never settle.
+assert SETTLE_LOOKBACK_WEEKS * 7 > PENDING_GRACE_DAYS + 7, (
+    "SETTLE_LOOKBACK_WEEKS must cover PENDING_GRACE_DAYS plus one week"
+)
 
 
 @dataclass(frozen=True)

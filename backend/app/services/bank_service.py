@@ -946,7 +946,7 @@ class BankService:
             description=(
                 f"Domingo por tareas (semana {week_monday.isoformat()})"
                 + (f" · Folio {reference}" if reference else "")
-                + (f" · +{pct_label}% madrugador" if bonus > 0 else "")
+                + (f" · +{pct_label}% madrugador" if bonus > 0 and base + bonus + int(adjustment_cents or 0) >= base + bonus else "")
             ),
             week_of=week_monday,
         )

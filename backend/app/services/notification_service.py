@@ -108,12 +108,12 @@ _COPY = {
     "deadline_r1": {
         "type": NT.DEADLINE_SOON,
         "title": {"es": "⏰ Falta 1 hora", "en": "⏰ 1 hour left"},
-        "body": {"es": "Termina tus {n} tareas antes de las {deadline} y gana tu bono madrugador.", "en": "Finish your {n} chores before {deadline} for your early-bird bonus."},
+        "body": {"es": "Termina tus {n} tareas antes de las {deadline} o quedan libres para tus hermanos.", "en": "Finish your {n} chores before {deadline} or they go up for grabs."},
     },
     "deadline_r1_one": {
         "type": NT.DEADLINE_SOON,
         "title": {"es": "⏰ Falta 1 hora", "en": "⏰ 1 hour left"},
-        "body": {"es": "Termina tu tarea antes de las {deadline} y gana tu bono madrugador.", "en": "Finish your chore before {deadline} for your early-bird bonus."},
+        "body": {"es": "Termina tu tarea antes de las {deadline} o queda libre para tus hermanos.", "en": "Finish your chore before {deadline} or it goes up for grabs."},
     },
     "deadline_r2": {
         "type": NT.DEADLINE_SOON,
@@ -129,6 +129,11 @@ _COPY = {
         "type": NT.UP_FOR_GRABS,
         "title": {"es": "⏰ Se acabó el tiempo", "en": "⏰ Time's up"},
         "body": {"es": "{n} de tus tareas quedaron libres. Hazlas antes de que alguien las tome.", "en": "{n} of your chores are up for grabs. Do them before someone takes them."},
+    },
+    "grabs_owner_one": {
+        "type": NT.UP_FOR_GRABS,
+        "title": {"es": "⏰ Se acabó el tiempo", "en": "⏰ Time's up"},
+        "body": {"es": "Tu tarea quedó libre. Hazla antes de que alguien la tome.", "en": "Your chore is up for grabs. Do it before someone takes it."},
     },
     "grabs_open": {
         "type": NT.UP_FOR_GRABS,

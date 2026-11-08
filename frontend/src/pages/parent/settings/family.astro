@@ -287,7 +287,7 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
                 {ebTeens.map((t) => {
                     const week: any[] = Array.isArray(t.week) ? t.week : [];
                     const early = week.filter((d) => d.state === "early").length;
-                    const counted = week.filter((d) => d.state !== "neutral").length;
+                    const counted = week.filter((d) => !["neutral", "future", "open"].includes(d.state)).length;
                     return (
                         <li class="py-2 text-sm text-brand-ink flex flex-wrap items-center justify-between gap-x-3">
                             <span class="font-semibold">{t.name}</span>
@@ -295,7 +295,7 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
                                 {ebTodayLabel[t.today] ?? ""}{ebTodayLabel[t.today] ? " · " : ""}
                                 {lang === "es" ? `${early}/${counted} días temprano` : `${early}/${counted} days early`}
                                 {" · "}
-                                {lang === "es" ? `racha ${t.run_weeks ?? 0}/3 semanas` : `run ${t.run_weeks ?? 0}/3 weeks`}
+                                {lang === "es" ? `racha ${(t.run_weeks ?? 0) % 3}/3 semanas` : `run ${(t.run_weeks ?? 0) % 3}/3 weeks`}
                             </span>
                         </li>
                     );
