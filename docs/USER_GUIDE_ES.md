@@ -460,6 +460,22 @@ graph TD
     I --> J
 ```
 
+### Madrugador
+
+Una forma de premiar a los adolescentes por hacer sus tareas temprano. Se activa en **Configuración > Familia > Madrugador** (viene apagado).
+
+- **Hora límite y recordatorios**: tú eliges la hora límite (por defecto 11:00, entre 07:00 y 22:00) y los días en que aplica (por defecto todos). Tus adolescentes reciben un aviso 1 hora y 30 minutos antes, mientras les queden tareas abiertas.
+- **Para tomar**: al pasar la hora, las tareas que sigan abiertas ese día quedan libres, **solo ese mismo día**. Otro niño puede tomarla, pero solo después de terminar las suyas. Quien la toma gana los puntos; el adolescente que la dejó los pierde (aparece como "Tomada por...").
+- **Tres premios**, cada uno ajustable (0 lo apaga):
+  1. **Más puntos por tarea temprana**: +20% de los puntos de la tarea si se hace antes del primer aviso (1 hora antes de la hora límite).
+  2. **Cheque semanal**: +5% en el cheque semanal de tareas en una semana donde todos los días con tareas fueron a tiempo. Lo ves en pagos como "incl. +5% madrugador".
+  3. **Tres semanas seguidas**: cada 3ª semana temprana consecutiva paga $500 MXN.
+- **Tareas de la tarde**: marca **"Tarea de la tarde - sin hora límite"** en la plantilla (por ejemplo "lavar los platos de la cena") y queda fuera del plazo. Las tareas bonus nunca cuentan.
+- **"Marcar hecha" por un padre**: si marcas una tarea como hecha antes del corte, cuenta como temprana.
+- Una calificación parcial o fallida rompe el día temprano; una tarea en espera de tu revisión aparece como pendiente hasta que la califiques.
+
+La misma pantalla muestra el estado de cada adolescente: hoy, días tempranos de la semana y la racha hacia el premio de 3 semanas. La semana en que lo activas no cuenta para los premios semanales.
+
 ---
 
 ## 2.4 Asignacion Semanal (Shuffle)

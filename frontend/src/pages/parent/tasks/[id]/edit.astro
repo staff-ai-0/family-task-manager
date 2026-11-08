@@ -44,6 +44,7 @@ if (Astro.request.method === "POST") {
                 : null,
         requires_proof: data.get("requires_proof") === "on",
         is_bonus: data.get("is_bonus") === "on",
+        early_bird_exempt: data.get("is_bonus") !== "on" && data.get("early_bird_exempt") === "on",
         blocks_rewards: data.get("blocks_rewards") === "on",
         gig_mode: data.get("gig_mode") || "claim",
         collaboration_min_count: Number(data.get("collaboration_min_count")) || 2,
@@ -392,6 +393,22 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                     </div>
                 </div>
 
+                <div class="flex items-center gap-3 py-1" id="evening-wrap" hidden={tmpl.is_bonus}>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input
+                            type="checkbox"
+                            name="early_bird_exempt"
+                            class="sr-only peer"
+                            checked={tmpl.early_bird_exempt}
+                        />
+                        <div class="w-9 h-5 bg-brand-cream-deep rounded-full peer peer-checked:bg-brand-sky-deep peer-focus:ring-2 peer-focus:ring-sky-300 transition-colors after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-brand-cream after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                    <div>
+                        <span class="text-sm font-medium text-brand-ink">{lang === "es" ? "Tarea de la tarde — sin hora límite" : "Evening chore — no deadline"}</span>
+                        <p class="text-xs text-brand-ink-soft">{lang === "es" ? "Queda fuera del plazo del madrugador." : "Exempt from the early-bird deadline."}</p>
+                    </div>
+                </div>
+
                 <div>
                     <label class="text-sm font-medium text-brand-ink mb-1 block">
                         {lang === "es" ? "Modo de gig" : "Gig mode"}
@@ -502,6 +519,10 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
 
 <script>
     document.addEventListener('astro:page-load', () => {
+    const bonusToggle = document.querySelector('input[name="is_bonus"]') as HTMLInputElement | null;
+    bonusToggle?.addEventListener('change', () => {
+        document.getElementById('evening-wrap')?.toggleAttribute('hidden', bonusToggle.checked);
+    });
     (window as any).toggleUserSelection = function(assignmentType: string) {
         const container = document.getElementById('user_selection_container');
         if (container) {

@@ -2,6 +2,7 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../lib/api";
 import { buttonClass } from "../../../lib/buttonClasses";
+import { centsToPesos, daysFromFamily } from "../../../lib/earlyBirdSettings";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -18,6 +19,17 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 // UX-D4b: the surprise jar, rendered server-side; the script keeps it in sync.
 const { data: jar } = await apiFetch<any[]>("/api/families/surprises", { token });
 const surprises: any[] = jar ?? [];
+// Early bird: per-teen status for the settings list (null -> list hidden).
+const { data: ebTeensRaw } = await apiFetch<any[]>("/api/early-bird/family", { token });
+const ebTeens: any[] = Array.isArray(ebTeensRaw) ? ebTeensRaw : [];
+const ebDays = daysFromFamily(family?.early_bird_days);
+const ebDayNames = lang === "es" ? ["L", "M", "X", "J", "V", "S", "D"] : ["M", "T", "W", "T", "F", "S", "S"];
+const ebDayLong = lang === "es"
+    ? ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    : ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const ebTodayLabel: Record<string, string> = lang === "es"
+    ? { early: "Hoy: a tiempo", pending: "Hoy: en espera", open: "Hoy: en curso", missed: "Hoy: se pasó", neutral: "Hoy: sin tareas", future: "" }
+    : { early: "Today: on time", pending: "Today: waiting", open: "Today: in progress", missed: "Today: missed", neutral: "Today: no chores", future: "" };
 
 // Common North-American + Latin-American zones bubbled to the top, then everything else.
 const PRIORITY_TZ = [
@@ -213,6 +225,83 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
             </button>
             <span id="quest-status" class="text-sm" aria-live="polite"></span>
         </div>
+    </section>
+
+    <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-4" id="early-bird-section"
+             data-saved={lang === "es" ? "Guardado." : "Saved."}
+             data-error={lang === "es" ? "No se pudo guardar. Intenta de nuevo." : "Could not save. Try again."}
+             data-invalid={JSON.stringify(lang === "es"
+                 ? { deadline: "La hora límite va de 07:00 a 22:00, en pasos de 5 minutos.", days: "Elige al menos un día.", bonus: "El bono por tarea va de 0 a 100.", week: "El bono semanal va de 0 a 50.", streak: "El premio va de 0 a 10,000 pesos." }
+                 : { deadline: "The deadline runs from 07:00 to 22:00 in 5-minute steps.", days: "Pick at least one day.", bonus: "The per-chore bonus is 0 to 100.", week: "The weekly bonus is 0 to 50.", streak: "The prize is 0 to 10,000 pesos." })}>
+        <h2 class="text-sm font-bold text-brand-ink">🐦 {lang === "es" ? "Madrugador" : "Early bird"}</h2>
+        <p class="text-xs text-brand-ink-soft">
+            {lang === "es"
+                ? "Los adolescentes ganan extra por terminar sus tareas antes de la hora límite. Les avisamos 1 h y 30 min antes. Después de la hora, sus tareas abiertas pasan a \"para tomar\" ese mismo día: otro niño puede tomarlas (si ya terminó las suyas), gana los puntos y quien las dejó los pierde. Tres premios: más puntos por tarea temprana, un % extra en el cheque semanal de tareas, y un premio en pesos cada 3ª semana seguida a tiempo. Las tareas marcadas como \"tarea de la tarde\" no cuentan."
+                : "Teens earn extra for finishing their chores before the deadline. We remind them 1 h and 30 min before. After the deadline their open chores go up for grabs that same day: another kid can take them (once their own are done), earns the points, and the one who left them loses them. Three rewards: more points per early chore, a % extra on the weekly chore paycheck, and a peso prize every 3rd week in a row on time. Chores marked \"evening chore\" are exempt."}
+        </p>
+        <label class="flex items-start gap-3 cursor-pointer">
+            <input type="checkbox" id="eb-enabled" class="mt-1 h-5 w-5 rounded border-brand-ink/30" checked={family?.early_bird_enabled === true} />
+            <span class="text-sm font-semibold text-brand-ink">{lang === "es" ? "Activar madrugador" : "Turn on early bird"}</span>
+        </label>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+                <label for="eb-deadline" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Hora límite" : "Deadline"}</label>
+                <input type="time" id="eb-deadline" step="300" min="07:00" max="22:00" value={family?.early_bird_deadline ?? "11:00"}
+                       class="w-32 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
+            </div>
+            <div>
+                <span class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Días" : "Days"}</span>
+                <div class="flex flex-wrap gap-1.5" id="eb-days" role="group" aria-label={lang === "es" ? "Días con hora límite" : "Days with a deadline"}>
+                    {ebDayNames.map((n, i) => (
+                        <button type="button" data-day={i} aria-pressed={ebDays.includes(i) ? "true" : "false"} aria-label={ebDayLong[i]}
+                                class="h-9 w-9 rounded-full border border-brand-ink/20 text-sm font-bold text-brand-ink bg-white aria-pressed:bg-brand-sky aria-pressed:border-brand-ink/40 focus:outline-none focus:ring-2 focus:ring-brand-sky">
+                            {n}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <div>
+                <label for="eb-bonus" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Puntos extra por tarea temprana (%)" : "Extra points per early chore (%)"}</label>
+                <input type="number" id="eb-bonus" inputmode="numeric" min="0" max="100" step="1" value={family?.early_bird_bonus_pct ?? 20}
+                       class="w-24 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
+            </div>
+            <div>
+                <label for="eb-week" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Extra en el cheque semanal (%)" : "Extra on the weekly paycheck (%)"}</label>
+                <input type="number" id="eb-week" inputmode="numeric" min="0" max="50" step="1" value={family?.early_bird_week_pct ?? 5}
+                       class="w-24 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
+            </div>
+            <div>
+                <label for="eb-streak" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Premio cada 3ª semana seguida (pesos)" : "Prize every 3rd week in a row (pesos)"}</label>
+                <input type="number" id="eb-streak" inputmode="numeric" min="0" max="10000" step="1" value={centsToPesos(family?.early_bird_streak_cents ?? 50000)}
+                       class="w-28 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <button type="button" id="eb-save" class={`disabled:opacity-60 ${buttonClass("secondary", "sm")}`}>
+                {lang === "es" ? "Guardar" : "Save"}
+            </button>
+            <span id="eb-status" class="text-sm" aria-live="polite"></span>
+        </div>
+        {ebTeens.length > 0 && (
+            <ul class="divide-y divide-brand-ink/10 border-t border-brand-ink/10" data-eb-teens>
+                {ebTeens.map((t) => {
+                    const week: any[] = Array.isArray(t.week) ? t.week : [];
+                    const early = week.filter((d) => d.state === "early").length;
+                    const counted = week.filter((d) => d.state !== "neutral").length;
+                    return (
+                        <li class="py-2 text-sm text-brand-ink flex flex-wrap items-center justify-between gap-x-3">
+                            <span class="font-semibold">{t.name}</span>
+                            <span class="text-xs text-brand-ink-soft">
+                                {ebTodayLabel[t.today] ?? ""}{ebTodayLabel[t.today] ? " · " : ""}
+                                {lang === "es" ? `${early}/${counted} días temprano` : `${early}/${counted} days early`}
+                                {" · "}
+                                {lang === "es" ? `racha ${t.run_weeks ?? 0}/3 semanas` : `run ${t.run_weeks ?? 0}/3 weeks`}
+                            </span>
+                        </li>
+                    );
+                })}
+            </ul>
+        )}
     </section>
 
     <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-3" id="smart-reminders-section"
@@ -699,6 +788,53 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
             status.textContent = r.ok ? (section.dataset.saved ?? "") : (section.dataset.error ?? "");
             status.className = r.ok ? "text-sm text-green-700" : "text-sm text-red-700";
             if (r.ok) document.querySelector("[data-quest-off]")?.toggleAttribute("hidden", value > 0);
+        } catch {
+            status.textContent = section.dataset.error ?? "";
+            status.className = "text-sm text-red-700";
+        } finally {
+            save.removeAttribute("disabled");
+        }
+    });
+</script>
+
+<script>
+    import { buildPayload, type EarlyBirdField } from "../../../lib/earlyBirdSettings";
+
+    const section = document.getElementById("early-bird-section");
+    const save = document.getElementById("eb-save") as HTMLButtonElement | null;
+    const status = document.getElementById("eb-status");
+    const chips = Array.from(document.querySelectorAll<HTMLButtonElement>("#eb-days [data-day]"));
+    chips.forEach((c) =>
+        c.addEventListener("click", () => c.setAttribute("aria-pressed", c.getAttribute("aria-pressed") === "true" ? "false" : "true")),
+    );
+    const val = (id: string) => (document.getElementById(id) as HTMLInputElement).value.trim();
+    save?.addEventListener("click", async () => {
+        if (!section || !status) return;
+        status.className = "text-sm";
+        const built = buildPayload({
+            enabled: (document.getElementById("eb-enabled") as HTMLInputElement).checked,
+            deadline: val("eb-deadline"),
+            days: chips.filter((c) => c.getAttribute("aria-pressed") === "true").map((c) => Number(c.dataset.day)),
+            bonusPct: val("eb-bonus") === "" ? NaN : Number(val("eb-bonus")),
+            weekPct: val("eb-week") === "" ? NaN : Number(val("eb-week")),
+            streakPesos: val("eb-streak") === "" ? NaN : Number(val("eb-streak")),
+        });
+        if (!built.ok) {
+            const msgs = JSON.parse(section.dataset.invalid ?? "{}") as Record<EarlyBirdField, string>;
+            status.textContent = msgs[built.field] ?? "";
+            status.className = "text-sm text-red-700";
+            return;
+        }
+        save.setAttribute("disabled", "true");
+        status.textContent = "";
+        try {
+            const r = await fetch("/api/families/me", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(built.body),
+            });
+            status.textContent = r.ok ? (section.dataset.saved ?? "") : (section.dataset.error ?? "");
+            status.className = r.ok ? "text-sm text-green-700" : "text-sm text-red-700";
         } catch {
             status.textContent = section.dataset.error ?? "";
             status.className = "text-sm text-red-700";

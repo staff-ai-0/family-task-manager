@@ -16,6 +16,8 @@ if (!user) {
 if (user.role !== "parent") return Astro.redirect("/dashboard");
 
 const { data: kidsData } = await apiFetch<any[]>("/api/cash/family", { token });
+const { data: payFamily } = await apiFetch<any>("/api/families/me", { token });
+const earlyWeekPct = Number(payFamily?.early_bird_week_pct ?? 5);
 const kids: any[] = Array.isArray(kidsData) ? kidsData : [];
 const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
@@ -239,6 +241,13 @@ const dayLabel = (iso: string): string =>
                                                     )}
                                                 </p>
                                                 <p class="text-xs text-brand-ink-soft">{w.done_points}/{w.assigned_points} pts · {w.pct}%</p>
+                                                {Number(w.early_bird_bonus_cents) > 0 && (
+                                                    <p class="text-xs font-semibold text-brand-mint-text" data-early-bird-line>
+                                                        {lang === "es"
+                                                            ? `incl. +${earlyWeekPct} % madrugador (${fmt(w.early_bird_bonus_cents)})`
+                                                            : `incl. +${earlyWeekPct} % early bird (${fmt(w.early_bird_bonus_cents)})`}
+                                                    </p>
+                                                )}
                                             </div>
                                             <div class="text-right">
                                                 <p class="text-2xl font-extrabold text-brand-mint-text">{fmt(w.amount_cents)}</p>
