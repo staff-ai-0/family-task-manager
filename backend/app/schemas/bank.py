@@ -87,7 +87,7 @@ class PayoutTaskDetail(BaseModel):
     title: str
     points: int
     earned_points: int
-    status: Literal["credited", "pending_review", "missed", "not_done"]
+    status: Literal["credited", "pending_review", "missed", "not_done", "taken"]
     grade: Optional[str] = None
     partial_credit_pct: Optional[int] = None
     assigned_date: date
