@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from types import SimpleNamespace
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 from uuid import UUID
@@ -291,6 +292,125 @@ class EarlyBirdService:
         except Exception:
             log.exception("chore_taken notification failed")
         return new_row
+
+    # ------------------------------------------------------------ API payloads
+
+    @staticmethod
+    async def _teen_view(db, cfg, family_id, user_id, now) -> dict:
+        """today / week / week_result / run_weeks for one teen. Reuses
+        week_status; never recomputes rules."""
+        today = now.astimezone(cfg.tz).date()
+        monday = today - timedelta(days=today.weekday())
+        result, days = await EarlyBirdService.week_status(
+            db, cfg, family_id, user_id, monday, now
+        )
+        week = []
+        for i in range(7):
+            d = monday + timedelta(days=i)
+            state = "future" if d > today else days.get(d, "neutral")
+            week.append({"date": d, "state": state})
+        today_state = (
+            days.get(today, "neutral") if is_active_day(cfg, today) else None
+        )
+        last = (await db.execute(
+            select(EarlyBirdWeek.run_weeks)
+            .where(EarlyBirdWeek.user_id == user_id)
+            .order_by(EarlyBirdWeek.week_of.desc())
+            .limit(1)
+        )).scalar_one_or_none()
+        return {
+            "today": today_state,
+            "week": week,
+            "week_result": result,
+            "run_weeks": int(last or 0),
+        }
+
+    @staticmethod
+    async def me(db: AsyncSession, user: User, now: Optional[datetime] = None) -> dict:
+        """Payload for GET /api/early-bird/me."""
+        now = EarlyBirdService._now(now)
+        cfg = await EarlyBirdService.config(db, user.family_id)
+        out = {
+            "enabled": cfg.enabled,
+            "applies": False,
+            "deadline": cfg.deadline.strftime("%H:%M"),
+            "cutoff_at": None,
+            "deadline_at": None,
+            "today": None,
+            "week": [],
+            "week_result": "ineligible",
+            "run_weeks": 0,
+            "streak_weeks": STREAK_WEEKS,
+            "streak_cents": int(cfg.streak_cents),
+            "week_pct": int(cfg.week_pct),
+            "bonus_pct": int(cfg.bonus_pct),
+            "grabs": [],
+            "take_block": None,
+        }
+        if not cfg.enabled:
+            return out
+        today = now.astimezone(cfg.tz).date()
+        if is_active_day(cfg, today):
+            t = day_times(cfg, today)
+            out["cutoff_at"], out["deadline_at"] = t.r1, t.deadline
+        if user.role == UserRole.TEEN:
+            out["applies"] = True
+            out.update(await EarlyBirdService._teen_view(db, cfg, user.family_id, user.id, now))
+
+        rows = await EarlyBirdService.grabbable(db, user.family_id, now)
+        if rows:
+            allowed = dict((await db.execute(
+                select(TaskAssignment.id, TaskTemplate.allowed_roles)
+                .join(TaskTemplate, TaskTemplate.id == TaskAssignment.template_id)
+                .where(TaskAssignment.id.in_([g.assignment_id for g in rows]))
+            )).all())
+            es = (getattr(user, "preferred_lang", None) or "en") == "es"
+            out["grabs"] = [
+                {
+                    "assignment_id": g.assignment_id,
+                    "title": g.title_es if (es and g.title_es) else g.title,
+                    "points": g.points,
+                    "owner_name": g.owner_name,
+                }
+                for g in rows
+                if g.owner_id != user.id
+                and (not allowed.get(g.assignment_id) or user.role.value in allowed[g.assignment_id])
+            ]
+            if out["grabs"]:
+                out["take_block"] = await EarlyBirdService._caller_block(db, user, today)
+        return out
+
+    @staticmethod
+    async def _caller_block(db, user: User, today: date) -> Optional[str]:
+        """Caller-level take block: not_kid / finish_yours_first, else None."""
+        reason = await EarlyBirdService.can_take(
+            db, user, SimpleNamespace(allowed_roles=None), today
+        )
+        return reason if reason in ("not_kid", "finish_yours_first") else None
+
+    @staticmethod
+    async def family_overview(
+        db: AsyncSession, parent: User, now: Optional[datetime] = None
+    ) -> list[dict]:
+        """One entry per participating TEEN of the parent's family."""
+        from app.services.task_assignment_service import TaskAssignmentService as TAS
+
+        now = EarlyBirdService._now(now)
+        cfg = await EarlyBirdService.config(db, parent.family_id)
+        if not cfg.enabled:
+            return []
+        teens = (await db.execute(
+            select(User).where(
+                User.family_id == parent.family_id,
+                User.role == UserRole.TEEN,
+                TAS._participating_member_clause(),
+            ).order_by(User.name)
+        )).scalars().all()
+        out = []
+        for t in teens:
+            view = await EarlyBirdService._teen_view(db, cfg, parent.family_id, t.id, now)
+            out.append({"user_id": t.id, "name": t.name, **view})
+        return out
 
     # ------------------------------------------------------------ bonus award
 
