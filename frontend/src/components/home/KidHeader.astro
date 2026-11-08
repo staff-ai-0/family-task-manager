@@ -3,6 +3,7 @@
 import type { PayMeter } from "../../lib/kidHome";
 import { headerToneClass } from "../../lib/headerTone";
 import type { ProgressView } from "../../lib/progress";
+import { paycheckBonusLine } from "../../lib/earlyBird";
 
 interface Props {
     name: string;
@@ -14,8 +15,10 @@ interface Props {
     meter: PayMeter;
     counter: { done: number; total: number; suffix: string };
     progress?: ProgressView | null;
+    /** Early Bird paycheck bump (%), for the "incl. +5% madrugador" line. */
+    earlyBirdPct?: number;
 }
-const { name, lang, skin, starMode, cashCents, points, meter, counter, progress = null } = Astro.props;
+const { name, lang, skin, starMode, cashCents, points, meter, counter, progress = null, earlyBirdPct = 0 } = Astro.props;
 const es = lang === "es";
 const money = (cents: number) =>
     `$${Math.round(cents / 100).toLocaleString(es ? "es-MX" : "en-US")}`;
@@ -23,6 +26,7 @@ const money = (cents: number) =>
 const skinClass = skin === "teen" ? "bg-[#1E2230] text-white" : headerToneClass("sky");
 const pillCls = skin === "teen" ? "bg-white/10 border-white/25" : "bg-white/40 border-brand-ink/20";
 const trackCls = skin === "teen" ? "bg-white/15" : "bg-brand-ink/15";
+const earlyLine = meter.show ? paycheckBonusLine(meter.earlyBirdBonusCents, earlyBirdPct, lang) : null;
 const fillCls = skin === "teen" ? "bg-brand-mint" : "bg-brand-ink";
 ---
 
@@ -76,6 +80,7 @@ const fillCls = skin === "teen" ? "bg-brand-mint" : "bg-brand-ink";
                 <div class="h-full bg-brand-mint-deep" style={`width:${meter.greenPct}%`}></div>
                 <div class="h-full bg-red-400" style={`width:${meter.redPct}%`}></div>
             </div>
+            {earlyLine && <p class="text-[11px] mt-1.5" data-early-bird-paycheck>{earlyLine}</p>}
             {meter.released && (
                 <p class="text-[11px] mt-1.5">{es ? "¡Pago de esta semana liberado! 🎉" : "This week's pay is released! 🎉"}</p>
             )}

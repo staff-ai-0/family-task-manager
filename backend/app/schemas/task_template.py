@@ -56,6 +56,7 @@ class TaskTemplateBase(BaseModel):
         ),
     )
     is_bonus: bool = False
+    early_bird_exempt: bool = False  # Early Bird: not covered by the deadline
     assignment_type: AssignmentType = AssignmentType.AUTO
     assigned_user_ids: Optional[List[UUID]] = Field(None, description="User UUIDs for FIXED or ROTATE assignment")
     allowed_roles: Optional[List[str]] = Field(
@@ -142,6 +143,7 @@ class TaskTemplateUpdate(BaseModel):
     recur_every_n_days: Optional[int] = Field(None, ge=1, le=90)
     requires_proof: Optional[bool] = None
     is_bonus: Optional[bool] = None
+    early_bird_exempt: Optional[bool] = None
     is_active: Optional[bool] = None
     assignment_type: Optional[AssignmentType] = None
     assigned_user_ids: Optional[List[UUID]] = None
@@ -172,6 +174,7 @@ class TaskTemplateResponse(FamilyEntityResponse):
     recur_every_n_days: Optional[int] = None
     requires_proof: bool = False
     is_bonus: bool
+    early_bird_exempt: bool = False
     is_active: bool
     created_by: Optional[UUID] = None
     assignment_type: AssignmentType

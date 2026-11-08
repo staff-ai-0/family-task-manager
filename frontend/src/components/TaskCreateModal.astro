@@ -291,6 +291,20 @@ const dowLabels = lang === "es"
                     </div>
                 </div>
 
+                <!-- 5b. Early bird exemption (hidden for bonus tasks) -->
+                <div class="flex items-center gap-3 py-1" id="tcm-evening-wrap">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input id="tcm-evening" type="checkbox" class="sr-only peer" />
+                        <div class="w-9 h-5 bg-brand-cream-deep rounded-full peer peer-checked:bg-brand-sky-deep peer-focus:ring-2 peer-focus:ring-sky-300 transition-colors after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-brand-cream after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                    <div>
+                        <span class="text-sm font-medium text-brand-ink">{lang === "es" ? "Tarea de la tarde — sin hora límite" : "Evening chore — no deadline"}</span>
+                        <p class="text-xs text-brand-ink-soft">
+                            {lang === "es" ? "Queda fuera del plazo del madrugador." : "Exempt from the early-bird deadline."}
+                        </p>
+                    </div>
+                </div>
+
                 <!-- Points (explicit at create time, not silently zeroed) -->
                 <div class="flex items-center gap-3 py-1">
                     <label for="tcm-points" class="text-sm font-medium text-brand-ink whitespace-nowrap">
@@ -424,6 +438,8 @@ const dowLabels = lang === "es"
     const bonusChk = document.getElementById("tcm-bonus");
     const blocksChk = document.getElementById("tcm-blocks-rewards");
     const proofChk = document.getElementById("tcm-proof");
+    const eveningChk = document.getElementById("tcm-evening");
+    const eveningWrap = document.getElementById("tcm-evening-wrap");
     const gigSelect = document.getElementById("tcm-gig");
     const gigWrap = document.getElementById("tcm-gig-wrap");
     const pointsInput = document.getElementById("tcm-points");
@@ -433,6 +449,7 @@ const dowLabels = lang === "es"
     // Gig mode is only relevant to bonus tasks — keep its jargon out of plain chores.
     bonusChk?.addEventListener("change", () => {
         gigWrap?.classList.toggle("hidden", !bonusChk.checked);
+        eveningWrap?.toggleAttribute("hidden", bonusChk.checked);
     });
     const descTA = document.getElementById("tcm-desc");
     const membersDiv = document.getElementById("tcm-members");
@@ -604,6 +621,8 @@ const dowLabels = lang === "es"
         if (bonusChk) bonusChk.checked = false;
         if (blocksChk) blocksChk.checked = false;
         if (proofChk) proofChk.checked = false;
+        if (eveningChk) eveningChk.checked = false;
+        eveningWrap?.removeAttribute("hidden");
         if (gigSelect) gigSelect.value = "claim";
         if (gigWrap) gigWrap.classList.add("hidden");
         if (pointsInput) pointsInput.value = "10";
@@ -790,6 +809,7 @@ const dowLabels = lang === "es"
             days_of_week: daysOfWeek.length > 0 ? daysOfWeek : null,
             requires_proof: proofChk?.checked || false,
             is_bonus: isBonus,
+            early_bird_exempt: isBonus ? false : eveningChk?.checked || false,
             blocks_rewards: blocksRewards,
             gig_mode: gigMode,
             collaboration_min_count: 2,

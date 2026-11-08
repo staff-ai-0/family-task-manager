@@ -123,6 +123,7 @@ class TaskTemplateService(BaseFamilyService[TaskTemplate]):
                 else None
             ),
             is_bonus=data.is_bonus,
+            early_bird_exempt=data.early_bird_exempt,
             auto_late_penalty=data.auto_late_penalty,
             late_restriction_type=data.late_restriction_type,
             late_severity=data.late_severity,

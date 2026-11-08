@@ -105,7 +105,7 @@ async def test_engine_session():
             ("userrole", ["PARENT", "CHILD", "TEEN"]),
             ("transactiontype", ["TASK_COMPLETED", "REWARD_REDEEMED", "PARENT_ADJUSTMENT", "BONUS", "PENALTY", "TRANSFER", "GIG_APPROVED"]),
             ("rewardcategory", ["SCREEN_TIME", "TREATS", "ACTIVITIES", "PRIVILEGES", "MONEY", "TOYS"]),
-            ("assignmentstatus", ["pending", "claimed", "completed", "overdue", "cancelled"]),
+            ("assignmentstatus", ["pending", "claimed", "completed", "overdue", "cancelled", "taken"]),
             ("approval_status", ["none", "pending", "approved", "rejected"]),
             ("invitationstatus", ["PENDING", "ACCEPTED", "REJECTED", "EXPIRED"]),
             ("restrictiontype", ["SCREEN_TIME", "REWARDS", "EXTRA_TASKS", "ALLOWANCE", "ACTIVITIES", "CUSTOM"]),

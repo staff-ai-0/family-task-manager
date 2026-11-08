@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from typing import Dict, Any, Optional
 
 from app.core.exceptions import (
+    ConflictException,
     NotFoundException,
     ValidationException,
     ForbiddenException,
@@ -49,6 +50,13 @@ async def validation_handler(
         status_code=status.HTTP_400_BAD_REQUEST,
         message=str(exc),
         error_type="validation_error",
+    )
+
+
+async def conflict_handler(request: Request, exc: ConflictException) -> JSONResponse:
+    """Handle 409 Conflict errors"""
+    return create_error_response(
+        status_code=status.HTTP_409_CONFLICT, message=str(exc), error_type="conflict"
     )
 
 
@@ -168,6 +176,7 @@ def register_exception_handlers(app):
     app.add_exception_handler(NotFoundException, not_found_handler)
     app.add_exception_handler(ValidationException, validation_handler)
     app.add_exception_handler(ForbiddenException, forbidden_handler)
+    app.add_exception_handler(ConflictException, conflict_handler)
     app.add_exception_handler(UnauthorizedException, unauthorized_handler)
     app.add_exception_handler(InsufficientPointsError, insufficient_points_handler)
     app.add_exception_handler(ConsequenceActiveError, consequence_active_handler)

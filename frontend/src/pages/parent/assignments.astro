@@ -317,7 +317,7 @@ function isToday(d: Date): boolean {
                                                 ? "bg-brand-mint/20 text-brand-mint-text border-brand-mint"
                                                 : task.status === "overdue"
                                                     ? "bg-red-100 text-red-700 border-red-200"
-                                                    : task.status === "cancelled"
+                                                    : (task.status === "cancelled" || task.status === "taken")
                                                         ? "bg-brand-cream-deep text-brand-ink-soft border-brand-ink/10 line-through"
                                                         : "bg-brand-sun/20 text-brand-sun-text border-brand-sun";
 
@@ -420,7 +420,7 @@ function isToday(d: Date): boolean {
                                                         ? "bg-brand-mint/20 text-brand-mint-text border-brand-mint"
                                                         : task.status === "overdue"
                                                             ? "bg-red-100 text-red-700 border-red-200"
-                                                            : task.status === "cancelled"
+                                                            : (task.status === "cancelled" || task.status === "taken")
                                                                 ? "bg-brand-cream-deep text-brand-ink-soft border-brand-ink/10 line-through"
                                                                 : "bg-brand-sun/20 text-brand-sun-text border-brand-sun";
                                                     const displayTitle = (lang === "es" && task.template_title_es) ? task.template_title_es : task.template_title;
@@ -499,6 +499,10 @@ function isToday(d: Date): boolean {
                         <div class="flex items-center gap-1.5">
                             <div class="w-3 h-3 rounded bg-brand-cream-deep border border-brand-ink/10"></div>
                             <span class="text-xs text-brand-ink-soft">{t(lang, "pac_status_cancelled")}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <div class="w-3 h-3 rounded bg-brand-cream-deep border border-brand-ink/10"></div>
+                            <span class="text-xs text-brand-ink-soft">{t(lang, "pac_status_taken")}</span>
                         </div>
                     </div>
                 </div>

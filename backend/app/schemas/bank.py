@@ -76,6 +76,7 @@ class ChorePaycheckPreview(BaseModel):
     pct: int
     discounted_pct: int
     projected_cents: int
+    early_bird_bonus_cents: int = 0
     already_released: bool
 
 
@@ -86,7 +87,7 @@ class PayoutTaskDetail(BaseModel):
     title: str
     points: int
     earned_points: int
-    status: Literal["credited", "pending_review", "missed", "not_done"]
+    status: Literal["credited", "pending_review", "missed", "not_done", "taken"]
     grade: Optional[str] = None
     partial_credit_pct: Optional[int] = None
     assigned_date: date
@@ -105,6 +106,7 @@ class PayoutPaycheckWeek(BaseModel):
     done_points: int
     assigned_points: int
     pct: int
+    early_bird_bonus_cents: int = 0
     is_current_week: bool
     already_released: bool
     tasks: list[PayoutTaskDetail] = []

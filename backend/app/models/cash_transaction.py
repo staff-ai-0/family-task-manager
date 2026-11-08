@@ -30,6 +30,7 @@ class CashTransactionType(str, enum.Enum):
     INTEREST = "interest"       # parent-paid weekly interest on the Save jar
     MATCH = "match"             # parent match on kid-initiated Save deposits
     JAR_TRANSFER = "jar_transfer"  # paired ± rows moving money between jars
+    BONUS = "bonus"             # Early Bird $ streak bonus (PG label: BONUS)
 
 
 class CashTransaction(Base):

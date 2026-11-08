@@ -67,7 +67,7 @@ describe("payMeterView", () => {
     it("maps the bar segments and release flag", () => {
         expect(payMeterView({
             mode: "chore_proportional", cap_cents: 25000, pct: 45, discounted_pct: 8, already_released: true,
-        })).toEqual({ show: true, capCents: 25000, greenPct: 45, redPct: 8, released: true });
+        })).toEqual({ show: true, capCents: 25000, greenPct: 45, redPct: 8, released: true, earlyBirdBonusCents: 0 });
     });
     it("never lets the bar overflow", () => {
         const m = payMeterView({ mode: "chore_proportional", cap_cents: 100, pct: 96, discounted_pct: 7 });

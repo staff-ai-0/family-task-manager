@@ -4,15 +4,32 @@ Family Pydantic schemas
 Request and response models for family-related operations.
 """
 
-from datetime import datetime
+from datetime import datetime, time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator
 from typing import Literal, Optional, List
 from uuid import UUID
 
 from app.schemas.user import UserResponse
 from app.schemas.base import EntityResponse
+
+
+def _parse_deadline(value):
+    """Accept "HH:MM" (or a time) between 07:00 and 22:00, on a 5-minute step."""
+    if value is None or isinstance(value, time):
+        parsed = value
+    else:
+        try:
+            hh, mm = str(value).split(":")[:2]
+            parsed = time(int(hh), int(mm))
+        except (ValueError, TypeError):
+            raise ValueError("early_bird_deadline must be HH:MM")
+    if parsed is None:
+        return parsed
+    if parsed.minute % 5 != 0 or parsed.second or not time(7, 0) <= parsed <= time(22, 0):
+        raise ValueError("early_bird_deadline must be 07:00-22:00 in 5-minute steps")
+    return parsed.replace(second=0, microsecond=0)
 
 
 def _validate_iana_tz(value: Optional[str]) -> Optional[str]:
@@ -60,9 +77,31 @@ class FamilyUpdate(BaseModel):
     teen_checkin_enabled: Optional[bool] = None
     # UX-D4b mystery box points maximum; 0 switches boxes off.
     mystery_box_points: Optional[int] = Field(None, ge=0, le=500)
+    # Early Bird. Deadline is "HH:MM" (07:00-22:00, 5-min steps). Days are
+    # weekdays 0=Mon..6=Sun, distinct, non-empty; an explicit null = every day.
+    early_bird_enabled: Optional[bool] = None
+    early_bird_deadline: Optional[time] = None
+    early_bird_days: Optional[List[int]] = None
+    early_bird_bonus_pct: Optional[int] = Field(None, ge=0, le=100)
+    early_bird_week_pct: Optional[int] = Field(None, ge=0, le=50)
+    early_bird_streak_cents: Optional[int] = Field(None, ge=0, le=1_000_000)
     # Module registry: list of ENABLED togglable modules. None = leave as-is
     # on PATCH; stored NULL = all on. Must be a subset of TOGGLABLE_MODULES.
     enabled_modules: Optional[List[str]] = None
+
+    @field_validator("early_bird_deadline", mode="before")
+    @classmethod
+    def _check_deadline(cls, v):
+        return _parse_deadline(v)
+
+    @field_validator("early_bird_days")
+    @classmethod
+    def _check_days(cls, v: Optional[List[int]]) -> Optional[List[int]]:
+        if v is None:
+            return v
+        if not v or any(d < 0 or d > 6 for d in v):
+            raise ValueError("early_bird_days must be a non-empty list of weekdays 0-6")
+        return sorted(set(v))
 
     @field_validator("enabled_modules")
     @classmethod
@@ -118,8 +157,20 @@ class FamilyResponse(EntityResponse):
     teen_checkin_decided_at: Optional[datetime] = None
     # UX-D4b: NULL = undecided (boxes off + one-time parent-hub card).
     mystery_box_points: Optional[int] = None
+    early_bird_enabled: bool = False
+    early_bird_enabled_at: Optional[datetime] = None
+    early_bird_deadline: time = time(11, 0)
+    early_bird_days: Optional[List[int]] = None  # NULL = every day
+    early_bird_bonus_pct: int = 20
+    early_bird_week_pct: int = 5
+    early_bird_streak_cents: int = 50000
     # Stored value: NULL = all modules on. Clients resolve via the same rule.
     enabled_modules: Optional[List[str]] = None
+
+
+    @field_serializer("early_bird_deadline")
+    def _ser_deadline(self, v: time) -> str:
+        return v.strftime("%H:%M")
 
 
 class FamilyWithMembers(FamilyResponse):

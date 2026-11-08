@@ -110,6 +110,19 @@ class PointTransaction(Base):
         )
 
     @classmethod
+    def create_bonus(cls, user_id, family_id, points: int, balance_before: int, description: str, assignment_id=None):
+        return cls(
+            type=TransactionType.BONUS,
+            user_id=user_id,
+            family_id=family_id,
+            assignment_id=assignment_id,
+            points=points,
+            balance_before=balance_before,
+            balance_after=balance_before + points,
+            description=description,
+        )
+
+    @classmethod
     def create_gig_claim_approval(cls, user_id, family_id, gig_claim_id, points: int, balance_before: int):
         return cls(
             type=TransactionType.GIG_APPROVED,

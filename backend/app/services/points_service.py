@@ -118,6 +118,29 @@ class PointsService:
         return transaction
 
     @staticmethod
+    async def award_bonus_points(
+        db: AsyncSession,
+        user_id: UUID,
+        family_id: UUID,
+        points: int,
+        description: str,
+        assignment_id=None,
+    ) -> PointTransaction:
+        """Credit BONUS points (e.g. Early Bird). Caller commits."""
+        user = await PointsService._get_user_locked(db, user_id, family_id)
+        transaction = PointTransaction.create_bonus(
+            user_id=user_id,
+            family_id=family_id,
+            points=points,
+            balance_before=user.points,
+            description=description,
+            assignment_id=assignment_id,
+        )
+        user.points += points
+        db.add(transaction)
+        return transaction
+
+    @staticmethod
     async def award_assignment_completion(
         db: AsyncSession,
         user_id: UUID,

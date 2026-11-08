@@ -187,6 +187,8 @@ class TaskTemplate(Base):
 
     # Classification
     is_bonus = Column(Boolean, default=False, nullable=False)
+    # Early Bird: chores marked exempt are not covered by the 11:00 deadline.
+    early_bird_exempt = Column(Boolean, nullable=False, default=False, server_default="false")
     is_active = Column(Boolean, default=True, nullable=False, index=True)
 
     # Ownership

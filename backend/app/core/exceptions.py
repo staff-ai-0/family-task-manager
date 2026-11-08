@@ -11,6 +11,11 @@ class NotFoundException(FamilyAppException):
     pass
 
 
+class ConflictException(FamilyAppException):
+    """Raised when the request conflicts with current state (HTTP 409)"""
+    pass
+
+
 class PermissionDeniedError(FamilyAppException):
     """Raised when user doesn't have permission for an operation"""
     pass

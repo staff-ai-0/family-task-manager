@@ -185,7 +185,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         """
         Cross-week fairness: sum of template points assigned to each member in the
         prior `lookback_weeks`. Members with high carry are picked LAST.
-        Excludes CANCELLED rows.
+        Excludes CANCELLED rows and Early Bird TAKEN rows (the taker's row
+        carries the chore, so it must not count for both).
         """
         if lookback_weeks <= 0 or not member_ids:
             return {mid: 0 for mid in member_ids}
@@ -202,7 +203,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     TaskAssignment.family_id == family_id,
                     TaskAssignment.week_of >= start,
                     TaskAssignment.week_of < week_monday,
-                    TaskAssignment.status != AssignmentStatus.CANCELLED,
+                    TaskAssignment.status.notin_(
+                        (AssignmentStatus.CANCELLED, AssignmentStatus.TAKEN)
+                    ),
                 )
             )
             .group_by(TaskAssignment.assigned_to)
@@ -1121,6 +1124,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 TaskAssignment.status == AssignmentStatus.PENDING,
                 TaskAssignment.template_id.not_in(interval_template_ids),
                 TaskAssignment.assigned_date >= today,
+                # Early Bird: a row someone TOOK is theirs now — a reshuffle
+                # must not hand it back or delete it.
+                TaskAssignment.taken_from_id.is_(None),
             )
         )
         await db.execute(delete_stmt)
@@ -1791,6 +1797,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             await PointsService.award_assignment_completion(
                 db, user_id, family_id, assignment.id, template.effective_points
             )
+            from app.services.early_bird_service import EarlyBirdService
+            await EarlyBirdService.maybe_award_early_bonus(db, assignment, template)
             from app.services.pet_service import PetService
             await PetService.on_task_completed(db, user_id, is_bonus=False)
 
@@ -2416,6 +2424,10 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 await PointsService.award_assignment_completion(
                     db, assignment.assigned_to, family_id, assignment.id, pts
                 )
+                from app.services.early_bird_service import EarlyBirdService
+                await EarlyBirdService.maybe_award_early_bonus(
+                    db, assignment, assignment.template, credit_pct=award_pct
+                )
             from app.services.notification_service import NotificationService
             from app.services.pet_service import PetService
             await PetService.on_task_completed(
@@ -2655,6 +2667,17 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
     # ─── Parent Edit (reassign / reschedule / cancel) ────────────────
 
+    @classmethod
+    async def delete_by_id(cls, db: AsyncSession, entity_id: UUID, family_id: UUID) -> None:
+        """Hard delete, except an Early Bird TAKEN row: ``taken_from_id`` is
+        ON DELETE SET NULL, so deleting it would turn the taker's row into an
+        ordinary (grabbable/covered) chore."""
+        entity = await cls.get_by_id(db, entity_id, family_id)
+        if entity.status == AssignmentStatus.TAKEN:
+            raise ValidationException("taken_row_locked")
+        await db.delete(entity)
+        await db.commit()
+
     @staticmethod
     async def patch_assignment(
         db: AsyncSession,
@@ -2675,6 +2698,13 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         assignment = await TaskAssignmentService.get_assignment(
             db, assignment_id, family_id, for_update=True
         )
+
+        # Early Bird: the owner's TAKEN row is a closed record — the taker's
+        # row carries the chore. Reopening/moving it would pay the chore twice.
+        if assignment.status == AssignmentStatus.TAKEN and (
+            status is not None or assigned_to is not None or assigned_date is not None
+        ):
+            raise ValidationException("taken_row_locked")
 
         if status is not None and status not in (
             AssignmentStatus.PENDING,
@@ -2725,6 +2755,19 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                         assignment.id,
                         -template.effective_points,
                     )
+                    n = assignment.early_bonus_points
+                    if isinstance(n, int) and n > 0:
+                        # Undoing the chore also undoes its Early Bird bonus,
+                        # and clears the marker so a later award is possible.
+                        await PointsService.award_bonus_points(
+                            db,
+                            assignment.assigned_to,
+                            family_id,
+                            -n,
+                            f"Madrugador revertido -{n}",
+                            assignment_id=assignment.id,
+                        )
+                        assignment.early_bonus_points = None
             assignment.status = status
             if status == AssignmentStatus.PENDING:
                 assignment.completed_at = None

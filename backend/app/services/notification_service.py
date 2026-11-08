@@ -27,6 +27,7 @@ from app.models.notification import Notification, NotificationType as NT
 # The UX-D4a smart reminders (streak at risk / quest nudge) supersede too.
 SUPERSEDING_TYPES = frozenset({
     NT.TASK_DUE, NT.TASK_ASSIGNED, NT.PARENT_NUDGE, NT.STREAK_AT_RISK, NT.QUEST_NUDGE,
+    NT.DEADLINE_SOON, NT.UP_FOR_GRABS,
 })
 
 # The unread badge only counts the last N days. Older unread rows stay in the
@@ -103,6 +104,61 @@ _COPY = {
         "type": NT.QUEST_NUDGE,
         "title": {"es": "🏁 Te falta 1 para tu misión de la semana", "en": "🏁 1 away from this week's quest"},
         "body": {"es": "Complétala y gana +{bonus} puntos.", "en": "Finish it for +{bonus} points."},
+    },
+    "deadline_r1": {
+        "type": NT.DEADLINE_SOON,
+        "title": {"es": "⏰ Falta 1 hora", "en": "⏰ 1 hour left"},
+        "body": {"es": "Termina tus {n} tareas antes de las {deadline} o quedan libres para tus hermanos.", "en": "Finish your {n} chores before {deadline} or they go up for grabs."},
+    },
+    "deadline_r1_one": {
+        "type": NT.DEADLINE_SOON,
+        "title": {"es": "⏰ Falta 1 hora", "en": "⏰ 1 hour left"},
+        "body": {"es": "Termina tu tarea antes de las {deadline} o queda libre para tus hermanos.", "en": "Finish your chore before {deadline} or it goes up for grabs."},
+    },
+    "deadline_r2": {
+        "type": NT.DEADLINE_SOON,
+        "title": {"es": "⚠️ Faltan 30 minutos", "en": "⚠️ 30 minutes left"},
+        "body": {"es": "A las {deadline} tus {n} tareas quedan libres para tus hermanos.", "en": "At {deadline} your {n} chores are up for grabs."},
+    },
+    "deadline_r2_one": {
+        "type": NT.DEADLINE_SOON,
+        "title": {"es": "⚠️ Faltan 30 minutos", "en": "⚠️ 30 minutes left"},
+        "body": {"es": "A las {deadline} tu tarea queda libre para tus hermanos.", "en": "At {deadline} your chore is up for grabs."},
+    },
+    "grabs_owner": {
+        "type": NT.UP_FOR_GRABS,
+        "title": {"es": "⏰ Se acabó el tiempo", "en": "⏰ Time's up"},
+        "body": {"es": "{n} de tus tareas quedaron libres. Hazlas antes de que alguien las tome.", "en": "{n} of your chores are up for grabs. Do them before someone takes them."},
+    },
+    "grabs_owner_one": {
+        "type": NT.UP_FOR_GRABS,
+        "title": {"es": "⏰ Se acabó el tiempo", "en": "⏰ Time's up"},
+        "body": {"es": "Tu tarea quedó libre. Hazla antes de que alguien la tome.", "en": "Your chore is up for grabs. Do it before someone takes it."},
+    },
+    "grabs_open": {
+        "type": NT.UP_FOR_GRABS,
+        "title": {"es": "🙌 {n} tareas libres", "en": "🙌 {n} chores up for grabs"},
+        "body": {"es": "Tómalas y gana sus puntos.", "en": "Take them and earn their points."},
+    },
+    "grabs_open_one": {
+        "type": NT.UP_FOR_GRABS,
+        "title": {"es": "🙌 1 tarea libre", "en": "🙌 1 chore up for grabs"},
+        "body": {"es": "Tómala y gana sus puntos.", "en": "Take it and earn its points."},
+    },
+    "early_bird_payout_kid": {
+        "type": NT.EARLY_BIRD_PAYOUT,
+        "title": {"es": "🏆 ¡{weeks} semanas madrugador!", "en": "🏆 {weeks} early-bird weeks!"},
+        "body": {"es": "Ganaste {amount}.", "en": "You earned {amount}."},
+    },
+    "early_bird_payout_parent": {
+        "type": NT.EARLY_BIRD_PAYOUT,
+        "title": {"es": "🏆 {kid}: {weeks} semanas madrugador", "en": "🏆 {kid}: {weeks} early-bird weeks"},
+        "body": {"es": "Se acreditaron {amount} a su saldo.", "en": "{amount} was credited to their balance."},
+    },
+    "chore_taken": {
+        "type": NT.CHORE_TAKEN,
+        "title": {"es": "🙋 {taker} tomó tu tarea", "en": "🙋 {taker} took your chore"},
+        "body": {"es": "'{title}' ya no es tuya — se acabó el tiempo.", "en": "'{title}' is no longer yours — time ran out."},
     },
     "task_due_today_one": {
         "type": NT.TASK_DUE,

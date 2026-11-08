@@ -83,6 +83,7 @@ from app.models import (
 from app.models.teen_checkin import TeenCheckin
 from app.models.mystery import MysteryBox, MysterySurprise
 from app.models.payout_receipt import PayoutReceipt
+from app.models.early_bird_week import EarlyBirdWeek
 from app.models.budget import (
     BudgetAccount,
     BudgetAllocation,
@@ -178,6 +179,8 @@ EXPORTED_FAMILY_TABLES: frozenset[str] = frozenset(
         MysteryBox,
         # Bank-transfer receipts that paid a chore paycheck.
         PayoutReceipt,
+        # Early Bird settled weeks (streak ledger).
+        EarlyBirdWeek,
         Routine,
         Reward,
         RewardRedemption,
@@ -363,6 +366,7 @@ class FamilyExportService:
         mystery_surprises = await _rows(db, fam(MysterySurprise))
         mystery_boxes = await _rows(db, fam(MysteryBox))
         payout_receipts = await _rows(db, fam(PayoutReceipt))
+        early_bird_weeks = await _rows(db, fam(EarlyBirdWeek))
         routines = await _rows(db, fam(Routine))
         _routine_ids = [r.id for r in routines]
         routine_steps = (
@@ -527,6 +531,7 @@ class FamilyExportService:
             "progress/mystery_surprises.json": _dump(mystery_surprises),
             "progress/mystery_boxes.json": _dump(mystery_boxes),
             "bank/payout_receipts.json": _dump(payout_receipts),
+            "progress/early_bird_weeks.json": _dump(early_bird_weeks),
             "routines/routines.json": _dump(routines),
             "routines/steps.json": _dump(routine_steps),
             "routines/progress.json": _dump(routine_progress),

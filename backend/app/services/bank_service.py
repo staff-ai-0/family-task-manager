@@ -467,6 +467,10 @@ class BankService:
         for points, status, approval, grade, pct in rows:
             pts = int(points or 0)
             assigned_units += grade_credit_units(pts, 100)
+            if status == AssignmentStatus.TAKEN:
+                # Early Bird: someone took it after the deadline — a full miss.
+                lost_units += grade_credit_units(pts, 100)
+                continue
             if status != AssignmentStatus.COMPLETED:
                 continue
             if approval == ApprovalStatus.REJECTED:
@@ -487,7 +491,8 @@ class BankService:
         """Per-task breakdown behind _chore_units for the parent payouts
         dashboard — same filters, one row per assignment with its status
         bucket and the grade-scaled points it contributed. Only `credited`
-        rows earn; the bucket rules must stay in lockstep with _chore_units."""
+        rows earn; the bucket rules must stay in lockstep with _chore_units
+        (TAKEN → bucket "taken", counted as fully lost there)."""
         from app.models.task_assignment import (
             TaskAssignment, AssignmentStatus, ApprovalStatus,
         )
@@ -520,7 +525,9 @@ class BankService:
         tasks = []
         for title, points, status, approval, grade, pct, day, done_at, notes in rows:
             pts = int(points or 0)
-            if status != AssignmentStatus.COMPLETED:
+            if status == AssignmentStatus.TAKEN:
+                bucket, earned = "taken", 0
+            elif status != AssignmentStatus.COMPLETED:
                 bucket, earned = "not_done", 0
             elif approval in (ApprovalStatus.NONE, ApprovalStatus.APPROVED):
                 credit_pct = int(pct or 50) if grade == "partial" else 100
@@ -584,6 +591,18 @@ class BankService:
         return datetime.now(_safe_zoneinfo(tz_name)).date()
 
     @staticmethod
+    async def _early_bird_bonus(
+        db: AsyncSession, family_id: UUID, user_id: UUID, week_monday: date, base: int,
+    ) -> int:
+        """Early Bird weekly bonus on a chore paycheck base (0 when off / not
+        earned). Shared by the projection and the release so they cannot drift."""
+        from app.services.early_bird_service import EarlyBirdService
+
+        return await EarlyBirdService.week_bonus_cents(
+            db, family_id, user_id, week_monday, base
+        )
+
+    @staticmethod
     async def _paycheck_projection(
         db: AsyncSession, acct: KidBankAccount, family_id: UUID, week_monday: date,
     ) -> dict:
@@ -606,10 +625,16 @@ class BankService:
             )
         else:
             amount = 0
+        bonus = 0
+        if mode in CHORE_PAYCHECK_MODES:
+            bonus = await BankService._early_bird_bonus(
+                db, family_id, acct.user_id, week_monday, amount
+            )
         return {
             "week_of": week_monday,
             "cap_cents": cap,
-            "amount_cents": amount,
+            "amount_cents": amount + bonus,
+            "early_bird_bonus_cents": bonus,
             "done_points": units_to_points(done_u),
             "assigned_points": units_to_points(assigned_u),
             "pct": round(100 * done_u / assigned_u) if assigned_u else 0,
@@ -639,6 +664,7 @@ class BankService:
             "pct": p["pct"],
             "discounted_pct": p["discounted_pct"],
             "projected_cents": p["amount_cents"],
+            "early_bird_bonus_cents": p["early_bird_bonus_cents"],
             "already_released": acct.last_chore_paycheck_week == week_monday,
         }
 
@@ -703,6 +729,7 @@ class BankService:
                 "done_points": projection["done_points"],
                 "assigned_points": projection["assigned_points"],
                 "pct": projection["pct"],
+                "early_bird_bonus_cents": 0 if is_released else projection["early_bird_bonus_cents"],
                 "is_current_week": is_current,
                 "already_released": is_released,
                 "tasks": tasks,
@@ -899,7 +926,15 @@ class BankService:
             points_converted = min(done // 100, max(0, int(user.points or 0)))
         else:
             base = BankService._chore_paycheck_cents(acct.allowance_cents, done, assigned)
-        amount = max(0, base + int(adjustment_cents or 0))
+        bonus = await BankService._early_bird_bonus(
+            db, family_id, user.id, week_monday, base
+        )
+        pct_label = 0
+        if bonus > 0:
+            pct_label = int((await db.execute(
+                select(Family.early_bird_week_pct).where(Family.id == family_id)
+            )).scalar() or 0)
+        amount = max(0, base + bonus + int(adjustment_cents or 0))
         # Always leaves a ledger row, even at $0 — a genuinely empty week
         # (kid did nothing, or a chore_gated week that missed the gate)
         # must still be markable as "handled" so it stops reappearing as
@@ -911,6 +946,7 @@ class BankService:
             description=(
                 f"Domingo por tareas (semana {week_monday.isoformat()})"
                 + (f" · Folio {reference}" if reference else "")
+                + (f" · +{pct_label}% madrugador" if bonus > 0 and base + bonus + int(adjustment_cents or 0) >= base + bonus else "")
             ),
             week_of=week_monday,
         )

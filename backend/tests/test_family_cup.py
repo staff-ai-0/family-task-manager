@@ -406,3 +406,24 @@ async def test_boss_ignores_bonus_gigs_and_cancelled(
 
     boss = await FamilyCupService.boss_battle(db_session, test_family.id)
     assert boss["max_hp"] == 30  # only the single PENDING mandatory chore
+
+
+async def test_boss_max_hp_excludes_early_bird_taken_row(
+    db_session, test_family, test_child_user, test_teen_user
+):
+    """Early Bird: an owner's TAKEN row and the taker's row are ONE chore.
+    Counting both makes the boss unbeatable (only the taker's row deals damage)."""
+    t = await _mandatory_template(db_session, test_family.id, 30)
+    await _assignment(
+        db_session, t, test_teen_user.id, test_family.id, AssignmentStatus.TAKEN
+    )
+    taker_row = await _assignment(
+        db_session, t, test_child_user.id, test_family.id, AssignmentStatus.COMPLETED
+    )
+    taker_row.approval_status = ApprovalStatus.APPROVED
+    await db_session.commit()
+
+    boss = await FamilyCupService.boss_battle(db_session, test_family.id)
+    assert boss["max_hp"] == 30
+    assert boss["damage"] == 30
+    assert boss["defeated"] is True

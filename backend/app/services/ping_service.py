@@ -55,7 +55,12 @@ def today_facts(rows: list[ChoreRow]) -> tuple[int, bool]:
     """
     chores = [r for r in rows if not r.is_bonus and r.status != AssignmentStatus.CANCELLED]
     open_today = sum(1 for r in chores if r.status in _OPEN)
-    day_lost = any(r.grade == "missed" or r.approval == ApprovalStatus.REJECTED for r in chores)
+    day_lost = any(
+        r.grade == "missed"
+        or r.approval == ApprovalStatus.REJECTED
+        or r.status == AssignmentStatus.TAKEN  # Early Bird: the chore was taken from them
+        for r in chores
+    )
     return open_today, day_lost
 
 

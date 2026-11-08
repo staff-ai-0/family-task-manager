@@ -137,6 +137,18 @@ class FamilyService:
 
         # Update fields if provided
         update_fields = family_data.model_dump(exclude_unset=True)
+        # Early Bird: every off->on re-stamps enabled_at (weeks that began
+        # before the switch never count). Decide before the loop overwrites it.
+        for col in (
+            "early_bird_enabled", "early_bird_deadline", "early_bird_bonus_pct",
+            "early_bird_week_pct", "early_bird_streak_cents",
+        ):  # NOT NULL columns: an explicit null means "leave as-is"
+            if update_fields.get(col, 0) is None:
+                del update_fields[col]
+        turning_on = (
+            update_fields.get("early_bird_enabled") is True
+            and not family.early_bird_enabled
+        )
         for field, value in update_fields.items():
             setattr(family, field, value)
 
@@ -152,6 +164,9 @@ class FamilyService:
         # every answer a parent gives (on, off, or back to undecided) is dated.
         if "teen_checkin_enabled" in update_fields:
             family.teen_checkin_decided_at = datetime.now(timezone.utc)
+
+        if turning_on:
+            family.early_bird_enabled_at = datetime.now(timezone.utc)
 
         family.updated_at = datetime.now(timezone.utc)
         await db.commit()

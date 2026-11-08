@@ -235,7 +235,14 @@ class FamilyCupService:
                     .where(
                         and_(
                             base_where,
-                            TaskAssignment.status != AssignmentStatus.CANCELLED,
+                            TaskAssignment.status.notin_(
+                                (
+                                    AssignmentStatus.CANCELLED,
+                                    # Early Bird: the owner's row is a miss;
+                                    # the taker's row carries the chore.
+                                    AssignmentStatus.TAKEN,
+                                )
+                            ),
                         )
                     )
                 )
