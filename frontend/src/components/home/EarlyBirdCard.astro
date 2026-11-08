@@ -54,7 +54,7 @@ const dotCls: Record<string, string> = {
     function initEarlyBirdCountdown() {
         const card = document.querySelector<HTMLElement>("[data-early-bird-card]");
         const label = card?.querySelector<HTMLElement>("[data-early-bird-countdown]");
-        const target = card?.dataset.cutoff ? new Date(card.dataset.target) : null;
+        const target = card?.dataset.target ? new Date(card.dataset.target) : null;
         if (timer) window.clearInterval(timer);
         if (!card || !label || !target || Number.isNaN(target.getTime())) return;
         const lang = card.dataset.lang === "en" ? "en" : "es";
