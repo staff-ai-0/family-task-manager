@@ -231,3 +231,84 @@ async def test_taker_completes_earns_points(ctx):
     bonus = (await db.execute(select(PointTransaction).where(
         PointTransaction.user_id == taker.id, PointTransaction.type == TransactionType.BONUS))).scalars().all()
     assert bonus == []
+
+
+# ---------------------------------------------------------- final-review fixes
+
+async def _login(client, email):
+    r = await client.post("/api/auth/login", json={"email": email, "password": "password123"})
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+
+async def test_taken_task_status_serializes_on_payout_endpoints(
+        client, ctx, test_parent_user):
+    """C1: a TAKEN chore must not 500 the payout-summary / outstanding / history."""
+    db, fam, owner, taker, tpl, a, day = ctx
+    acct = await BankService.ensure_account(db, owner)
+    acct.allowance_mode = "chore_proportional"
+    acct.allowance_cents = 20000
+    await db.commit()
+    await EarlyBirdService.take(db, fam.id, taker, a.id, now=_at(day, 11, 5))
+    # A taken chore in last week too, so the outstanding list contains it.
+    last = day - timedelta(days=7)
+    t2 = await _tpl(db, fam, title="Last week")
+    owner_row = await _assign(db, owner, t2, last, status=AssignmentStatus.TAKEN)
+    await _assign(db, taker, t2, last)
+
+    h = await _login(client, "parent@test.com")
+    r = await client.get("/api/bank/payout-summary", headers=h)
+    assert r.status_code == 200, r.text
+    kid = next(k for k in r.json()["kids"] if k["user_id"] == str(owner.id))
+    statuses = [t["status"] for t in kid["tasks"]] + [
+        t["status"] for w in kid["outstanding_weeks"] for t in w["tasks"]]
+    assert "taken" in statuses
+
+    r = await client.get(f"/api/bank/chore-paycheck/{owner.id}/outstanding", headers=h)
+    assert r.status_code == 200, r.text
+    flat = [t["status"] for w in r.json()["weeks"] for t in w.get("tasks", [])]
+    assert "taken" in flat
+    r = await client.get(f"/api/bank/chore-paycheck/{owner.id}/history", headers=h)
+    assert r.status_code == 200, r.text
+    assert owner_row.status == AssignmentStatus.TAKEN
+
+
+async def test_taken_row_cannot_be_patched(ctx):
+    """I4: reopening / moving a TAKEN row would pay the chore twice."""
+    db, fam, owner, taker, tpl, a, day = ctx
+    a_id, fam_id, owner_id, taker_id = a.id, fam.id, owner.id, taker.id
+    await EarlyBirdService.take(db, fam_id, taker, a_id, now=_at(day, 11, 5))
+    for kw in ({"status": AssignmentStatus.PENDING}, {"status": AssignmentStatus.CANCELLED},
+               {"assigned_to": taker_id}, {"assigned_date": day + timedelta(days=1)}):
+        with pytest.raises(ValidationException, match="taken_row_locked"):
+            await TaskAssignmentService.patch_assignment(db, a_id, fam_id, **kw)
+        await db.rollback()
+    a = await db.get(TaskAssignment, a_id, populate_existing=True)
+    assert a.status == AssignmentStatus.TAKEN and a.assigned_to == owner_id
+    assert a.assigned_date == day
+
+
+async def test_taken_row_cannot_be_deleted(ctx):
+    """I4: taken_from_id is ON DELETE SET NULL — deleting the owner's row would
+    turn the taker's row into an ordinary grabbable chore."""
+    db, fam, owner, taker, tpl, a, day = ctx
+    a_id, fam_id = a.id, fam.id
+    row = await EarlyBirdService.take(db, fam_id, taker, a_id, now=_at(day, 11, 5))
+    row_id = row.id
+    with pytest.raises(ValidationException, match="taken_row_locked"):
+        await TaskAssignmentService.delete_by_id(db, a_id, fam_id)
+    await db.rollback()
+    assert (await db.get(TaskAssignment, a_id)) is not None
+    row = await db.get(TaskAssignment, row_id, populate_existing=True)
+    assert row.taken_from_id == a_id
+
+
+async def test_chore_taken_notification_uses_owner_language(ctx):
+    """m4: the title is rendered in the owner's language."""
+    db, fam, owner, taker, tpl, a, day = ctx
+    tpl.title_es = "Lavar platos"
+    owner.preferred_lang = "es"
+    await db.commit()
+    await EarlyBirdService.take(db, fam.id, taker, a.id, now=_at(day, 11, 5))
+    n = (await db.execute(select(Notification).where(
+        Notification.user_id == owner.id, Notification.type == "chore_taken"))).scalars().one()
+    assert "Lavar platos" in (n.title + (n.body or ""))

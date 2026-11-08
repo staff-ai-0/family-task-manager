@@ -163,7 +163,8 @@ async def test_grabs_pushes_at_1100(ctx):
     owner_rows = await _rows(db, teen, "up_for_grabs")
     sib_rows = await _rows(db, sib, "up_for_grabs")
     assert len(owner_rows) == 1 and ("Se acabó" in owner_rows[0].title or "Time's up" in owner_rows[0].title)
-    assert len(sib_rows) == 1 and "libre" in sib_rows[0].title or "up for grabs" in sib_rows[0].title
+    assert len(sib_rows) == 1
+    assert "libre" in sib_rows[0].title or "up for grabs" in sib_rows[0].title
     assert sib_rows[0].expires_at.astimezone(MX) == datetime.combine(day + timedelta(days=1), time.min, tzinfo=MX)
     await _stamp(db, _at(day, 11, 0))
     assert (await EarlyBirdService.run_sweep(db, now=_at(day, 11, 5)))["grabs"] == 0

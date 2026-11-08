@@ -99,7 +99,8 @@ async def ctx(db_session, test_family, test_teen_user, test_parent_user):
 
 
 @pytest.mark.asyncio
-async def test_three_early_weeks_pay_500(ctx):
+async def test_three_early_weeks_pay_500(ctx, test_parent_user):
+    parent = test_parent_user
     db, fam, kid = ctx
     await _build(db, fam, kid, ["early", "early", "early"])
     out = await EarlyBirdService.run_sweep(db, _now())
@@ -113,7 +114,10 @@ async def test_three_early_weeks_pay_500(ctx):
     assert kid.cash_cents == 50000
     notes = await _notifs(db, kid.id)
     assert any(n.user_id == kid.id for n in notes)
-    assert any(n.user_id is None for n in notes)
+    # I7: one row per parent (pushable), never a user_id=NULL family broadcast.
+    assert not any(n.user_id is None for n in notes)
+    parent_notes = [n for n in notes if n.link == "/parent/payouts"]
+    assert len(parent_notes) == 1 and parent_notes[0].user_id == parent.id
 
 
 @pytest.mark.asyncio
@@ -207,3 +211,24 @@ async def test_week_six_pays_again(ctx):
     assert len(await _credits(db, kid)) == 2
     await db.refresh(kid)
     assert kid.cash_cents == 100000
+
+
+@pytest.mark.asyncio
+async def test_guarded_update_blocks_second_credit(ctx):
+    """m8: a pays_streak row already stamped paid_at must not credit again."""
+    db, fam, kid = ctx
+    await _build(db, fam, kid, ["early", "early", "early"])
+    # Settle without paying (streak off), then stamp paid_at out of band and
+    # turn the bonus back on: the guarded UPDATE (paid_at IS NULL) must hit
+    # rowcount 0 and credit nothing.
+    await _setup(db, fam, streak_cents=0)
+    await EarlyBirdService.run_sweep(db, _now())
+    _, rows = await _runs(db, kid)
+    rows[2].paid_at = datetime.now(timezone.utc)
+    await db.commit()
+    await _setup(db, fam, streak_cents=50000)
+    out = await EarlyBirdService.run_sweep(db, _now())
+    assert out["paid"] == 0
+    assert await _credits(db, kid) == []
+    await db.refresh(kid)
+    assert kid.cash_cents == 0

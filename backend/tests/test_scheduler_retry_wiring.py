@@ -25,6 +25,7 @@ from app.main import (
 )
 
 EXPECTED_JOB_IDS = {
+    "early_bird_sweep",
     "subscription_sweep",
     "pet_decay_sweep",
     "pup_snapshot_sweep",

@@ -75,7 +75,7 @@ async def test_me_teen_shape(client, db_session, test_family, test_teen_user):
     assert r.status_code == 200
     b = r.json()
     assert set(b) == {"enabled", "applies", "deadline", "cutoff_at", "deadline_at", "today",
-                      "week", "week_result", "run_weeks", "streak_weeks", "streak_cents",
+                      "week", "week_result", "run_weeks", "weeks_to_payout", "streak_weeks", "streak_cents",
                       "week_pct", "bonus_pct", "grabs", "take_block", "open_today"}
     assert b["enabled"] is True and b["applies"] is True and b["deadline"] == "11:00"
     assert len(b["week"]) == 7 and b["week"][0]["date"] <= b["week"][6]["date"]
@@ -206,7 +206,8 @@ async def test_family_overview_parent_only(client, db_session, test_family, test
     assert r.status_code == 200
     rows = r.json()
     assert [x["user_id"] for x in rows] == [str(test_teen_user.id)]
-    assert set(rows[0]) == {"user_id", "name", "today", "week", "week_result", "run_weeks"}
+    assert set(rows[0]) == {"user_id", "name", "today", "week", "week_result", "run_weeks",
+                          "weeks_to_payout"}
     assert len(rows[0]["week"]) == 7
 
 
@@ -223,3 +224,53 @@ async def test_me_service_week_states(db_session, test_family, test_teen_user):
         elif d < today:
             assert s == "neutral"
     assert states[today] == "neutral" and out["today"] == "neutral"
+
+
+async def test_weeks_to_payout_cycles(db_session, test_family, test_teen_user):
+    """I5: run 0 -> 3, run 3 (just paid) -> 3, run 4 -> 2; /me and /family agree."""
+    from app.models.early_bird_week import EarlyBirdWeek
+
+    await _enable(db_session, test_family)
+    parent = await _user(db_session, test_family, "Mom", UserRole.PARENT)
+    now = _at(_today(), 9, 0)
+    last_monday = _today() - timedelta(days=_today().weekday() + 7)
+    for run, expected in ((0, 3), (3, 3), (4, 2)):
+        await db_session.execute(
+            EarlyBirdWeek.__table__.delete().where(EarlyBirdWeek.user_id == test_teen_user.id))
+        if run:
+            db_session.add(EarlyBirdWeek(
+                family_id=test_family.id, user_id=test_teen_user.id,
+                week_of=last_monday, result="early", run_weeks=run))
+        await db_session.commit()
+        me = await EarlyBirdService.me(db_session, test_teen_user, now=now)
+        assert me["run_weeks"] == run and me["weeks_to_payout"] == expected
+        fam = await EarlyBirdService.family_overview(db_session, parent, now=now)
+        assert fam[0]["weeks_to_payout"] == expected
+
+
+async def test_family_overview_excludes_other_family_teens(
+        client, db_session, test_family, test_parent_user, test_teen_user):
+    """m9: tenancy."""
+    await _enable(db_session, test_family)
+    other = Family(name="Other fam", timezone="America/Mexico_City")
+    db_session.add(other)
+    await db_session.commit()
+    stranger = await _user(db_session, other, "Stranger")
+    r = await client.get("/api/early-bird/family", headers=await _login(client, "parent@test.com"))
+    ids = [x["user_id"] for x in r.json()]
+    assert str(stranger.id) not in ids and str(test_teen_user.id) in ids
+
+
+async def test_me_grabs_exclude_other_family_chores(
+        client, db_session, test_family, test_teen_user, test_child_user, after_deadline):
+    """m9: tenancy on the up-for-grabs list."""
+    await _enable(db_session, test_family)
+    other = Family(name="Other fam", timezone="America/Mexico_City")
+    db_session.add(other)
+    await db_session.commit()
+    await _enable(db_session, other)
+    stranger = await _user(db_session, other, "Stranger")
+    await _chore(db_session, other, stranger, _today(), title="Foreign")
+    await _chore(db_session, test_family, test_teen_user, _today(), title="Mine")
+    b = (await client.get("/api/early-bird/me", headers=await _login(client, "child@test.com"))).json()
+    assert [g["title"] for g in b["grabs"]] == ["Mine"]
