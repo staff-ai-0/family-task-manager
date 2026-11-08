@@ -346,6 +346,7 @@ class EarlyBirdService:
             "bonus_pct": int(cfg.bonus_pct),
             "grabs": [],
             "take_block": None,
+            "open_today": 0,
         }
         if not cfg.enabled:
             return out
@@ -356,6 +357,12 @@ class EarlyBirdService:
         if user.role == UserRole.TEEN:
             out["applies"] = True
             out.update(await EarlyBirdService._teen_view(db, cfg, user.family_id, user.id, now))
+            if is_active_day(cfg, today):
+                todays = await EarlyBirdService.covered_rows(
+                    db, cfg, user.family_id, user.id, today, today)
+                out["open_today"] = sum(
+                    1 for r in todays
+                    if r.status in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE))
 
         rows = await EarlyBirdService.grabbable(db, user.family_id, now)
         if rows:

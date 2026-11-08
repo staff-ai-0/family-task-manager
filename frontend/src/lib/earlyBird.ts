@@ -151,9 +151,13 @@ export function earlyBirdView(me: any, lang: Lang, now: Date): EarlyBirdView | n
     if (today === "missed") state = "missed";
     if (today === "early" || today === "pending") state = "early";
     else if (today === "open" || today === "missed") {
-        if (cutoff && now.getTime() < cutoff.getTime() && today === "open") state = "on_track";
-        else if (deadline && now.getTime() < deadline.getTime()) state = "before_deadline";
-        else if (today === "open") state = "late";
+        const openCount = Math.max(0, Math.trunc(Number(me?.open_today) || 0));
+        if (openCount > 0) {
+            if (cutoff && now.getTime() < cutoff.getTime()) state = "on_track";
+            else if (deadline && now.getTime() < deadline.getTime()) state = "before_deadline";
+            else state = "late";
+        }
+        // Nothing left open: a "missed" day just was not early (state stays "missed").
     }
 
     const headline = {

@@ -25,6 +25,7 @@ const me = (over: Record<string, unknown> = {}) => ({
     streak_cents: 0,
     week_pct: 5,
     bonus_pct: 20,
+    open_today: 1,
     grabs: [],
     take_block: null,
     ...over,
@@ -60,6 +61,17 @@ describe("earlyBirdView", () => {
         expect(v.countdown).toBe("40 min");
         expect(v.headline).toContain("11:00");
         expect(v.targetAt).toBe(d("2026-11-09T11:00:00-06:00").toISOString());
+    });
+    it("missed with open chores still counts down to the deadline", () => {
+        const v = earlyBirdView(me({ today: "missed", open_today: 1 }), "en", d("2026-11-09T10:20:00-06:00"))!;
+        expect(v.state).toBe("before_deadline");
+        expect(v.countdown).toBe("40 min");
+    });
+    it("missed with nothing open is plain missed, no countdown", () => {
+        const v = earlyBirdView(me({ today: "missed", open_today: 0 }), "en", d("2026-11-09T10:20:00-06:00"))!;
+        expect(v.state).toBe("missed");
+        expect(v.countdown).toBe("");
+        expect(v.targetAt).toBe("");
     });
     it("late after the deadline", () => {
         const v = earlyBirdView(me(), "en", d("2026-11-09T11:05:00-06:00"))!;

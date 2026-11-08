@@ -76,13 +76,24 @@ async def test_me_teen_shape(client, db_session, test_family, test_teen_user):
     b = r.json()
     assert set(b) == {"enabled", "applies", "deadline", "cutoff_at", "deadline_at", "today",
                       "week", "week_result", "run_weeks", "streak_weeks", "streak_cents",
-                      "week_pct", "bonus_pct", "grabs", "take_block"}
+                      "week_pct", "bonus_pct", "grabs", "take_block", "open_today"}
     assert b["enabled"] is True and b["applies"] is True and b["deadline"] == "11:00"
     assert len(b["week"]) == 7 and b["week"][0]["date"] <= b["week"][6]["date"]
     assert b["streak_weeks"] == 3 and b["run_weeks"] == 0
     assert b["today"] in ("open", "missed")
     assert b["cutoff_at"] and b["deadline_at"]
     assert isinstance(b["streak_cents"], int) and isinstance(b["week_pct"], int)
+
+
+async def test_me_open_today_counts_open_chores(client, db_session, test_family, test_teen_user):
+    await _enable(db_session, test_family)
+    await _chore(db_session, test_family, test_teen_user, _today(), title="A")
+    done = await _chore(db_session, test_family, test_teen_user, _today(), title="B")
+    done.status = AssignmentStatus.COMPLETED
+    done.completed_at = datetime.now(timezone.utc)
+    await db_session.commit()
+    b = (await client.get("/api/early-bird/me", headers=await _login(client, "teen@test.com"))).json()
+    assert b["open_today"] == 1
 
 
 async def test_me_parent_403(client, test_parent_user):

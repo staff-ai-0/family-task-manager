@@ -36,6 +36,7 @@ class EarlyBirdMe(BaseModel):
     bonus_pct: int
     grabs: list[GrabItem]
     take_block: Optional[str] = None
+    open_today: int = 0
 
 
 class FamilyTeen(BaseModel):
