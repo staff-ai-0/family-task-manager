@@ -40,6 +40,7 @@ def test_migration_enum_labels_match_orm_names():
     src = _read(
         "2026_06_30_two_currency_economy.py",
         "2026_07_08_family_bank.py",
+        "2026_11_07_early_bird.py",   # BONUS
     )
     assert src, "migration files not found"
     # Require every member NAME (uppercase), in either quote style.

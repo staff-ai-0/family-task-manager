@@ -1,7 +1,7 @@
-from sqlalchemy import CheckConstraint, Column, Integer, String, Boolean, DateTime
+from sqlalchemy import CheckConstraint, Column, Integer, String, Boolean, DateTime, Time
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 import uuid
 import secrets
 
@@ -50,6 +50,17 @@ class Family(Base):
     # When a parent last answered (on, off, or back to undecided). The record
     # of the consent itself: cheap to keep now, impossible to backfill later.
     teen_checkin_decided_at = Column(DateTime(timezone=True), nullable=True)
+    # Early Bird: 11:00 chore deadline for teens, up-for-grabs take-over and
+    # early bonuses. `enabled_at` is re-stamped on EVERY off->on so a week that
+    # started before the switch never counts (see the design spec).
+    early_bird_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
+    early_bird_enabled_at = Column(DateTime(timezone=True), nullable=True)
+    early_bird_deadline = Column(Time, nullable=False, default=time(11, 0), server_default="11:00")
+    # Weekdays (0=Mon) the deadline applies on. NULL = every day.
+    early_bird_days = Column(JSONB, nullable=True)
+    early_bird_bonus_pct = Column(Integer, nullable=False, default=20, server_default="20")
+    early_bird_week_pct = Column(Integer, nullable=False, default=5, server_default="5")
+    early_bird_streak_cents = Column(Integer, nullable=False, default=50000, server_default="50000")
     # UX-D4b mystery box: points maximum for the fallback bonus. NULL = an
     # existing family that has not decided (boxes off; one-time parent-hub
     # card), 0 = off by choice, > 0 = on. New families default to 20.

@@ -13,6 +13,7 @@ from sqlalchemy import (
     DateTime,
     Date,
     Float,
+    Integer,
     ForeignKey,
     Index,
     SmallInteger,
@@ -36,6 +37,7 @@ class AssignmentStatus(str, enum.Enum):
     COMPLETED = "completed"
     OVERDUE = "overdue"
     CANCELLED = "cancelled"
+    TAKEN = "taken"  # Early Bird: the original owner lost it to someone who took it
 
 
 class ApprovalStatus(str, enum.Enum):
@@ -142,6 +144,18 @@ class TaskAssignment(Base):
     # Completion
     completed_at = Column(DateTime(timezone=True), nullable=True)
     claimed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Early Bird take-over: the new assignment points at the one it replaced
+    # (taken_from_id); the replaced row records who took it (taken_by/taken_at).
+    taken_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    taken_at = Column(DateTime(timezone=True), nullable=True)
+    taken_from_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("task_assignments.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    early_bonus_points = Column(Integer, nullable=True)
 
     # Metadata
     created_at = Column(
