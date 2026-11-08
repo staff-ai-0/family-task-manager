@@ -115,7 +115,12 @@ async def test_r2_sent_at_1030(ctx):
     db, fam, teen, tpl, a, day = ctx
     await EarlyBirdService.run_sweep(db, now=_at(day, 10, 0))
     await _stamp(db, _at(day, 10, 0))
+    r1_ids = [r.id for r in await _rows(db, teen, "deadline_soon")]
     await EarlyBirdService.run_sweep(db, now=_at(day, 10, 30))
+    # Pin the R2 row (real-clock created_at) so ordering is clock-independent.
+    await db.execute(update(Notification).where(Notification.id.notin_(r1_ids))
+                     .values(created_at=_at(day, 10, 30)))
+    await db.commit()
     rows = await _rows(db, teen, "deadline_soon")
     assert len(rows) == 2
     assert rows[0].is_read is True and rows[1].is_read is False
