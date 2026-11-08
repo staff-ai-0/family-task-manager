@@ -38,7 +38,9 @@ jobs:
   backend:
     name: Backend (pytest)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The suite alone took 28m33s on main (2026-11-03, 3026 tests) — 30 left
+    # no headroom, so the next ~100 tests tipped a green run into a timeout.
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: backend
