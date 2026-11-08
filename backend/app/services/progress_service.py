@@ -219,6 +219,8 @@ class ProgressService:
 
         # Badge counts use a stricter variant of this rule — see BadgeService.counts_for.
         def done_in_time(row) -> bool:
+            if row.status == AssignmentStatus.TAKEN:  # Early Bird: lost it, a miss now
+                return False
             if row.completion_grade == "missed" or row.approval_status == ApprovalStatus.REJECTED:
                 return False
             if row.status != AssignmentStatus.COMPLETED:
@@ -228,6 +230,7 @@ class ProgressService:
             return row.completed_at.astimezone(tz).date() <= row.assigned_date
 
         by_day: dict[date, bool] = {}
+        taken_days = {r.assigned_date for r in rows if r.status == AssignmentStatus.TAKEN}
         for row in rows:
             ok = done_in_time(row)
             by_day[row.assigned_date] = by_day.get(row.assigned_date, True) and ok
@@ -237,7 +240,8 @@ class ProgressService:
             if all_done:
                 states[day] = DayState.done
             else:
-                states[day] = DayState.today if day == today else DayState.missed
+                lost = day in taken_days
+                states[day] = DayState.today if day == today and not lost else DayState.missed
         return states
 
     @staticmethod

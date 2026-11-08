@@ -1121,6 +1121,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 TaskAssignment.status == AssignmentStatus.PENDING,
                 TaskAssignment.template_id.not_in(interval_template_ids),
                 TaskAssignment.assigned_date >= today,
+                # Early Bird: a row someone TOOK is theirs now — a reshuffle
+                # must not hand it back or delete it.
+                TaskAssignment.taken_from_id.is_(None),
             )
         )
         await db.execute(delete_stmt)

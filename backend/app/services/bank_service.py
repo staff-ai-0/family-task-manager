@@ -467,6 +467,10 @@ class BankService:
         for points, status, approval, grade, pct in rows:
             pts = int(points or 0)
             assigned_units += grade_credit_units(pts, 100)
+            if status == AssignmentStatus.TAKEN:
+                # Early Bird: someone took it after the deadline — a full miss.
+                lost_units += grade_credit_units(pts, 100)
+                continue
             if status != AssignmentStatus.COMPLETED:
                 continue
             if approval == ApprovalStatus.REJECTED:
@@ -487,7 +491,8 @@ class BankService:
         """Per-task breakdown behind _chore_units for the parent payouts
         dashboard — same filters, one row per assignment with its status
         bucket and the grade-scaled points it contributed. Only `credited`
-        rows earn; the bucket rules must stay in lockstep with _chore_units."""
+        rows earn; the bucket rules must stay in lockstep with _chore_units
+        (TAKEN → bucket "taken", counted as fully lost there)."""
         from app.models.task_assignment import (
             TaskAssignment, AssignmentStatus, ApprovalStatus,
         )
@@ -520,7 +525,9 @@ class BankService:
         tasks = []
         for title, points, status, approval, grade, pct, day, done_at, notes in rows:
             pts = int(points or 0)
-            if status != AssignmentStatus.COMPLETED:
+            if status == AssignmentStatus.TAKEN:
+                bucket, earned = "taken", 0
+            elif status != AssignmentStatus.COMPLETED:
                 bucket, earned = "not_done", 0
             elif approval in (ApprovalStatus.NONE, ApprovalStatus.APPROVED):
                 credit_pct = int(pct or 50) if grade == "partial" else 100

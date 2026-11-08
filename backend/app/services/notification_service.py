@@ -104,6 +104,11 @@ _COPY = {
         "title": {"es": "🏁 Te falta 1 para tu misión de la semana", "en": "🏁 1 away from this week's quest"},
         "body": {"es": "Complétala y gana +{bonus} puntos.", "en": "Finish it for +{bonus} points."},
     },
+    "chore_taken": {
+        "type": NT.CHORE_TAKEN,
+        "title": {"es": "🙋 {taker} tomó tu tarea", "en": "🙋 {taker} took your chore"},
+        "body": {"es": "'{title}' ya no es tuya — se acabó el tiempo.", "en": "'{title}' is no longer yours — time ran out."},
+    },
     "task_due_today_one": {
         "type": NT.TASK_DUE,
         "title": {
