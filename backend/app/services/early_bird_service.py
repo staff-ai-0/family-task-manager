@@ -9,7 +9,8 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +19,8 @@ from app.core.exceptions import (
     ForbiddenException,
     ValidationException,
 )
+from app.models.cash_transaction import CashTransactionType
+from app.models.early_bird_week import EarlyBirdWeek
 from app.models.family import Family
 from app.models.notification import NotificationType as NT
 from app.models.point_transaction import PointTransaction  # noqa: F401
@@ -27,12 +30,16 @@ from app.models.user import User, UserRole
 from app.services.early_bird_rules import (
     CoveredRow,
     PENDING_GRACE_DAYS,
+    SETTLE_LOOKBACK_WEEKS,
+    STREAK_WEEKS,
     EarlyBirdConfig,
     chore_state,
     day_result,
     day_times,
     early_bonus_points,
+    next_run,
     is_active_day,
+    pays_streak,
     reminder_stage,
     week_bonus,
     week_eligible,
@@ -343,8 +350,6 @@ class EarlyBirdService:
         window. Unlike the evening ping sweep this does NOT require a push
         subscription: rows carry ``expires_at`` so they never go stale.
         Returns counts; ``settled``/``paid`` are filled by the settlement step."""
-        from app.services.task_assignment_service import TaskAssignmentService as TAS
-
         now = EarlyBirdService._now(now)
         out = {"reminders": 0, "grabs": 0, "settled": 0, "paid": 0}
         # Plain rows, not ORM entities: a rollback below would expire entities.
@@ -358,35 +363,167 @@ class EarlyBirdService:
                 cfg = await EarlyBirdService.config(db, fam_id)
                 local_now = now.astimezone(cfg.tz)
                 today = local_now.date()
-                if not is_active_day(cfg, today):
-                    continue
-                times = day_times(cfg, today)
-                stage = reminder_stage(now, times)
-                if stage in ("r1", "r2"):
-                    teens = (await db.execute(
-                        select(User.id).where(
-                            User.family_id == fam_id,
-                            User.role == UserRole.TEEN,
-                            TAS._participating_member_clause(),
-                        )
-                    )).scalars().all()
-                    since = times.r1 if stage == "r1" else times.r2
-                    for uid in teens:
-                        try:
-                            out["reminders"] += await EarlyBirdService._remind(
-                                db, cfg, fam_id, uid, today, stage, since, times.deadline
-                            )
-                        except Exception:
-                            log.exception("early bird reminder failed for user %s", uid)
-                            await db.rollback()
-                elif stage == "grabs":
-                    out["grabs"] += await EarlyBirdService._push_grabs(
-                        db, cfg, fam_id, now, times.deadline, today
-                    )
+                if is_active_day(cfg, today):
+                    await EarlyBirdService._sweep_reminders(db, cfg, fam_id, now, today, out)
+                await EarlyBirdService._sweep_settle(db, cfg, fam_id, now, out)
             except Exception:
                 log.exception("early bird sweep failed for family %s", fam_id)
                 await db.rollback()
         return out
+
+    @staticmethod
+    async def _sweep_settle(db, cfg, fam_id, now, out) -> None:
+        from app.services.task_assignment_service import TaskAssignmentService as TAS
+
+        teens = (await db.execute(
+            select(User.id).where(
+                User.family_id == fam_id,
+                User.role == UserRole.TEEN,
+                TAS._participating_member_clause(),
+            )
+        )).scalars().all()
+        for uid in teens:
+            try:
+                settled, paid = await EarlyBirdService._settle(db, cfg, fam_id, uid, now)
+                out["settled"] += settled
+                out["paid"] += paid
+            except Exception:
+                log.exception("early bird settlement failed for user %s", uid)
+                await db.rollback()
+
+    @staticmethod
+    async def _sweep_reminders(db, cfg, fam_id, now, today, out) -> None:
+        from app.services.task_assignment_service import TaskAssignmentService as TAS
+
+        times = day_times(cfg, today)
+        stage = reminder_stage(now, times)
+        if stage in ("r1", "r2"):
+            teens = (await db.execute(
+                select(User.id).where(
+                    User.family_id == fam_id,
+                    User.role == UserRole.TEEN,
+                    TAS._participating_member_clause(),
+                )
+            )).scalars().all()
+            since = times.r1 if stage == "r1" else times.r2
+            for uid in teens:
+                try:
+                    out["reminders"] += await EarlyBirdService._remind(
+                        db, cfg, fam_id, uid, today, stage, since, times.deadline
+                    )
+                except Exception:
+                    log.exception("early bird reminder failed for user %s", uid)
+                    await db.rollback()
+        elif stage == "grabs":
+            out["grabs"] += await EarlyBirdService._push_grabs(
+                db, cfg, fam_id, now, times.deadline, today
+            )
+
+    # ------------------------------------------------------------- settlement
+
+    @staticmethod
+    async def settle_teen(db, cfg, family_id, user_id, now) -> int:
+        """Settle every finished, undecided week of one teen (oldest first) and
+        pay the streak bonus. Returns the number of payouts."""
+        return (await EarlyBirdService._settle(db, cfg, family_id, user_id, now))[1]
+
+    @staticmethod
+    async def _settle(db, cfg, family_id, user_id, now) -> tuple[int, int]:
+        """(weeks settled, payouts). Idempotent: UNIQUE(user_id, week_of) +
+        ON CONFLICT DO NOTHING for the row, guarded UPDATE (paid_at IS NULL)
+        for the money."""
+        if not cfg.enabled:
+            return 0, 0
+        this_monday = now.astimezone(cfg.tz).date()
+        this_monday -= timedelta(days=this_monday.weekday())
+        settled = paid = 0
+        for k in range(SETTLE_LOOKBACK_WEEKS, 0, -1):
+            monday = this_monday - timedelta(weeks=k)
+            existing = await EarlyBirdService._week_row(db, user_id, monday)
+            if existing is None:
+                result, _ = await EarlyBirdService.week_status(
+                    db, cfg, family_id, user_id, monday, now
+                )
+                if result == "ineligible":
+                    continue
+                if result in ("pending", "in_progress"):
+                    break  # later weeks wait so runs are computed in order
+                prev = await EarlyBirdService._week_row(db, user_id, monday - timedelta(days=7))
+                run = next_run(prev.run_weeks if prev is not None else 0, result)
+                await db.execute(
+                    pg_insert(EarlyBirdWeek)
+                    .values(family_id=family_id, user_id=user_id, week_of=monday,
+                            result=result, run_weeks=run)
+                    .on_conflict_do_nothing(index_elements=["user_id", "week_of"])
+                )
+                await db.commit()
+                existing = await EarlyBirdService._week_row(db, user_id, monday)
+                settled += 1
+            if (
+                existing is not None
+                and existing.paid_at is None
+                and cfg.streak_cents > 0
+                and pays_streak(existing.result, existing.run_weeks)
+            ):
+                if await EarlyBirdService._pay_streak(
+                    db, family_id, user_id, existing.id, existing.run_weeks,
+                    cfg.streak_cents, now,
+                ):
+                    paid += 1
+        return settled, paid
+
+    @staticmethod
+    async def _week_row(db, user_id, monday) -> Optional[EarlyBirdWeek]:
+        return (await db.execute(
+            select(EarlyBirdWeek)
+            .where(EarlyBirdWeek.user_id == user_id, EarlyBirdWeek.week_of == monday)
+            .execution_options(populate_existing=True)
+        )).scalar_one_or_none()
+
+    @staticmethod
+    async def _pay_streak(db, family_id, user_id, row_id, run, cents, now) -> bool:
+        from app.services.bank_service import _fmt_mxn
+        from app.services.cash_service import (
+            CashService,
+            _get_or_create_account_locked,
+            _get_user_locked,
+        )
+        from app.services.notification_service import NotificationService
+
+        user = await _get_user_locked(db, user_id)
+        acct = await _get_or_create_account_locked(db, user, family_id)
+        res = await db.execute(
+            update(EarlyBirdWeek)
+            .where(EarlyBirdWeek.id == row_id, EarlyBirdWeek.paid_at.is_(None))
+            .values(paid_at=now, bonus_cents=cents)
+        )
+        if res.rowcount != 1:
+            await db.rollback()
+            return False
+        CashService.credit_split_rows(
+            db, user, acct, family_id, cents, CashTransactionType.BONUS,
+            entitled=await CashService._bank_automation_entitled(db, family_id),
+            description=f"Bono madrugador {STREAK_WEEKS} semanas",
+        )
+        kid_name = user.name
+        await db.commit()
+
+        params = {"weeks": run, "amount": _fmt_mxn(cents)}
+        try:
+            await NotificationService.create_localized(
+                db, family_id, "early_bird_payout_kid", user_id=user_id,
+                params=params, link="/bank",
+            )
+        except Exception:
+            log.exception("early bird payout kid notification failed")
+        try:
+            await NotificationService.create_localized(
+                db, family_id, "early_bird_payout_parent", user_id=None,
+                params={**params, "kid": kid_name}, link="/parent/payouts",
+            )
+        except Exception:
+            log.exception("early bird payout parent notification failed")
+        return True
 
     @staticmethod
     async def _remind(db, cfg, fam_id, uid, today, stage, since, deadline) -> int:

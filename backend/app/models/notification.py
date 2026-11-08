@@ -30,6 +30,7 @@ class NotificationType:
     # Early Bird deadline reminders / up-for-grabs pushes (rows are the send record).
     DEADLINE_SOON = "deadline_soon"
     UP_FOR_GRABS = "up_for_grabs"
+    EARLY_BIRD_PAYOUT = "early_bird_payout"
     LATE_PENALTY_APPLIED = "late_penalty_applied"
     REWARDS_LOCKED = "rewards_locked"
     REWARD_REDEEMED = "reward_redeemed"

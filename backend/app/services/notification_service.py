@@ -140,6 +140,16 @@ _COPY = {
         "title": {"es": "🙌 1 tarea libre", "en": "🙌 1 chore up for grabs"},
         "body": {"es": "Tómala y gana sus puntos.", "en": "Take it and earn its points."},
     },
+    "early_bird_payout_kid": {
+        "type": NT.EARLY_BIRD_PAYOUT,
+        "title": {"es": "🏆 ¡{weeks} semanas madrugador!", "en": "🏆 {weeks} early-bird weeks!"},
+        "body": {"es": "Ganaste {amount}.", "en": "You earned {amount}."},
+    },
+    "early_bird_payout_parent": {
+        "type": NT.EARLY_BIRD_PAYOUT,
+        "title": {"es": "🏆 {kid}: {weeks} semanas madrugador", "en": "🏆 {kid}: {weeks} early-bird weeks"},
+        "body": {"es": "Se acreditaron {amount} a su saldo.", "en": "{amount} was credited to their balance."},
+    },
     "chore_taken": {
         "type": NT.CHORE_TAKEN,
         "title": {"es": "🙋 {taker} tomó tu tarea", "en": "🙋 {taker} took your chore"},

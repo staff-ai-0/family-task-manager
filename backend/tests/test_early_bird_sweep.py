@@ -88,7 +88,7 @@ async def ctx(db_session, test_family, test_teen_user):
 async def test_r1_sent_at_1000_local(ctx):
     db, fam, teen, tpl, a, day = ctx
     res = await EarlyBirdService.run_sweep(db, now=_at(day, 10, 0))
-    assert res == {"reminders": 1, "grabs": 0, "settled": 0, "paid": 0}
+    assert (res["reminders"], res["grabs"], res["paid"]) == (1, 0, 0)  # settled: neutral past weeks
     rows = await _rows(db, teen, "deadline_soon")
     assert len(rows) == 1
     assert rows[0].expires_at.astimezone(MX) == datetime.combine(day, time(11, 0), tzinfo=MX)
