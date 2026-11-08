@@ -198,3 +198,34 @@ async def test_covered_rows_filters(ctx, test_child_user):
     cfg = await EarlyBirdService.config(db, fam.id)
     rows = await EarlyBirdService.covered_rows(db, cfg, fam.id, kid.id, day, day)
     assert [r.assignment_id for r in rows] == [keep.id]
+
+
+async def _undo_setup(ctx):
+    db, fam, kid, day = ctx
+    a = await _assign(db, kid, await _template(db, fam), day)
+    await _complete(db, a, kid, _local(day, 9, 0))
+    await db.refresh(kid)
+    assert a.early_bonus_points == 2 and kid.points == 12
+    return a
+
+
+async def _check_clawed_back(db, a, kid):
+    await db.refresh(kid)
+    await db.refresh(a)
+    assert kid.points == 0
+    assert a.early_bonus_points is None
+    assert sorted(r.points for r in await _bonus_rows(db, kid)) == [-2, 2]
+
+
+async def test_revive_claws_back_early_bonus(ctx):
+    db, fam, kid, _ = ctx
+    a = await _undo_setup(ctx)
+    await TaskAssignmentService.patch_assignment(db, a.id, fam.id, status=AssignmentStatus.PENDING)
+    await _check_clawed_back(db, a, kid)
+
+
+async def test_cancel_claws_back_early_bonus(ctx):
+    db, fam, kid, _ = ctx
+    a = await _undo_setup(ctx)
+    await TaskAssignmentService.patch_assignment(db, a.id, fam.id, status=AssignmentStatus.CANCELLED)
+    await _check_clawed_back(db, a, kid)

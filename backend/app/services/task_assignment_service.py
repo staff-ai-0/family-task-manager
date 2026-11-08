@@ -2731,6 +2731,19 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                         assignment.id,
                         -template.effective_points,
                     )
+                    n = assignment.early_bonus_points
+                    if isinstance(n, int) and n > 0:
+                        # Undoing the chore also undoes its Early Bird bonus,
+                        # and clears the marker so a later award is possible.
+                        await PointsService.award_bonus_points(
+                            db,
+                            assignment.assigned_to,
+                            family_id,
+                            -n,
+                            f"Madrugador revertido -{n}",
+                            assignment_id=assignment.id,
+                        )
+                        assignment.early_bonus_points = None
             assignment.status = status
             if status == AssignmentStatus.PENDING:
                 assignment.completed_at = None
