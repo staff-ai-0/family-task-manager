@@ -8,7 +8,7 @@ export type Lang = "es" | "en";
 export const RUN_TARGET = 3;
 
 export type DayState = "early" | "pending" | "open" | "missed" | "neutral" | "future";
-export type CardState = "early" | "on_track" | "late" | "missed" | "idle";
+export type CardState = "early" | "on_track" | "before_deadline" | "late" | "missed" | "idle";
 
 export interface GrabItem {
     id: string;
@@ -36,8 +36,8 @@ export interface EarlyBirdView {
     runLabel: string;
     bonusLabel: string;
     weekPct: number;
-    /** deadline/cutoff ISO (client refresh target); "" when none. */
-    cutoffAt: string;
+    /** ISO instant the countdown runs to (cutoff, then deadline); "" when none. */
+    targetAt: string;
     grabs: GrabItem[];
     takeBlock: string | null;
 }
@@ -46,6 +46,7 @@ const COPY = {
     es: {
         title: "Madrugador",
         headlineOnTrack: "Termina a tiempo y gana extra",
+        headlineBeforeDeadline: (d: string) => `Termina antes de las ${d} o tus tareas quedan libres`,
         headlineEarly: "¡Hoy fuiste madrugador!",
         headlineLate: "Hoy ya pasó la hora madrugadora",
         headlineMissed: "Hoy no se pudo madrugar",
@@ -74,6 +75,7 @@ const COPY = {
     en: {
         title: "Early bird",
         headlineOnTrack: "Finish on time and earn extra",
+        headlineBeforeDeadline: (d: string) => `Finish before ${d} or your chores go up for grabs`,
         headlineEarly: "You were an early bird today!",
         headlineLate: "Today's early window has passed",
         headlineMissed: "No early bird today",
@@ -142,22 +144,29 @@ export function earlyBirdView(me: any, lang: Lang, now: Date): EarlyBirdView | n
 
     const c = earlyBirdCopy(lang);
     const cutoff = parse(me?.cutoff_at);
+    const deadline = parse(me?.deadline_at);
     const today = String(me?.today ?? "");
 
     let state: CardState = "idle";
+    if (today === "missed") state = "missed";
     if (today === "early" || today === "pending") state = "early";
-    else if (today === "missed") state = "missed";
-    else if (today === "open") state = cutoff && now.getTime() >= cutoff.getTime() ? "late" : "on_track";
+    else if (today === "open" || today === "missed") {
+        if (cutoff && now.getTime() < cutoff.getTime() && today === "open") state = "on_track";
+        else if (deadline && now.getTime() < deadline.getTime()) state = "before_deadline";
+        else if (today === "open") state = "late";
+    }
 
     const headline = {
         early: c.headlineEarly,
         on_track: c.headlineOnTrack,
+        before_deadline: c.headlineBeforeDeadline(String(me?.deadline ?? "")),
         late: c.headlineLate,
         missed: c.headlineMissed,
         idle: c.headlineIdle,
     }[state];
 
-    const countdown = state === "on_track" && cutoff ? countdownLabel(cutoff, now, lang) : "";
+    const target = state === "on_track" ? cutoff : state === "before_deadline" ? deadline : null;
+    const countdown = target ? countdownLabel(target, now, lang) : "";
 
     const dots: DotView[] = (Array.isArray(me?.week) ? me.week : []).map((w: any) => {
         const s = (w?.state in c.dayGlyph ? w.state : "future") as DayState;
@@ -179,7 +188,7 @@ export function earlyBirdView(me: any, lang: Lang, now: Date): EarlyBirdView | n
         runLabel: c.run,
         bonusLabel: streakCents > 0 ? c.bonus(money(streakCents, lang)) : "",
         weekPct: Math.max(0, Math.round(Number(me?.week_pct) || 0)),
-        cutoffAt: state === "on_track" && cutoff ? cutoff.toISOString() : "",
+        targetAt: target ? target.toISOString() : "",
         grabs: grabsRaw.map((g) => ({
             id: String(g.assignment_id),
             title: String(g.title ?? ""),

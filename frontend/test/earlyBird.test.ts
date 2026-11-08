@@ -54,9 +54,17 @@ describe("earlyBirdView", () => {
         expect(v.dots).toHaveLength(7);
         expect(v.countdown).toBe("1 h 00 min");
     });
-    it("late after the cutoff", () => {
+    it("before_deadline between cutoff and deadline, counting to the deadline", () => {
         const v = earlyBirdView(me(), "en", d("2026-11-09T10:20:00-06:00"))!;
+        expect(v.state).toBe("before_deadline");
+        expect(v.countdown).toBe("40 min");
+        expect(v.headline).toContain("11:00");
+        expect(v.targetAt).toBe(d("2026-11-09T11:00:00-06:00").toISOString());
+    });
+    it("late after the deadline", () => {
+        const v = earlyBirdView(me(), "en", d("2026-11-09T11:05:00-06:00"))!;
         expect(v.state).toBe("late");
+        expect(v.countdown).toBe("");
     });
     it("early when today is early", () => {
         const v = earlyBirdView(me({ today: "early" }), "en", d("2026-11-09T09:00:00-06:00"))!;

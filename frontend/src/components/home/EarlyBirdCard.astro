@@ -23,7 +23,7 @@ const dotCls: Record<string, string> = {
 };
 ---
 
-<section data-early-bird-card data-lang={lang} data-cutoff={view.cutoffAt}
+<section data-early-bird-card data-lang={lang} data-target={view.targetAt}
          class="rounded-2xl border border-brand-ink/10 bg-white p-4 shadow-[var(--shadow-card)]">
     <h2 class="text-xs font-extrabold uppercase tracking-wider text-brand-sun-text">
         <span aria-hidden="true">🐦 </span>{c.title}
@@ -54,18 +54,18 @@ const dotCls: Record<string, string> = {
     function initEarlyBirdCountdown() {
         const card = document.querySelector<HTMLElement>("[data-early-bird-card]");
         const label = card?.querySelector<HTMLElement>("[data-early-bird-countdown]");
-        const cutoff = card?.dataset.cutoff ? new Date(card.dataset.cutoff) : null;
+        const target = card?.dataset.cutoff ? new Date(card.dataset.target) : null;
         if (timer) window.clearInterval(timer);
-        if (!card || !label || !cutoff || Number.isNaN(cutoff.getTime())) return;
+        if (!card || !label || !target || Number.isNaN(target.getTime())) return;
         const lang = card.dataset.lang === "en" ? "en" : "es";
         const tick = () => {
             const now = new Date();
-            if (now >= cutoff) {
+            if (now >= target) {
                 label.hidden = true;
                 if (timer) window.clearInterval(timer);
                 return;
             }
-            label.textContent = earlyBirdCopy(lang).left(countdownLabel(cutoff, now, lang));
+            label.textContent = earlyBirdCopy(lang).left(countdownLabel(target, now, lang));
         };
         timer = window.setInterval(tick, 30000);
     }
