@@ -156,3 +156,8 @@ class TestTypesAndCopy:
             "🏁 1 away from this week's quest", "Finish it for +20 points.")
         assert NotificationService.render("quest_nudge", "es", {"bonus": 20}) == (
             "🏁 Te falta 1 para tu misión de la semana", "Complétala y gana +20 puntos.")
+
+
+def test_taken_chore_loses_day():
+    open_today, day_lost = today_facts([row(ST.TAKEN), row(ST.PENDING)])
+    assert day_lost is True and open_today == 1

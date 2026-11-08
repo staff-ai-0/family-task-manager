@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -19,6 +19,7 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.models.family import Family
+from app.models.notification import NotificationType as NT
 from app.models.point_transaction import PointTransaction  # noqa: F401
 from app.models.task_assignment import AssignmentStatus, TaskAssignment
 from app.models.task_template import TaskTemplate
@@ -32,6 +33,7 @@ from app.services.early_bird_rules import (
     day_times,
     early_bonus_points,
     is_active_day,
+    reminder_stage,
     week_bonus,
     week_eligible,
     week_result,
@@ -330,3 +332,127 @@ class EarlyBirdService:
         )
         assignment.early_bonus_points = pts
         return pts
+
+    # ------------------------------------------------------------------ sweep
+
+    @staticmethod
+    async def run_sweep(db: AsyncSession, now: Optional[datetime] = None) -> dict[str, int]:
+        """Every ~5 min, across ALL families: deadline reminders (R1/R2) and
+        the up-for-grabs pushes. The notification row is the send record
+        (``PingService._has_ping_since``), so a run is idempotent per member per
+        window. Unlike the evening ping sweep this does NOT require a push
+        subscription: rows carry ``expires_at`` so they never go stale.
+        Returns counts; ``settled``/``paid`` are filled by the settlement step."""
+        from app.services.task_assignment_service import TaskAssignmentService as TAS
+
+        now = EarlyBirdService._now(now)
+        out = {"reminders": 0, "grabs": 0, "settled": 0, "paid": 0}
+        # Plain rows, not ORM entities: a rollback below would expire entities.
+        fam_ids = (await db.execute(
+            select(Family.id).where(
+                Family.deleted_at.is_(None), Family.early_bird_enabled.is_(True)
+            )
+        )).scalars().all()
+        for fam_id in fam_ids:
+            try:
+                cfg = await EarlyBirdService.config(db, fam_id)
+                local_now = now.astimezone(cfg.tz)
+                today = local_now.date()
+                if not is_active_day(cfg, today):
+                    continue
+                times = day_times(cfg, today)
+                stage = reminder_stage(now, times)
+                if stage in ("r1", "r2"):
+                    teens = (await db.execute(
+                        select(User.id).where(
+                            User.family_id == fam_id,
+                            User.role == UserRole.TEEN,
+                            TAS._participating_member_clause(),
+                        )
+                    )).scalars().all()
+                    since = times.r1 if stage == "r1" else times.r2
+                    for uid in teens:
+                        try:
+                            out["reminders"] += await EarlyBirdService._remind(
+                                db, cfg, fam_id, uid, today, stage, since, times.deadline
+                            )
+                        except Exception:
+                            log.exception("early bird reminder failed for user %s", uid)
+                            await db.rollback()
+                elif stage == "grabs":
+                    out["grabs"] += await EarlyBirdService._push_grabs(
+                        db, cfg, fam_id, now, times.deadline, today
+                    )
+            except Exception:
+                log.exception("early bird sweep failed for family %s", fam_id)
+                await db.rollback()
+        return out
+
+    @staticmethod
+    async def _remind(db, cfg, fam_id, uid, today, stage, since, deadline) -> int:
+        from app.services.notification_service import NotificationService
+        from app.services.ping_service import PingService
+
+        rows = await EarlyBirdService.covered_rows(db, cfg, fam_id, uid, today, today)
+        n = sum(1 for r in rows if r.status in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE))
+        if n < 1:
+            return 0
+        if await PingService._has_ping_since(db, fam_id, uid, (NT.DEADLINE_SOON,), since):
+            return 0
+        key = f"deadline_{stage}" + ("_one" if n == 1 else "")
+        await NotificationService.create_localized(
+            db, fam_id, key, user_id=uid,
+            params={"n": n, "deadline": cfg.deadline.strftime("%H:%M")},
+            link="/dashboard", expires_at=deadline, push_tag="ftm-early-bird",
+        )
+        return 1
+
+    @staticmethod
+    async def _push_grabs(db, cfg, fam_id, now, deadline, today) -> int:
+        from app.services.notification_service import NotificationService
+        from app.services.ping_service import PingService
+        from app.services.task_assignment_service import TaskAssignmentService as TAS
+
+        grabs = await EarlyBirdService.grabbable(db, fam_id, now)
+        if not grabs:
+            return 0
+        allowed = dict((await db.execute(
+            select(TaskAssignment.id, TaskTemplate.allowed_roles)
+            .join(TaskTemplate, TaskTemplate.id == TaskAssignment.template_id)
+            .where(TaskAssignment.id.in_([g.assignment_id for g in grabs]))
+        )).all())
+        owner_n: dict[UUID, int] = {}
+        for g in grabs:
+            owner_n[g.owner_id] = owner_n.get(g.owner_id, 0) + 1
+        members = (await db.execute(
+            select(User.id, User.role).where(
+                User.family_id == fam_id,
+                User.role.in_([UserRole.CHILD, UserRole.TEEN]),
+                TAS._participating_member_clause(),
+            )
+        )).all()
+        midnight = datetime.combine(today + timedelta(days=1), time.min, tzinfo=cfg.tz)
+        sent = 0
+        for uid, role in members:
+            try:
+                if uid in owner_n:
+                    key, n = "grabs_owner", owner_n[uid]
+                else:
+                    n = sum(
+                        1 for g in grabs
+                        if not allowed.get(g.assignment_id) or role.value in allowed[g.assignment_id]
+                    )
+                    if n < 1:
+                        continue
+                    key = "grabs_open_one" if n == 1 else "grabs_open"
+                if await PingService._has_ping_since(db, fam_id, uid, (NT.UP_FOR_GRABS,), deadline):
+                    continue
+                await NotificationService.create_localized(
+                    db, fam_id, key, user_id=uid, params={"n": n},
+                    link="/dashboard", expires_at=midnight, push_tag="ftm-early-bird",
+                )
+                sent += 1
+            except Exception:
+                log.exception("early bird grabs push failed for user %s", uid)
+                await db.rollback()
+        return sent

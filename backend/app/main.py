@@ -184,6 +184,19 @@ def _register_cron_jobs(scheduler: AsyncIOScheduler) -> None:
             except Exception:
                 logger.exception("Smart reminder sweep failed")
 
+    async def _early_bird_sweep():
+        # Early Bird: deadline reminders (-60/-30 min) and up-for-grabs pushes.
+        # Every 5 min; idempotent per member per window (the notification row
+        # is the send record), so a restart never double-sends.
+        async with AsyncSessionLocal() as session:
+            try:
+                from app.services.early_bird_service import EarlyBirdService
+                res = await EarlyBirdService.run_sweep(session)
+                if any(res.values()):
+                    logger.info("Early Bird sweep: %s", res)
+            except Exception:
+                logger.exception("Early Bird sweep failed")
+
     async def _family_purge_sweep():
         # Hard-delete families soft-deleted longer than the grace window
         # (FamilyDeletionService.PURGE_RETENTION_DAYS). Self-serve family
@@ -249,6 +262,7 @@ def _register_cron_jobs(scheduler: AsyncIOScheduler) -> None:
     scheduler.add_job(_jarvis_schedule_sweep, "cron", minute="*/5", id="jarvis_sched_sweep")
     scheduler.add_job(_family_bank_payday_sweep, "cron", minute=10, id="family_bank_payday")  # hourly
     scheduler.add_job(_smart_ping_sweep, "cron", minute=0, id="smart_ping_sweep")  # hourly
+    scheduler.add_job(_early_bird_sweep, "cron", minute="*/5", id="early_bird_sweep")
     scheduler.add_job(_family_purge_sweep, "cron", hour=4, minute=0, id="family_purge_sweep")  # daily
     scheduler.add_job(_auto_shuffle_sweep, "cron", minute=25, id="auto_shuffle_sweep")  # hourly
     scheduler.add_job(_recurring_post_sweep, "cron", minute=40, id="recurring_post_sweep")  # hourly
