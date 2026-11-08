@@ -63,6 +63,8 @@ function taskBadge(a: any): { label: string; cls: string } {
         return { label: es ? "Por aprobar" : "To approve", cls: "bg-sky-100 text-sky-700" };
     if (a.status === "completed")
         return { label: es ? "Hecha" : "Done", cls: "bg-emerald-100 text-emerald-700" };
+    if (a.status === "taken")
+        return { label: es ? "Tomada" : "Taken", cls: "bg-brand-cream-deep text-brand-ink-soft" };
     if (a.is_overdue || a.status === "overdue")
         return { label: es ? "Tarde" : "Late", cls: "bg-red-100 text-red-700" };
     return { label: es ? "Pendiente" : "Pending", cls: "bg-brand-cream-deep text-brand-ink-soft" };

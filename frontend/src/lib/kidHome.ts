@@ -50,7 +50,7 @@ export function claimableGigs(items: unknown, role: string, now: Date = new Date
 
 export type PayMeter =
     | { show: false }
-    | { show: true; capCents: number; greenPct: number; redPct: number; released: boolean };
+    | { show: true; capCents: number; greenPct: number; redPct: number; released: boolean; earlyBirdBonusCents: number };
 
 const clampPct = (n: unknown) => {
     const v = Math.round(Number(n));
@@ -70,5 +70,6 @@ export function payMeterView(paycheck: any): PayMeter {
         greenPct,
         redPct,
         released: Boolean(paycheck.already_released),
+        earlyBirdBonusCents: Math.max(0, Math.trunc(Number(paycheck.early_bird_bonus_cents) || 0)),
     };
 }

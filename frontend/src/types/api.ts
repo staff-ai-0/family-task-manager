@@ -28,7 +28,7 @@ export interface Assignment {
     template_id: string;
     assigned_to_id: string;
     scheduled_date: string;
-    status: "pending" | "completed" | "cancelled" | "overdue";
+    status: "pending" | "completed" | "cancelled" | "overdue" | "taken";
     completed_at?: string;
     template_title: string;
     template_title_es?: string;

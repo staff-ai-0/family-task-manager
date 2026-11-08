@@ -1,0 +1,75 @@
+---
+/**
+ * "Up for grabs": chores a sibling left late that this kid may take.
+ * The server re-checks every rule; the button just reports the reason.
+ */
+import { buttonClass } from "../../lib/buttonClasses";
+import { earlyBirdCopy, type GrabItem } from "../../lib/earlyBird";
+
+interface Props {
+    grabs: GrabItem[];
+    takeBlock: string | null;
+    lang: "es" | "en";
+}
+const { grabs, takeBlock, lang } = Astro.props;
+const c = earlyBirdCopy(lang);
+---
+
+<section data-up-for-grabs data-lang={lang} class="rounded-2xl border border-brand-ink/10 bg-white p-4 shadow-[var(--shadow-card)]">
+    <h2 class="text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft">{c.grabsTitle}</h2>
+    <p class="mt-0.5 text-xs text-brand-ink-soft">{c.grabsHint}</p>
+    <ul class="mt-2 space-y-2">
+        {grabs.map((g) => (
+            <li class="flex items-center gap-3">
+                <div class="min-w-0 flex-1">
+                    <p class="truncate font-bold text-brand-ink">{g.title}</p>
+                    <p class="text-xs text-brand-ink-soft">{c.from(g.ownerName)} · +{g.points}</p>
+                </div>
+                <button type="button" data-grab-take={g.id} data-block={takeBlock ?? ""} class={buttonClass("primary", "sm")}>{c.take}</button>
+            </li>
+        ))}
+    </ul>
+</section>
+
+<script>
+    import { queueToast } from "../../lib/dialogs";
+    import { showToast } from "../../lib/toast";
+    import { earlyBirdCopy, takeErrorMessage } from "../../lib/earlyBird";
+
+    function initUpForGrabs() {
+        const root = document.querySelector<HTMLElement>("[data-up-for-grabs]");
+        if (!root || root.dataset.bound === "1") return;
+        root.dataset.bound = "1";
+        const lang = root.dataset.lang === "en" ? "en" : "es";
+        root.querySelectorAll<HTMLButtonElement>("[data-grab-take]").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                if (btn.disabled) return;
+                btn.disabled = true; // synchronous: no double submit
+                try {
+                    const res = await fetch(`/api/early-bird/grabs/${encodeURIComponent(btn.dataset.grabTake ?? "")}/take`, {
+                        method: "POST",
+                        credentials: "same-origin",
+                    });
+                    if (res.ok) {
+                        queueToast(earlyBirdCopy(lang).taken, "success");
+                        window.location.reload();
+                        return;
+                    }
+                    let detail = "";
+                    try {
+                        const body = await res.json();
+                        detail = typeof body?.detail === "string" ? body.detail : "";
+                    } catch {
+                        /* non-JSON error body */
+                    }
+                    showToast(takeErrorMessage(detail, lang), "error");
+                } catch {
+                    showToast(earlyBirdCopy(lang).takeFailed, "error");
+                }
+                btn.disabled = false;
+            });
+        });
+    }
+    document.addEventListener("astro:page-load", initUpForGrabs);
+    if (document.readyState !== "loading") initUpForGrabs();
+</script>

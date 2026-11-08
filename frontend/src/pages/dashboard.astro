@@ -15,6 +15,7 @@ import { progressView, shouldCelebrate } from "../lib/progress";
 import { questView } from "../lib/quest";
 import { checkinView } from "../lib/checkin";
 import { mysteryView } from "../lib/mystery";
+import { earlyBirdView } from "../lib/earlyBird";
 import { pickDashboardRoutines } from "../lib/routines";
 
 const token = Astro.cookies.get("access_token")?.value;
@@ -55,7 +56,7 @@ const y = new Date(`${todayStr}T00:00:00`);
 y.setDate(y.getDate() - 1);
 const yesterdayStr = [y.getFullYear(), String(y.getMonth() + 1).padStart(2, "0"), String(y.getDate()).padStart(2, "0")].join("-");
 
-const [{ data: paycheck }, { data: bankGoal }, { data: rewardGoal }, { data: offerings }, { data: pet }, { data: weekDone }, { data: progressResp }, { data: badgesResp }, { data: questResp }, { data: checkinResp }, { data: mysteryResp }] =
+const [{ data: paycheck }, { data: bankGoal }, { data: rewardGoal }, { data: offerings }, { data: pet }, { data: weekDone }, { data: progressResp }, { data: badgesResp }, { data: questResp }, { data: checkinResp }, { data: mysteryResp }, { data: earlyBirdResp }] =
     await Promise.all([
         apiFetch<any>(`/api/bank/chore-paycheck/${user.id}`, { token }),
         starMode ? none : apiFetch<any>("/api/bank/goals/me", { token }),
@@ -72,6 +73,8 @@ const [{ data: paycheck }, { data: bankGoal }, { data: rewardGoal }, { data: off
         user.role === "teen" ? apiFetch<any>("/api/jarvis/checkin", { token }) : none,
         // UX-D4b. apiFetch never throws; null → no card.
         apiFetch<any>("/api/progress/mystery", { token }),
+        // Early Bird. apiFetch never throws; null → no card, no grabs.
+        apiFetch<any>("/api/early-bird/me", { token }),
     ]);
 
 const progress = progressView(progressResp, skin, lang);
@@ -79,6 +82,7 @@ const badges = badgesView(badgesResp, lang);
 const quest = questView(questResp, lang, starMode);
 const checkin = checkinView(checkinResp, lang);
 const mystery = mysteryView(mysteryResp);
+const earlyBird = earlyBirdView(earlyBirdResp, lang, new Date());
 // One celebration modal per load: the rank-up goes first, badges wait a visit.
 const rankCelebrating = shouldCelebrate(progress, user.completed_welcome_tour);
 
@@ -136,6 +140,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
         meter={meter}
         counter={counter}
         progress={progress}
+        earlyBirdPct={earlyBirdResp?.week_pct ?? 0}
     />
 
     <Fragment slot="banner">
@@ -176,6 +181,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
         quest={quest}
         checkin={checkin}
         mystery={mystery}
+        earlyBird={earlyBird}
     />
 
     {progress && <ProgressSheet progress={progress} badges={badges} lang={lang} />}

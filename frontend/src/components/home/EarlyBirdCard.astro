@@ -1,0 +1,74 @@
+---
+/**
+ * Early Bird card on the teen home: today's countdown to the early cutoff,
+ * the Mon–Sun dots, and the 3-week run toward the bonus. All copy and state
+ * come from lib/earlyBird.ts; the countdown label is server-rendered and
+ * refreshed every 30 s by a tiny script.
+ */
+import { earlyBirdCopy, type EarlyBirdView } from "../../lib/earlyBird";
+
+interface Props {
+    view: EarlyBirdView;
+    lang: "es" | "en";
+}
+const { view, lang } = Astro.props;
+const c = earlyBirdCopy(lang);
+const dotCls: Record<string, string> = {
+    early: "bg-brand-mint text-brand-ink",
+    pending: "bg-brand-sun text-brand-ink",
+    open: "bg-white text-brand-ink border-2 border-brand-ink",
+    missed: "bg-brand-coral text-brand-ink",
+    neutral: "bg-brand-ink/10 text-brand-ink",
+    future: "bg-brand-ink/10 text-brand-ink",
+};
+---
+
+<section data-early-bird-card data-lang={lang} data-cutoff={view.cutoffAt}
+         class="rounded-2xl border border-brand-ink/10 bg-white p-4 shadow-[var(--shadow-card)]">
+    <h2 class="text-xs font-extrabold uppercase tracking-wider text-brand-sun-text">
+        <span aria-hidden="true">🐦 </span>{c.title}
+    </h2>
+    <p class="mt-1 font-bold text-brand-ink">{view.headline}</p>
+    <p class="mt-0.5 text-sm font-extrabold tabular-nums text-brand-ink" data-early-bird-countdown hidden={!view.countdownText}>{view.countdownText}</p>
+
+    <ul class="mt-3 flex items-center justify-between gap-1" aria-label={c.title}>
+        {view.dots.map((d) => (
+            <li class={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-extrabold ${dotCls[d.state]}`}
+                title={`${d.date} · ${d.label}`} aria-label={`${d.date}: ${d.label}`}>
+                <span aria-hidden="true">{d.glyph}</span>
+            </li>
+        ))}
+    </ul>
+
+    <p class="mt-3 flex items-center justify-between gap-2 text-xs font-bold text-brand-ink-soft">
+        <span>{view.runLabel} <span class="font-extrabold tabular-nums text-brand-ink">{view.runText}</span></span>
+        {view.bonusLabel && <span class="text-brand-mint-text">{view.bonusLabel}</span>}
+        {view.weekPct > 0 && <span class="text-brand-sun-text">{c.weekPct(view.weekPct)}</span>}
+    </p>
+</section>
+
+<script>
+    import { countdownLabel, earlyBirdCopy } from "../../lib/earlyBird";
+
+    let timer: number | undefined;
+    function initEarlyBirdCountdown() {
+        const card = document.querySelector<HTMLElement>("[data-early-bird-card]");
+        const label = card?.querySelector<HTMLElement>("[data-early-bird-countdown]");
+        const cutoff = card?.dataset.cutoff ? new Date(card.dataset.cutoff) : null;
+        if (timer) window.clearInterval(timer);
+        if (!card || !label || !cutoff || Number.isNaN(cutoff.getTime())) return;
+        const lang = card.dataset.lang === "en" ? "en" : "es";
+        const tick = () => {
+            const now = new Date();
+            if (now >= cutoff) {
+                label.hidden = true;
+                if (timer) window.clearInterval(timer);
+                return;
+            }
+            label.textContent = earlyBirdCopy(lang).left(countdownLabel(cutoff, now, lang));
+        };
+        timer = window.setInterval(tick, 30000);
+    }
+    document.addEventListener("astro:page-load", initEarlyBirdCountdown);
+    if (document.readyState !== "loading") initEarlyBirdCountdown();
+</script>
