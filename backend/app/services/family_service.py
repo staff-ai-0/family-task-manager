@@ -137,8 +137,9 @@ class FamilyService:
 
         # Update fields if provided
         update_fields = family_data.model_dump(exclude_unset=True)
-        # Early Bird: every off->on re-stamps enabled_at (weeks that began
-        # before the switch never count). Decide before the loop overwrites it.
+        # Early Bird: every off->on re-stamps enabled_at (the week you switch
+        # it on never counts) and every on->off files the closed period in
+        # early_bird_past_periods. Decide before the loop overwrites the flag.
         for col in (
             "early_bird_enabled", "early_bird_deadline", "early_bird_bonus_pct",
             "early_bird_week_pct", "early_bird_streak_cents",
@@ -148,6 +149,10 @@ class FamilyService:
         turning_on = (
             update_fields.get("early_bird_enabled") is True
             and not family.early_bird_enabled
+        )
+        turning_off = (
+            update_fields.get("early_bird_enabled") is False
+            and family.early_bird_enabled
         )
         for field, value in update_fields.items():
             setattr(family, field, value)
@@ -167,6 +172,15 @@ class FamilyService:
 
         if turning_on:
             family.early_bird_enabled_at = datetime.now(timezone.utc)
+        if turning_off and family.early_bird_enabled_at is not None:
+            # Keep the period this switch-off closes: the next off->on
+            # re-stamps enabled_at, and the weeks already run must still count.
+            from app.services.early_bird_rules import close_period
+            family.early_bird_past_periods = close_period(
+                family.early_bird_past_periods,
+                family.early_bird_enabled_at,
+                datetime.now(timezone.utc),
+            )
 
         family.updated_at = datetime.now(timezone.utc)
         await db.commit()

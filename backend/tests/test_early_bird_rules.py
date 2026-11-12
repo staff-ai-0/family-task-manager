@@ -167,3 +167,36 @@ def test_week_bonus():
     assert week_bonus(80000, 5, "pending") == 0
     assert week_bonus(0, 5, "early") == 0
     assert week_bonus(80000, 0, "early") == 0
+
+
+def test_off_on_toggle_keeps_weeks_that_ran_under_the_earlier_period():
+    """Switching off and on again starts a new period; it must not make the
+    weeks that ran fully under the earlier period ineligible."""
+    earlier = (datetime(2026, 10, 1, tzinfo=MX), at(12, day=MON + timedelta(days=8)))
+    c = cfg(enabled_at=at(9, day=MON + timedelta(days=14)), past_periods=(earlier,))
+    assert week_eligible(c, MON)                                # fully in the earlier period
+    assert not week_eligible(c, MON + timedelta(days=7))        # off/on during that week
+    assert week_eligible(c, MON + timedelta(days=14))           # current period
+    assert is_active_day(c, MON)
+    assert is_active_day(c, MON + timedelta(days=7))            # Mon R1 10:00 < off Tue 12:00
+    assert not is_active_day(c, MON + timedelta(days=9))        # Wed: switched off
+    assert is_active_day(c, MON + timedelta(days=14))
+
+
+def test_past_periods_do_not_apply_while_switched_off():
+    earlier = (datetime(2026, 10, 1, tzinfo=MX), at(12, day=MON + timedelta(days=8)))
+    c = cfg(enabled=False, enabled_at=None, past_periods=(earlier,))
+    assert not week_eligible(c, MON)
+    assert not is_active_day(c, MON)
+
+
+def test_from_family_reads_past_periods():
+    fam = SimpleNamespace(early_bird_enabled=True, early_bird_enabled_at=None,
+                          early_bird_deadline=time(11), early_bird_days=None,
+                          early_bird_bonus_pct=20, early_bird_week_pct=5,
+                          early_bird_streak_cents=100, timezone="America/Mexico_City",
+                          early_bird_past_periods=[["2026-10-01T00:00:00+00:00",
+                                                    "2026-10-20T12:00:00+00:00"]])
+    c = EarlyBirdConfig.from_family(fam)
+    assert c.past_periods == ((datetime(2026, 10, 1, tzinfo=timezone.utc),
+                               datetime(2026, 10, 20, 12, tzinfo=timezone.utc)),)

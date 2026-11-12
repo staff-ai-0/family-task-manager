@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countdownLabel, earlyBirdCopy, earlyBirdView, takeErrorMessage, paycheckBonusLine } from "../src/lib/earlyBird";
+import { countdownLabel, earlyBirdCopy, earlyBirdView, takeBlockHint, takeErrorMessage, paycheckBonusLine } from "../src/lib/earlyBird";
 
 const d = (s: string) => new Date(s);
 
@@ -125,5 +125,17 @@ describe("paycheckBonusLine", () => {
 describe("copy", () => {
     it("has both languages", () => {
         expect(earlyBirdCopy("es").title).not.toBe(earlyBirdCopy("en").title);
+    });
+});
+
+describe("takeBlockHint", () => {
+    it("explains a caller-level block so the Take buttons can be disabled up front", () => {
+        expect(takeBlockHint("finish_yours_first", "es")).toBe("Termina primero tus tareas");
+        expect(takeBlockHint("finish_yours_first", "en")).toBe("Finish your own chores first");
+        expect(takeBlockHint("not_kid", "en")).toBeTruthy();
+    });
+    it("is null when nothing blocks the caller", () => {
+        expect(takeBlockHint(null, "es")).toBeNull();
+        expect(takeBlockHint("", "en")).toBeNull();
     });
 });

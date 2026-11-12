@@ -155,3 +155,20 @@ async def test_export_includes_early_bird_weeks(client, db_session, test_family,
     zf = zipfile.ZipFile(io.BytesIO(r.content))
     rows = json.loads(zf.read("progress/early_bird_weeks.json"))
     assert len(rows) == 1 and rows[0]["result"] == "early"
+
+
+async def test_switching_off_records_the_period_it_closes(client, auth_headers, db_session, test_family):
+    on, off = {"early_bird_enabled": True}, {"early_bird_enabled": False}
+    await client.patch("/api/families/me", json=on, headers=auth_headers)
+    await db_session.refresh(test_family)
+    t1 = test_family.early_bird_enabled_at
+    await client.patch("/api/families/me", json=off, headers=auth_headers)
+    await db_session.refresh(test_family)
+    periods = test_family.early_bird_past_periods
+    assert len(periods) == 1
+    start, end = (datetime.fromisoformat(x) for x in periods[0])
+    assert start == t1 and end >= t1
+    # a second "off" while already off records nothing more
+    await client.patch("/api/families/me", json=off, headers=auth_headers)
+    await db_session.refresh(test_family)
+    assert len(test_family.early_bird_past_periods) == 1

@@ -9,7 +9,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from app.models.task_assignment import ApprovalStatus, AssignmentStatus
-from app.services.bank_service import _safe_zoneinfo
+from app.services.bank_service import PAYCHECK_LOOKBACK_WEEKS, _safe_zoneinfo
 
 STREAK_WEEKS = 3
 R1_BEFORE = timedelta(minutes=60)
@@ -36,6 +36,10 @@ class EarlyBirdConfig:
     week_pct: int
     streak_cents: int
     tz: ZoneInfo
+    # Earlier on-periods, closed by a switch-off: ((start, end), ...). The
+    # current period is (enabled_at, open). Kept so an off->on toggle does not
+    # retroactively make the weeks that already ran under the feature ineligible.
+    past_periods: tuple[tuple[datetime, datetime], ...] = ()
 
     @classmethod
     def from_family(cls, fam) -> "EarlyBirdConfig":
@@ -49,6 +53,10 @@ class EarlyBirdConfig:
             week_pct=fam.early_bird_week_pct,
             streak_cents=fam.early_bird_streak_cents,
             tz=_safe_zoneinfo(fam.timezone),
+            past_periods=tuple(
+                (datetime.fromisoformat(start), datetime.fromisoformat(end))
+                for start, end in (getattr(fam, "early_bird_past_periods", None) or ())
+            ),
         )
 
 
@@ -64,18 +72,48 @@ def day_times(cfg: EarlyBirdConfig, day: date) -> DayTimes:
     return DayTimes(r1=deadline - R1_BEFORE, r2=deadline - R2_BEFORE, deadline=deadline)
 
 
-def is_active_day(cfg: EarlyBirdConfig, day: date) -> bool:
+def _on_periods(cfg: EarlyBirdConfig) -> list[tuple[datetime, Optional[datetime]]]:
+    """Every (start, end) the feature was on; end None = still on. Empty while
+    switched off: an off feature computes nothing, earlier periods included."""
     if not cfg.enabled or cfg.enabled_at is None:
-        return False
+        return []
+    return [*cfg.past_periods, (cfg.enabled_at, None)]
+
+
+def _on_throughout(cfg: EarlyBirdConfig, start: datetime, end: datetime) -> bool:
+    """One on-period spans (start, end]: switched on before ``start`` and not
+    switched off before ``end``."""
+    return any(
+        on < start and (off is None or off > end) for on, off in _on_periods(cfg)
+    )
+
+
+# A closed period is kept while a week inside it can still be paid or settled:
+# the paycheck window plus a margin (settlement looks back less than that).
+PAST_PERIOD_KEEP = timedelta(weeks=PAYCHECK_LOOKBACK_WEEKS + 2)
+assert PAST_PERIOD_KEEP > timedelta(weeks=SETTLE_LOOKBACK_WEEKS + 1)
+
+
+def close_period(past: Optional[list], start: datetime, end: datetime) -> list:
+    """``families.early_bird_past_periods`` after a switch-off that ends the
+    period begun at ``start``: appended, and pruned past PAST_PERIOD_KEEP."""
+    kept = [p for p in (past or []) if datetime.fromisoformat(p[1]) > end - PAST_PERIOD_KEEP]
+    return [*kept, [start.isoformat(), end.isoformat()]]
+
+
+def is_active_day(cfg: EarlyBirdConfig, day: date) -> bool:
     if cfg.days is not None and day.weekday() not in cfg.days:
         return False
-    return day_times(cfg, day).r1 > cfg.enabled_at
+    r1 = day_times(cfg, day).r1
+    return _on_throughout(cfg, r1, r1)
 
 
 def week_eligible(cfg: EarlyBirdConfig, monday: date) -> bool:
-    if not cfg.enabled or cfg.enabled_at is None:
-        return False
-    return cfg.enabled_at < day_times(cfg, monday).r1
+    """On from before Monday's R1 through Sunday's R1 (when the week is over)
+    without a switch-off: the week you switch it on never counts."""
+    return _on_throughout(
+        cfg, day_times(cfg, monday).r1, day_times(cfg, monday + timedelta(days=6)).r1
+    )
 
 
 @dataclass(frozen=True)

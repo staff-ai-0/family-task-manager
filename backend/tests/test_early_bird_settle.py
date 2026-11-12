@@ -215,17 +215,31 @@ async def test_week_six_pays_again(ctx):
 
 @pytest.mark.asyncio
 async def test_guarded_update_blocks_second_credit(ctx):
-    """m8: a pays_streak row already stamped paid_at must not credit again."""
+    """m8: a row already stamped paid_at must not credit again."""
     db, fam, kid = ctx
     await _build(db, fam, kid, ["early", "early", "early"])
-    # Settle without paying (streak off), then stamp paid_at out of band and
-    # turn the bonus back on: the guarded UPDATE (paid_at IS NULL) must hit
-    # rowcount 0 and credit nothing.
-    await _setup(db, fam, streak_cents=0)
     await EarlyBirdService.run_sweep(db, _now())
     _, rows = await _runs(db, kid)
-    rows[2].paid_at = datetime.now(timezone.utc)
-    await db.commit()
+    row = rows[2]
+    assert row.paid_at is not None
+    args = (fam.id, kid.id, row.id, row.run_weeks, row.bonus_cents)
+    paid = await EarlyBirdService._pay_streak(db, *args, _now())  # rolls back
+    assert paid is False
+    credits = (await db.execute(select(CashTransaction).where(
+        CashTransaction.user_id == args[1],
+        CashTransaction.type == CashTransactionType.BONUS))).scalars().all()
+    assert len(credits) == 1
+    assert (await db.get(User, args[1], populate_existing=True)).cash_cents == 50000
+
+
+@pytest.mark.asyncio
+async def test_prize_is_fixed_when_the_week_settles(ctx):
+    """A run-3 week that settled while the prize was 0 earned nothing; raising
+    the prize later must not pay it retroactively."""
+    db, fam, kid = ctx
+    await _setup(db, fam, streak_cents=0)
+    await _build(db, fam, kid, ["early", "early", "early"])
+    await EarlyBirdService.run_sweep(db, _now())
     await _setup(db, fam, streak_cents=50000)
     out = await EarlyBirdService.run_sweep(db, _now())
     assert out["paid"] == 0

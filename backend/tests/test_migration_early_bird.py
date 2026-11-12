@@ -84,7 +84,8 @@ def _labels(dsn, typ):
 def test_round_trip(scratch_dsn):
     dsn = scratch_dsn
     _alembic(dsn, "upgrade", "head")
-    assert {"early_bird_enabled", "early_bird_deadline", "early_bird_days"} <= _cols(dsn, "families")
+    assert {"early_bird_enabled", "early_bird_deadline", "early_bird_days",
+            "early_bird_past_periods"} <= _cols(dsn, "families")
     assert "early_bird_exempt" in _cols(dsn, "task_templates")
     assert {"taken_by", "taken_at", "taken_from_id", "early_bonus_points"} <= _cols(dsn, "task_assignments")
     assert _cols(dsn, "early_bird_weeks")
@@ -102,9 +103,11 @@ def test_round_trip(scratch_dsn):
     _insert(dsn, "cash_transactions", id=uuid.uuid4(), type="BONUS", amount_cents=500,
             user_id=usr, family_id=fam)
 
-    _alembic(dsn, "downgrade", "-1")
+    # To the revision before early_bird by name: later Early Bird migrations
+    # (early_bird_past_periods) sit on top, so "-1" would stop short.
+    _alembic(dsn, "downgrade", "payout_receipts")
     assert not _cols(dsn, "early_bird_weeks")
-    assert not ({"early_bird_enabled"} & _cols(dsn, "families"))
+    assert not ({"early_bird_enabled", "early_bird_past_periods"} & _cols(dsn, "families"))
     assert not ({"taken_by", "early_bonus_points"} & _cols(dsn, "task_assignments"))
     assert "early_bird_exempt" not in _cols(dsn, "task_templates")
     assert "taken" not in _labels(dsn, "assignmentstatus")

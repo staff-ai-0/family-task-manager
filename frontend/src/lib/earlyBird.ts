@@ -70,6 +70,7 @@ const COPY = {
             role_not_allowed: "Tu perfil no puede tomar esta tarea",
             own_chore: "Esta tarea ya es tuya",
             not_grabbable: "Esta tarea ya no se puede tomar",
+            not_kid: "Solo los hijos pueden tomar tareas",
         } as Record<string, string>,
     },
     en: {
@@ -99,6 +100,7 @@ const COPY = {
             role_not_allowed: "Your profile can't take this chore",
             own_chore: "This chore is already yours",
             not_grabbable: "This chore can't be taken anymore",
+            not_kid: "Only kids can take chores",
         } as Record<string, string>,
     },
 } as const;
@@ -118,6 +120,13 @@ export function countdownLabel(target: Date, now: Date, _lang: Lang): string {
 export function takeErrorMessage(detail: string, lang: Lang): string {
     const c = earlyBirdCopy(lang);
     return c.errors[detail] ?? c.takeFailed;
+}
+
+/** Why the caller can take none of the grabs (`take_block` from the API), or
+ * null. Lets the list disable its Take buttons instead of failing on tap. */
+export function takeBlockHint(block: string | null | undefined, lang: Lang): string | null {
+    if (!block) return null;
+    return takeErrorMessage(block, lang);
 }
 
 /** "incl. +5% early bird" when the projected paycheck carries a bonus. */

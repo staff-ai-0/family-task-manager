@@ -1,7 +1,9 @@
 """Early Bird settled week — one row per (teen, Mon–Sun week).
 
 `result` is early / missed / neutral; `run_weeks` is the consecutive-early run
-after that week (every 3rd pays `bonus_cents` once, `paid_at` marks it).
+after that week. Every 3rd pays `bonus_cents` once (`paid_at` marks it); the
+prize is copied from the family when the week settles, so a $0 prize then
+means the week never pays.
 """
 import uuid
 from datetime import datetime, timezone

@@ -35,6 +35,15 @@ from app.services.base_service import (
 
 logger = logging.getLogger(__name__)
 
+# Early Bird: a taken-over chore (the owner's TAKEN row and the taker's row)
+# is locked against edits that would pay it twice or orphan it.
+TAKEN_ROW_LOCKED = (
+    "Esta tarea se tomó en Madrugador: no se puede mover, cancelar ni borrar / "
+    "This chore was taken over (Madrugador / Early Bird): it cannot be moved, "
+    "cancelled or deleted"
+)
+
+
 class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
     """Service for task assignment operations including shuffle and gating"""
 
@@ -2668,15 +2677,13 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
     # ─── Parent Edit (reassign / reschedule / cancel) ────────────────
 
     @classmethod
-    async def delete_by_id(cls, db: AsyncSession, entity_id: UUID, family_id: UUID) -> None:
-        """Hard delete, except an Early Bird TAKEN row: ``taken_from_id`` is
-        ON DELETE SET NULL, so deleting it would turn the taker's row into an
-        ordinary (grabbable/covered) chore."""
-        entity = await cls.get_by_id(db, entity_id, family_id)
-        if entity.status == AssignmentStatus.TAKEN:
-            raise ValidationException("taken_row_locked")
-        await db.delete(entity)
-        await db.commit()
+    def _check_deletable(cls, entity: TaskAssignment) -> None:
+        """Neither half of an Early Bird take can be hard-deleted. The owner's
+        TAKEN row: ``taken_from_id`` is ON DELETE SET NULL, so the taker's row
+        would turn into an ordinary (grabbable/covered) chore. The taker's
+        row: the owner's row would stay TAKEN with nobody doing the chore."""
+        if entity.status == AssignmentStatus.TAKEN or entity.taken_from_id is not None:
+            raise ValidationException(TAKEN_ROW_LOCKED)
 
     @staticmethod
     async def patch_assignment(
@@ -2704,7 +2711,16 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         if assignment.status == AssignmentStatus.TAKEN and (
             status is not None or assigned_to is not None or assigned_date is not None
         ):
-            raise ValidationException("taken_row_locked")
+            raise ValidationException(TAKEN_ROW_LOCKED)
+        # The taker's row holds the chore now: cancelling or moving it would
+        # leave the owner's row TAKEN with nobody doing it. Sending the
+        # taker's own work back for a redo (status=pending) stays allowed.
+        if assignment.taken_from_id is not None and (
+            status == AssignmentStatus.CANCELLED
+            or assigned_to is not None
+            or assigned_date is not None
+        ):
+            raise ValidationException(TAKEN_ROW_LOCKED)
 
         if status is not None and status not in (
             AssignmentStatus.PENDING,
@@ -2713,6 +2729,10 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             raise ValidationException(
                 "PATCH only allows status=pending or status=cancelled. Use /complete to mark completed."
             )
+
+        # Whoever earned the chore's credit, captured before a reassignment
+        # in this same call moves the row to someone else.
+        credited_to = assignment.assigned_to
 
         if assigned_to is not None:
             new_user = await get_user_by_id(db, assigned_to)
@@ -2744,16 +2764,15 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 if not template.is_bonus and assignment.approval_status in (
                     ApprovalStatus.NONE, ApprovalStatus.APPROVED
                 ):
-                    # Mandatory chores credited effective_points at completion
-                    # (or approval). Reviving/cancelling must claw those back,
-                    # otherwise revive + re-complete double-credits.
+                    # Mandatory chores credited points at completion (or
+                    # approval). Reviving/cancelling must claw those back,
+                    # otherwise revive + re-complete double-credits. The
+                    # amount is what the ledger credited — a partial grade
+                    # paid less than effective_points, and the template may
+                    # have been re-priced since.
                     from app.services.points_service import PointsService
-                    await PointsService.award_assignment_completion(
-                        db,
-                        assignment.assigned_to,
-                        family_id,
-                        assignment.id,
-                        -template.effective_points,
+                    await PointsService.reverse_assignment_completion(
+                        db, family_id, assignment.id
                     )
                     n = assignment.early_bonus_points
                     if isinstance(n, int) and n > 0:
@@ -2761,7 +2780,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                         # and clears the marker so a later award is possible.
                         await PointsService.award_bonus_points(
                             db,
-                            assignment.assigned_to,
+                            credited_to,
                             family_id,
                             -n,
                             f"Madrugador revertido -{n}",

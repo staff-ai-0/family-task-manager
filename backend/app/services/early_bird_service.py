@@ -247,6 +247,10 @@ class EarlyBirdService:
             raise ConflictException("already_taken")
         if owner_row.assigned_to == taker.id:
             raise ForbiddenException("own_chore")
+        # Serialize one kid's takes: "finish yours first" below reads the
+        # taker's open chores, and two takes of different grabs at once would
+        # otherwise both see none. Locked after the owner row (fixed order).
+        await db.execute(select(User.id).where(User.id == taker.id).with_for_update())
 
         cfg = await EarlyBirdService.config(db, family_id)
         now = EarlyBirdService._now(now)
@@ -582,10 +586,14 @@ class EarlyBirdService:
                     break  # later weeks wait so runs are computed in order
                 prev = await EarlyBirdService._week_row(db, user_id, monday - timedelta(days=7))
                 run = next_run(prev.run_weeks if prev is not None else 0, result)
+                # The prize is fixed when the week settles (like the quest
+                # bonus): a run-3 week settled under a $0 prize earned nothing,
+                # and raising the prize later must not pay it retroactively.
+                prize = cfg.streak_cents if pays_streak(result, run) else 0
                 await db.execute(
                     pg_insert(EarlyBirdWeek)
                     .values(family_id=family_id, user_id=user_id, week_of=monday,
-                            result=result, run_weeks=run)
+                            result=result, run_weeks=run, bonus_cents=max(0, prize))
                     .on_conflict_do_nothing(index_elements=["user_id", "week_of"])
                 )
                 await db.commit()
@@ -594,12 +602,12 @@ class EarlyBirdService:
             if (
                 existing is not None
                 and existing.paid_at is None
-                and cfg.streak_cents > 0
+                and existing.bonus_cents > 0
                 and pays_streak(existing.result, existing.run_weeks)
             ):
                 if await EarlyBirdService._pay_streak(
                     db, family_id, user_id, existing.id, existing.run_weeks,
-                    cfg.streak_cents, now,
+                    existing.bonus_cents, now,
                 ):
                     paid += 1
         return settled, paid
