@@ -55,6 +55,10 @@ class Family(Base):
     # started before the switch never counts (see the design spec).
     early_bird_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
     early_bird_enabled_at = Column(DateTime(timezone=True), nullable=True)
+    # Earlier on-periods closed by a switch-off, [[start_iso, end_iso], ...]
+    # (pruned past the payout window). Without them a re-stamped enabled_at
+    # would retroactively void weeks the teen already earned.
+    early_bird_past_periods = Column(JSONB, nullable=True)
     early_bird_deadline = Column(Time, nullable=False, default=time(11, 0), server_default="11:00")
     # Weekdays (0=Mon) the deadline applies on. NULL = every day.
     early_bird_days = Column(JSONB, nullable=True)
