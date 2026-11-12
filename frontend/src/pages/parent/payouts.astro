@@ -3,6 +3,7 @@ import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
 import { fmtDate as fmtTzDate } from "../../lib/datetime";
 import { buttonClass } from "../../lib/buttonClasses";
+import { payoutTaskStatusLabel } from "../../lib/payoutTaskStatus";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -16,8 +17,6 @@ if (!user) {
 if (user.role !== "parent") return Astro.redirect("/dashboard");
 
 const { data: kidsData } = await apiFetch<any[]>("/api/cash/family", { token });
-const { data: payFamily } = await apiFetch<any>("/api/families/me", { token });
-const earlyWeekPct = Number(payFamily?.early_bird_week_pct ?? 5);
 const kids: any[] = Array.isArray(kidsData) ? kidsData : [];
 const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
@@ -49,19 +48,7 @@ const chipIcon: Record<string, string> = {
     not_done: "·",
     taken: "↪",
 };
-const statusLabel = (t: any): string => {
-    if (t.status === "credited") {
-        const base = lang === "es" ? "Completada ✓" : "Completed ✓";
-        return t.grade === "partial"
-            ? `${base} · ${lang === "es" ? "parcial" : "partial"} ${t.partial_credit_pct}%`
-            : base;
-    }
-    if (t.status === "pending_review")
-        return lang === "es" ? "Esperando revisión" : "Awaiting review";
-    if (t.status === "missed") return lang === "es" ? "No cumplida" : "Missed";
-    if (t.status === "taken") return lang === "es" ? "Tomada" : "Taken";
-    return lang === "es" ? "Sin hacer" : "Not done yet";
-};
+const statusLabel = (t: any): string => payoutTaskStatusLabel(t, lang);
 const dayLabel = (iso: string): string =>
     new Date(`${iso}T00:00:00`).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
         weekday: "short",
@@ -247,8 +234,8 @@ const dayLabel = (iso: string): string =>
                                                 {Number(w.early_bird_bonus_cents) > 0 && (
                                                     <p class="text-xs font-semibold text-brand-mint-text" data-early-bird-line>
                                                         {lang === "es"
-                                                            ? `incl. +${earlyWeekPct} % madrugador (${fmt(w.early_bird_bonus_cents)})`
-                                                            : `incl. +${earlyWeekPct} % early bird (${fmt(w.early_bird_bonus_cents)})`}
+                                                            ? `incl. +${w.early_bird_week_pct} % madrugador (${fmt(w.early_bird_bonus_cents)})`
+                                                            : `incl. +${w.early_bird_week_pct} % early bird (${fmt(w.early_bird_bonus_cents)})`}
                                                     </p>
                                                 )}
                                             </div>
@@ -311,6 +298,7 @@ const dayLabel = (iso: string): string =>
 
 <script>
 import { normalizeErrorDetail } from "../../lib/errors";
+import { payoutTaskStatusLabel } from "../../lib/payoutTaskStatus";
 
 (function initPayouts() {
     // Read from the cookie rather than define:vars: an inline script cannot
@@ -416,19 +404,6 @@ import { normalizeErrorDetail } from "../../lib/errors";
     };
     const histChipIcon: Record<string, string> = { credited: "✓", pending_review: "⏳", missed: "✗", not_done: "·", taken: "↪" };
 
-    function histStatusLabel(t: any) {
-        if (t.status === "credited") {
-            const base = lang === "es" ? "Completada ✓" : "Completed ✓";
-            return t.grade === "partial"
-                ? `${base} · ${lang === "es" ? "parcial" : "partial"} ${t.partial_credit_pct}%`
-                : base;
-        }
-        if (t.status === "pending_review") return lang === "es" ? "Esperando revisión" : "Awaiting review";
-        if (t.status === "missed") return lang === "es" ? "No cumplida" : "Missed";
-        if (t.status === "taken") return lang === "es" ? "Tomada" : "Taken";
-        return lang === "es" ? "Sin hacer" : "Not done yet";
-    }
-
     function histDayLabel(iso: string) {
         return new Date(`${iso}T00:00:00`).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
             weekday: "short", day: "numeric", month: "short",
@@ -449,7 +424,7 @@ import { normalizeErrorDetail } from "../../lib/errors";
                 <span class="opacity-70">${t.earned_points}/${t.points}</span>
                 <span class="hidden group-hover:block group-focus:block pointer-events-none absolute left-2 right-2 bottom-full mb-1 z-[60] rounded-xl bg-brand-ink text-brand-cream text-left text-xs font-normal p-3 shadow-lg">
                     <span class="block font-bold mb-0.5">${escapeHtml(t.title)}</span>
-                    <span class="block">${histStatusLabel(t)} · ${t.earned_points}/${t.points} pts</span>
+                    <span class="block">${payoutTaskStatusLabel(t, lang)} · ${t.earned_points}/${t.points} pts</span>
                     <span class="block opacity-80">${histDayLabel(t.assigned_date)}</span>
                     ${t.approval_notes ? `<span class="block mt-1 opacity-90">📝 ${escapeHtml(t.approval_notes)}</span>` : ""}
                 </span>

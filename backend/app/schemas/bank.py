@@ -107,6 +107,8 @@ class PayoutPaycheckWeek(BaseModel):
     assigned_points: int
     pct: int
     early_bird_bonus_cents: int = 0
+    # The % behind early_bird_bonus_cents (0 when there is no bonus).
+    early_bird_week_pct: int = 0
     is_current_week: bool
     already_released: bool
     tasks: list[PayoutTaskDetail] = []

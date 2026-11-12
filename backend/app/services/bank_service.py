@@ -586,18 +586,25 @@ class BankService:
     @staticmethod
     async def _early_bird_bonus(
         db: AsyncSession, family_id: UUID, user_id: UUID, week_monday: date, base: int,
-    ) -> int:
-        """Early Bird weekly bonus on a chore paycheck base (0 when off / not
-        earned). Shared by the projection and the release so they cannot drift."""
+        cfg=None,
+    ) -> tuple[int, int]:
+        """(bonus_cents, week_pct) — the Early Bird weekly bonus on a chore
+        paycheck base (0 when off / not earned) and the % it applied. Shared by
+        the projection and the release so they cannot drift. Pass ``cfg`` (an
+        EarlyBirdConfig) when scanning many weeks of one family."""
         from app.services.early_bird_service import EarlyBirdService
 
-        return await EarlyBirdService.week_bonus_cents(
-            db, family_id, user_id, week_monday, base
+        if cfg is None:
+            cfg = await EarlyBirdService.config(db, family_id)
+        bonus = await EarlyBirdService.week_bonus_cents(
+            db, family_id, user_id, week_monday, base, cfg=cfg
         )
+        return bonus, (int(cfg.week_pct) if bonus > 0 else 0)
 
     @staticmethod
     async def _paycheck_projection(
         db: AsyncSession, acct: KidBankAccount, family_id: UUID, week_monday: date,
+        eb_cfg=None,
     ) -> dict:
         """Pure per-week paycheck math shared by chore_paycheck_preview (single,
         current-week-biased) and list_outstanding_weeks (multi-week scan).
@@ -618,16 +625,17 @@ class BankService:
             )
         else:
             amount = 0
-        bonus = 0
+        bonus = bonus_pct = 0
         if mode in CHORE_PAYCHECK_MODES:
-            bonus = await BankService._early_bird_bonus(
-                db, family_id, acct.user_id, week_monday, amount
+            bonus, bonus_pct = await BankService._early_bird_bonus(
+                db, family_id, acct.user_id, week_monday, amount, cfg=eb_cfg
             )
         return {
             "week_of": week_monday,
             "cap_cents": cap,
             "amount_cents": amount + bonus,
             "early_bird_bonus_cents": bonus,
+            "early_bird_week_pct": bonus_pct,
             "done_points": units_to_points(done_u),
             "assigned_points": units_to_points(assigned_u),
             "pct": round(100 * done_u / assigned_u) if assigned_u else 0,
@@ -696,6 +704,9 @@ class BankService:
             .group_by(CashTransaction.week_of)
         )).all())
 
+        from app.services.early_bird_service import EarlyBirdService
+
+        eb_cfg = await EarlyBirdService.config(db, family_id)  # once, not per week
         weeks: list[dict] = []
         for i in range(lookback_weeks - 1, -1, -1):
             week_monday = current_monday - timedelta(weeks=i)
@@ -706,7 +717,7 @@ class BankService:
                 # not here.
                 continue
             projection = await BankService._paycheck_projection(
-                db, acct, family_id, week_monday
+                db, acct, family_id, week_monday, eb_cfg=eb_cfg
             )
             if not is_current and not is_released and projection["assigned_units"] <= 0:
                 continue
@@ -723,6 +734,7 @@ class BankService:
                 "assigned_points": projection["assigned_points"],
                 "pct": projection["pct"],
                 "early_bird_bonus_cents": 0 if is_released else projection["early_bird_bonus_cents"],
+                "early_bird_week_pct": 0 if is_released else projection["early_bird_week_pct"],
                 "is_current_week": is_current,
                 "already_released": is_released,
                 "tasks": tasks,
@@ -919,14 +931,9 @@ class BankService:
             points_converted = min(done // 100, max(0, int(user.points or 0)))
         else:
             base = BankService._chore_paycheck_cents(acct.allowance_cents, done, assigned)
-        bonus = await BankService._early_bird_bonus(
+        bonus, pct_label = await BankService._early_bird_bonus(
             db, family_id, user.id, week_monday, base
         )
-        pct_label = 0
-        if bonus > 0:
-            pct_label = int((await db.execute(
-                select(Family.early_bird_week_pct).where(Family.id == family_id)
-            )).scalar() or 0)
         amount = max(0, base + bonus + int(adjustment_cents or 0))
         # Always leaves a ledger row, even at $0 — a genuinely empty week
         # (kid did nothing, or a chore_gated week that missed the gate)
@@ -939,7 +946,8 @@ class BankService:
             description=(
                 f"Domingo por tareas (semana {week_monday.isoformat()})"
                 + (f" · Folio {reference}" if reference else "")
-                + (f" · +{pct_label}% madrugador" if bonus > 0 and base + bonus + int(adjustment_cents or 0) >= base + bonus else "")
+                # A dock (negative adjustment) eats into the bonus: no label.
+                + (f" · +{pct_label}% madrugador" if bonus > 0 and int(adjustment_cents or 0) >= 0 else "")
             ),
             week_of=week_monday,
         )
