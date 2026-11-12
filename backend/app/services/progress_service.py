@@ -144,7 +144,7 @@ from app.models.task_assignment import ApprovalStatus, AssignmentStatus, TaskAss
 from app.models.task_template import TaskTemplate  # noqa: E402
 from app.models.user import User, UserRole  # noqa: E402
 from app.schemas.progress import DayEntry, ProgressResponse  # noqa: E402
-from app.services.bank_service import _safe_zoneinfo  # noqa: E402
+from app.core.time_utils import safe_zoneinfo  # noqa: E402
 
 XP_POINT_TYPES = (TransactionType.TASK_COMPLETED, TransactionType.BONUS, TransactionType.GIG_APPROVED)
 KID_ROLES = (UserRole.CHILD, UserRole.TEEN)
@@ -153,7 +153,7 @@ KID_ROLES = (UserRole.CHILD, UserRole.TEEN)
 class ProgressService:
     @staticmethod
     async def family_today(db: AsyncSession, family_id: UUID) -> tuple[date, ZoneInfo]:
-        tz = _safe_zoneinfo((await db.execute(select(Family.timezone).where(Family.id == family_id))).scalar())
+        tz = safe_zoneinfo((await db.execute(select(Family.timezone).where(Family.id == family_id))).scalar())
         return datetime.now(tz).date(), tz
 
     @staticmethod

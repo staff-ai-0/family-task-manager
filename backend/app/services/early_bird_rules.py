@@ -9,7 +9,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from app.models.task_assignment import ApprovalStatus, AssignmentStatus
-from app.services.bank_service import PAYCHECK_LOOKBACK_WEEKS, _safe_zoneinfo
+from app.core.time_utils import safe_zoneinfo
 
 STREAK_WEEKS = 3
 R1_BEFORE = timedelta(minutes=60)
@@ -52,7 +52,7 @@ class EarlyBirdConfig:
             bonus_pct=fam.early_bird_bonus_pct,
             week_pct=fam.early_bird_week_pct,
             streak_cents=fam.early_bird_streak_cents,
-            tz=_safe_zoneinfo(fam.timezone),
+            tz=safe_zoneinfo(fam.timezone),
             past_periods=tuple(
                 (datetime.fromisoformat(start), datetime.fromisoformat(end))
                 for start, end in (getattr(fam, "early_bird_past_periods", None) or ())
@@ -89,8 +89,9 @@ def _on_throughout(cfg: EarlyBirdConfig, start: datetime, end: datetime) -> bool
 
 
 # A closed period is kept while a week inside it can still be paid or settled:
-# the paycheck window plus a margin (settlement looks back less than that).
-PAST_PERIOD_KEEP = timedelta(weeks=PAYCHECK_LOOKBACK_WEEKS + 2)
+# bank_service.PAYCHECK_LOOKBACK_WEEKS (8) plus a margin — pinned by a test so
+# this pure module does not import the bank service.
+PAST_PERIOD_KEEP = timedelta(weeks=10)
 assert PAST_PERIOD_KEEP > timedelta(weeks=SETTLE_LOOKBACK_WEEKS + 1)
 
 

@@ -17,12 +17,12 @@ import logging
 from datetime import date, datetime, time, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.time_utils import safe_zoneinfo
 from app.core.grading import (
     grade_credit_points,
     grade_credit_units,
@@ -45,13 +45,6 @@ from app.services.cash_service import (
 from app.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
-
-
-def _safe_zoneinfo(tz_name: Optional[str]) -> ZoneInfo:
-    try:
-        return ZoneInfo(tz_name or "UTC")
-    except Exception:
-        return ZoneInfo("UTC")
 
 
 def _fmt_mxn(cents: int) -> str:
@@ -140,7 +133,7 @@ class BankService:
     @staticmethod
     def _next_payday(tz_name: Optional[str], payday_weekday: int):
         """(next_payday_date, days_until) in the family-local timezone."""
-        local_now = datetime.now(_safe_zoneinfo(tz_name))
+        local_now = datetime.now(safe_zoneinfo(tz_name))
         days = (payday_weekday - local_now.weekday()) % 7
         return (local_now.date() + timedelta(days=days)), days
 
@@ -588,7 +581,7 @@ class BankService:
         tz_name = (await db.execute(
             select(Family.timezone).where(Family.id == family_id)
         )).scalar()
-        return datetime.now(_safe_zoneinfo(tz_name)).date()
+        return datetime.now(safe_zoneinfo(tz_name)).date()
 
     @staticmethod
     async def _early_bird_bonus(
@@ -1198,7 +1191,7 @@ class BankService:
         )).all()
         paid = 0
         for fid, tz_name in families:
-            tz = _safe_zoneinfo(tz_name)
+            tz = safe_zoneinfo(tz_name)
             local_now = datetime.now(tz)
             if local_now.hour < 8:  # pay after 08:00 local, not at midnight
                 continue

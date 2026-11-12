@@ -22,7 +22,7 @@ from app.models.reward import RedemptionStatus, RewardRedemption
 from app.models.task_assignment import ApprovalStatus, AssignmentStatus, TaskAssignment
 from app.models.task_template import TaskTemplate
 from app.models.user import User, UserRole
-from app.services.bank_service import _safe_zoneinfo
+from app.core.time_utils import safe_zoneinfo
 from app.services.notification_service import NotificationService
 from app.services.progress_service import KID_ROLES, ProgressService, compute_streak
 from app.services.quest_service import ChoreRow, QuestService, bonus_state, chore_state, week_monday
@@ -258,7 +258,7 @@ class PingService:
             # One family failing (here, before its kids are even listed) must
             # not cost every family after it their reminders.
             try:
-                tz = _safe_zoneinfo(fam.timezone)
+                tz = safe_zoneinfo(fam.timezone)
                 local_now = now.astimezone(tz)
                 if not in_ping_window(local_now):
                     continue
