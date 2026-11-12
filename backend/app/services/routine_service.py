@@ -28,7 +28,6 @@ from app.core.exceptions import (
     NotFoundException,
     ValidationException,
 )
-from app.models.point_transaction import PointTransaction, TransactionType
 from app.models.routine import (
     TIME_OF_DAY_VALUES,
     Routine,
@@ -36,7 +35,6 @@ from app.models.routine import (
     RoutineStep,
 )
 from app.models.user import User, UserRole
-from app.services.base_service import get_user_by_id
 
 
 def _norm_icon(value: Optional[str], fallback: str) -> str:
@@ -567,19 +565,10 @@ class RoutineService:
         flip are atomic."""
         points = int(routine.points_reward or 0)
         if points > 0:
-            fresh = await get_user_by_id(db, user.id)
-            before = fresh.points
-            fresh.points = before + points
-            db.add(
-                PointTransaction(
-                    type=TransactionType.BONUS,
-                    user_id=user.id,
-                    family_id=fresh.family_id,
-                    points=points,
-                    balance_before=before,
-                    balance_after=fresh.points,
-                    description=f"Routine completed: {routine.name}",
-                )
+            from app.services.points_service import PointsService
+
+            await PointsService.award_bonus_points(
+                db, user.id, user.family_id, points, f"Routine completed: {routine.name}",
             )
 
         # Feed the pet through the shared hook (best-effort; never breaks the

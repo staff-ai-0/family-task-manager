@@ -22,7 +22,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.modules import effective_modules
 from app.models.family import Family
 from app.models.gig import GigClaim, GigClaimStatus, GigOffering, GigOfferingStatus
-from app.models.point_transaction import PointTransaction, TransactionType
 from app.models.task_assignment import ApprovalStatus, AssignmentStatus, TaskAssignment
 from app.models.task_template import TaskTemplate
 from app.models.user import User, UserRole
@@ -289,25 +288,10 @@ class QuestService:
         )).first()
         bonus = int(quest.bonus_points or 0)
         if paid is not None and bonus > 0:
-            kid = await PointsService._get_user_locked(db, quest.user_id, quest.family_id)
-            # The row is now locked, but `kid` may be the SAME object the
-            # request's `get_current_user` already loaded into this session
-            # earlier (identity map, `expire_on_commit=False`) — the locked
-            # SELECT resolves to it without refreshing its attributes, so
-            # `.points` can still read as of auth time. Refresh explicitly so
-            # the award lands on the current balance.
-            await db.refresh(kid)
-            before = int(kid.points or 0)
-            kid.points = before + bonus
-            db.add(PointTransaction(
-                type=TransactionType.BONUS,
-                user_id=kid.id,
-                family_id=kid.family_id,
-                points=bonus,
-                balance_before=before,
-                balance_after=kid.points,
-                description="Misión semanal lograda" if lang == "es" else "Weekly quest completed",
-            ))
+            await PointsService.award_bonus_points(
+                db, quest.user_id, quest.family_id, bonus,
+                "Misión semanal lograda" if lang == "es" else "Weekly quest completed",
+            )
         await db.commit()
         await db.refresh(quest)
 
