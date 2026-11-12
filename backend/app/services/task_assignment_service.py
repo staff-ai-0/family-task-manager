@@ -2714,6 +2714,10 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 "PATCH only allows status=pending or status=cancelled. Use /complete to mark completed."
             )
 
+        # Whoever earned the chore's credit, captured before a reassignment
+        # in this same call moves the row to someone else.
+        credited_to = assignment.assigned_to
+
         if assigned_to is not None:
             new_user = await get_user_by_id(db, assigned_to)
             if new_user.family_id != family_id:
@@ -2744,16 +2748,15 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 if not template.is_bonus and assignment.approval_status in (
                     ApprovalStatus.NONE, ApprovalStatus.APPROVED
                 ):
-                    # Mandatory chores credited effective_points at completion
-                    # (or approval). Reviving/cancelling must claw those back,
-                    # otherwise revive + re-complete double-credits.
+                    # Mandatory chores credited points at completion (or
+                    # approval). Reviving/cancelling must claw those back,
+                    # otherwise revive + re-complete double-credits. The
+                    # amount is what the ledger credited — a partial grade
+                    # paid less than effective_points, and the template may
+                    # have been re-priced since.
                     from app.services.points_service import PointsService
-                    await PointsService.award_assignment_completion(
-                        db,
-                        assignment.assigned_to,
-                        family_id,
-                        assignment.id,
-                        -template.effective_points,
+                    await PointsService.reverse_assignment_completion(
+                        db, family_id, assignment.id
                     )
                     n = assignment.early_bonus_points
                     if isinstance(n, int) and n > 0:
@@ -2761,7 +2764,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                         # and clears the marker so a later award is possible.
                         await PointsService.award_bonus_points(
                             db,
-                            assignment.assigned_to,
+                            credited_to,
                             family_id,
                             -n,
                             f"Madrugador revertido -{n}",

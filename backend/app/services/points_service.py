@@ -166,6 +166,40 @@ class PointsService:
         return transaction
 
     @staticmethod
+    async def reverse_assignment_completion(
+        db: AsyncSession,
+        family_id: UUID,
+        assignment_id: UUID,
+    ) -> int:
+        """Take back what the ledger credited for one chore completion.
+
+        Nets the assignment's TASK_COMPLETED rows per kid and posts one
+        negating row for each non-zero net. The amount comes from the ledger,
+        not the template: an approval may have paid a partial grade, and the
+        parent may have re-priced the chore since. Returns the total reversed.
+        Caller commits.
+        """
+        rows = (await db.execute(
+            select(PointTransaction.user_id, func.sum(PointTransaction.points))
+            .where(
+                PointTransaction.family_id == family_id,
+                PointTransaction.assignment_id == assignment_id,
+                PointTransaction.type == TransactionType.TASK_COMPLETED,
+            )
+            .group_by(PointTransaction.user_id)
+        )).all()
+        reversed_total = 0
+        for user_id, net in rows:
+            net = int(net or 0)
+            if net == 0:
+                continue
+            await PointsService.award_assignment_completion(
+                db, user_id, family_id, assignment_id, -net
+            )
+            reversed_total += net
+        return reversed_total
+
+    @staticmethod
     async def deduct_points_for_reward(
         db: AsyncSession,
         user_id: UUID,

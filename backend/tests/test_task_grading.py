@@ -329,3 +329,53 @@ async def test_approval_notification_carries_grade_and_notes(
     assert (pushes[0]["title"], pushes[0]["body"]) == (
         push_title or title, push_body or body,
     )
+
+
+@pytest.mark.asyncio
+async def test_reopen_partial_chore_claws_back_only_what_was_paid(
+    db_session, test_family, test_parent_user, test_child_user,
+):
+    """A 20-pt chore approved at 50% credited 10 pts. Reopening it must take
+    back those 10 — not the template's full 20 — so the kid lands exactly
+    where they started."""
+    chore = await _make_chore_template(db_session, test_family, points=20)
+    a = await _make_pending(db_session, test_family, test_child_user, chore)
+    await db_session.refresh(test_child_user)
+    before = test_child_user.points
+
+    await TaskAssignmentService.approve_gig(
+        db_session, a.id, test_family.id, test_parent_user.id,
+        approve=True, grade="partial", partial_credit_pct=50,
+    )
+    await db_session.refresh(test_child_user)
+    assert test_child_user.points == before + 10
+
+    await TaskAssignmentService.patch_assignment(
+        db_session, a.id, test_family.id, status=AssignmentStatus.PENDING,
+    )
+    await db_session.refresh(test_child_user)
+    assert test_child_user.points == before
+
+
+@pytest.mark.asyncio
+async def test_cancel_claws_back_credit_even_after_template_points_change(
+    db_session, test_family, test_parent_user, test_child_user,
+):
+    """The clawback is what the ledger credited for THIS assignment, not the
+    template's current value — a parent may re-price the chore in between."""
+    chore = await _make_chore_template(db_session, test_family, points=20)
+    a = await _make_pending(db_session, test_family, test_child_user, chore)
+    await db_session.refresh(test_child_user)
+    before = test_child_user.points
+
+    await TaskAssignmentService.approve_gig(
+        db_session, a.id, test_family.id, test_parent_user.id, approve=True,
+    )
+    chore.points = 50
+    await db_session.commit()
+
+    await TaskAssignmentService.patch_assignment(
+        db_session, a.id, test_family.id, status=AssignmentStatus.CANCELLED,
+    )
+    await db_session.refresh(test_child_user)
+    assert test_child_user.points == before
