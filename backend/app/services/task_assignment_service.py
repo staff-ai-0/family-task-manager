@@ -43,6 +43,7 @@ TAKEN_ROW_LOCKED = (
     "cancelled or deleted"
 )
 
+
 class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
     """Service for task assignment operations including shuffle and gating"""
 
