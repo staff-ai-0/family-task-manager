@@ -6,6 +6,7 @@ Business logic for point transaction management.
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
+from sqlalchemy import inspect as sa_inspect
 from typing import List, Optional
 from uuid import UUID
 
@@ -43,7 +44,27 @@ class PointsService:
         )).scalar_one_or_none()
         if user is None:
             raise NotFoundException("User not found")
+        if not sa_inspect(user).attrs.points.history.has_changes():
+            # An identity-map hit (e.g. the request's auth user, loaded in an
+            # earlier transaction under expire_on_commit=False) keeps its old
+            # balance through the locked SELECT; re-read it now that the row
+            # is locked. A pending change is an earlier award in THIS
+            # transaction (sessions run autoflush=False) and must be kept, so
+            # populate_existing would be wrong here.
+            await db.refresh(user, attribute_names=["points"])
         return user
+
+    @staticmethod
+    async def _credit(db: AsyncSession, user_id: UUID, family_id: UUID, points: int,
+                      make_transaction) -> PointTransaction:
+        """The one read-modify-write behind every award: lock the balance, write
+        the ledger row ``make_transaction(balance_before)`` builds, move the
+        balance. Caller commits."""
+        user = await PointsService._get_user_locked(db, user_id, family_id)
+        transaction = make_transaction(user.points)
+        user.points += points
+        db.add(transaction)
+        return transaction
 
     @staticmethod
     async def get_user_balance(db: AsyncSession, user_id: UUID) -> int:
@@ -70,21 +91,12 @@ class PointsService:
         Returns:
             Created PointTransaction
         """
-        # Get user (row-locked: concurrent awards must serialize)
-        user = await PointsService._get_user_locked(db, user_id, family_id)
-
-        # Create transaction
-        transaction = PointTransaction.create_task_completion(
-            user_id=user_id,
-            family_id=family_id,
-            points=points,
-            balance_before=user.points,
+        transaction = await PointsService._credit(
+            db, user_id, family_id, points,
+            lambda before: PointTransaction.create_task_completion(
+                user_id=user_id, family_id=family_id, points=points, balance_before=before,
+            ),
         )
-
-        # Update user balance
-        user.points += points
-
-        db.add(transaction)
         await db.commit()
         await db.refresh(transaction)
 
@@ -104,18 +116,13 @@ class PointsService:
         `points` may be negative — used to claw back over-awarded points when a
         collaboration gig is re-split among more completers.
         """
-        user = await PointsService._get_user_locked(db, user_id, family_id)
-        transaction = PointTransaction.create_gig_approval(
-            user_id=user_id,
-            family_id=family_id,
-            assignment_id=assignment_id,
-            points=points,
-            balance_before=user.points,
-            description=description,
+        return await PointsService._credit(
+            db, user_id, family_id, points,
+            lambda before: PointTransaction.create_gig_approval(
+                user_id=user_id, family_id=family_id, assignment_id=assignment_id,
+                points=points, balance_before=before, description=description,
+            ),
         )
-        user.points += points
-        db.add(transaction)
-        return transaction
 
     @staticmethod
     async def award_bonus_points(
@@ -126,19 +133,16 @@ class PointsService:
         description: str,
         assignment_id=None,
     ) -> PointTransaction:
-        """Credit BONUS points (e.g. Early Bird). Caller commits."""
-        user = await PointsService._get_user_locked(db, user_id, family_id)
-        transaction = PointTransaction.create_bonus(
-            user_id=user_id,
-            family_id=family_id,
-            points=points,
-            balance_before=user.points,
-            description=description,
-            assignment_id=assignment_id,
+        """Credit BONUS points (Early Bird, weekly quest, mystery box,
+        routine). Caller commits."""
+        return await PointsService._credit(
+            db, user_id, family_id, points,
+            lambda before: PointTransaction.create_bonus(
+                user_id=user_id, family_id=family_id, points=points,
+                balance_before=before, description=description,
+                assignment_id=assignment_id,
+            ),
         )
-        user.points += points
-        db.add(transaction)
-        return transaction
 
     @staticmethod
     async def award_assignment_completion(
@@ -153,17 +157,13 @@ class PointsService:
         Caller commits. Mirrors award_gig_points (no commit) so it composes
         inside complete_assignment's single transaction.
         """
-        user = await PointsService._get_user_locked(db, user_id, family_id)
-        transaction = PointTransaction.create_assignment_completion(
-            user_id=user_id,
-            family_id=family_id,
-            assignment_id=assignment_id,
-            points=points,
-            balance_before=user.points,
+        return await PointsService._credit(
+            db, user_id, family_id, points,
+            lambda before: PointTransaction.create_assignment_completion(
+                user_id=user_id, family_id=family_id, assignment_id=assignment_id,
+                points=points, balance_before=before,
+            ),
         )
-        user.points += points
-        db.add(transaction)
-        return transaction
 
     @staticmethod
     async def reverse_assignment_completion(

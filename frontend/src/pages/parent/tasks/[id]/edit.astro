@@ -4,6 +4,7 @@ import { apiFetch } from "../../../../lib/api";
 import { isFreePlan } from "../../../../lib/plan";
 import { t } from "../../../../lib/i18n";
 import { buttonClass } from "../../../../lib/buttonClasses";
+import EveningChoreToggle from "../../../../components/tasks/EveningChoreToggle.astro";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -393,21 +394,7 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                     </div>
                 </div>
 
-                <div class="flex items-center gap-3 py-1" id="evening-wrap" hidden={tmpl.is_bonus}>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input
-                            type="checkbox"
-                            name="early_bird_exempt"
-                            class="sr-only peer"
-                            checked={tmpl.early_bird_exempt}
-                        />
-                        <div class="w-9 h-5 bg-brand-cream-deep rounded-full peer peer-checked:bg-brand-sky-deep peer-focus:ring-2 peer-focus:ring-sky-300 transition-colors after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-brand-cream after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
-                    </label>
-                    <div>
-                        <span class="text-sm font-medium text-brand-ink">{lang === "es" ? "Tarea de la tarde — sin hora límite" : "Evening chore — no deadline"}</span>
-                        <p class="text-xs text-brand-ink-soft">{lang === "es" ? "Queda fuera del plazo del madrugador." : "Exempt from the early-bird deadline."}</p>
-                    </div>
-                </div>
+                <EveningChoreToggle lang={lang} wrapId="evening-wrap" name="early_bird_exempt" checked={tmpl.early_bird_exempt} hidden={tmpl.is_bonus} />
 
                 <div>
                     <label class="text-sm font-medium text-brand-ink mb-1 block">

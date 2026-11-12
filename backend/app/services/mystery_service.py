@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundException, ValidationError
 from app.models.family import Family
 from app.models.mystery import MysteryBox, MysterySurprise
-from app.models.point_transaction import PointTransaction, TransactionType
 from app.models.user import User
 from app.schemas.progress import DeliveryView, MysteryBoxView, MysteryResponse
 from app.services.points_service import PointsService
@@ -146,16 +145,11 @@ class MysteryService:
             .execution_options(synchronize_session=False)
         )).first()
         if opened is not None and values["kind"] == "points":
-            kid = await PointsService._get_user_locked(db, user_id, family_id)
-            await db.refresh(kid)                      # identity map may hold the auth-time balance
-            before = int(kid.points or 0)
-            kid.points = before + values["points"]
             lang = (user.preferred_lang or "en").lower()
-            db.add(PointTransaction(
-                type=TransactionType.BONUS, user_id=kid.id, family_id=family_id, points=values["points"],
-                balance_before=before, balance_after=kid.points,
-                description="Caja sorpresa" if lang.startswith("es") else "Mystery box",
-            ))
+            await PointsService.award_bonus_points(
+                db, user_id, family_id, values["points"],
+                "Caja sorpresa" if lang.startswith("es") else "Mystery box",
+            )
         await db.commit()
         await db.refresh(box)
         return _view(box)

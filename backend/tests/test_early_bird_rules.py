@@ -200,3 +200,11 @@ def test_from_family_reads_past_periods():
     c = EarlyBirdConfig.from_family(fam)
     assert c.past_periods == ((datetime(2026, 10, 1, tzinfo=timezone.utc),
                                datetime(2026, 10, 20, 12, tzinfo=timezone.utc)),)
+
+
+def test_past_periods_outlive_the_paycheck_window():
+    """A closed period must be kept while a week in it can still be paid."""
+    from app.services.bank_service import PAYCHECK_LOOKBACK_WEEKS
+    from app.services.early_bird_rules import PAST_PERIOD_KEEP
+
+    assert PAST_PERIOD_KEEP > timedelta(weeks=PAYCHECK_LOOKBACK_WEEKS)

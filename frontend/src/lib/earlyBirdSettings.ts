@@ -53,3 +53,15 @@ export function buildPayload(f: EarlyBirdForm): { ok: true; body: Record<string,
         },
     };
 }
+
+/** Parent-facing "today" line per teen (/api/early-bird/family). Worded for
+ * the parent, so deliberately not the kid's dayLabel in lib/earlyBird.ts. */
+const TEEN_TODAY = {
+    es: { early: "Hoy: a tiempo", pending: "Hoy: en espera", open: "Hoy: en curso", missed: "Hoy: se pasó", neutral: "Hoy: sin tareas" },
+    en: { early: "Today: on time", pending: "Today: waiting", open: "Today: in progress", missed: "Today: missed", neutral: "Today: no chores" },
+} as const;
+
+export function teenTodayLabel(state: unknown, lang: string): string {
+    const labels: Record<string, string> = TEEN_TODAY[lang === "es" ? "es" : "en"];
+    return typeof state === "string" ? labels[state] ?? "" : "";
+}

@@ -5,8 +5,6 @@
  */
 export type Lang = "es" | "en";
 
-export const RUN_TARGET = 3;
-
 export type DayState = "early" | "pending" | "open" | "missed" | "neutral" | "future";
 export type CardState = "early" | "on_track" | "before_deadline" | "late" | "missed" | "idle";
 
@@ -110,7 +108,7 @@ export function earlyBirdCopy(lang: Lang) {
 }
 
 /** "45 min" / "1 h 05 min"; never negative. */
-export function countdownLabel(target: Date, now: Date, _lang: Lang): string {
+export function countdownLabel(target: Date, now: Date): string {
     const mins = Math.max(0, Math.floor((target.getTime() - now.getTime()) / 60000));
     if (mins < 60) return `${mins} min`;
     const h = Math.floor(mins / 60);
@@ -120,6 +118,22 @@ export function countdownLabel(target: Date, now: Date, _lang: Lang): string {
 export function takeErrorMessage(detail: string, lang: Lang): string {
     const c = earlyBirdCopy(lang);
     return c.errors[detail] ?? c.takeFailed;
+}
+
+/** The reason key of a failed take: the API's error body carries it in
+ * "message" (FamilyAppException handlers) or "detail" (FastAPI). */
+export function takeErrorReason(body: any): string {
+    const reason = body?.message ?? body?.detail;
+    return typeof reason === "string" ? reason : "";
+}
+
+/** Progress toward the next streak payout: run_weeks modulo the API's
+ * streak_weeks (the backend STREAK_WEEKS — never a copy here). Works on the
+ * kid's /me payload and on a /family teen row alike. */
+export function runProgress(src: any): { done: number; target: number } {
+    const target = Math.max(0, Math.trunc(Number(src?.streak_weeks) || 0));
+    if (!target) return { done: 0, target: 0 };
+    return { done: Math.max(0, Math.trunc(Number(src?.run_weeks) || 0)) % target, target };
 }
 
 /** Why the caller can take none of the grabs (`take_block` from the API), or
@@ -179,14 +193,14 @@ export function earlyBirdView(me: any, lang: Lang, now: Date): EarlyBirdView | n
     }[state];
 
     const target = state === "on_track" ? cutoff : state === "before_deadline" ? deadline : null;
-    const countdown = target ? countdownLabel(target, now, lang) : "";
+    const countdown = target ? countdownLabel(target, now) : "";
 
     const dots: DotView[] = (Array.isArray(me?.week) ? me.week : []).map((w: any) => {
         const s = (w?.state in c.dayGlyph ? w.state : "future") as DayState;
         return { date: String(w?.date ?? ""), state: s, glyph: c.dayGlyph[s], label: c.dayLabel[s] };
     });
 
-    const run = Math.max(0, Math.trunc(Number(me?.run_weeks) || 0)) % RUN_TARGET;
+    const run = runProgress(me);
     const streakCents = Math.max(0, Math.trunc(Number(me?.streak_cents) || 0));
 
     return {
@@ -197,7 +211,7 @@ export function earlyBirdView(me: any, lang: Lang, now: Date): EarlyBirdView | n
         countdownText: countdown ? c.left(countdown) : "",
         deadlineLabel: String(me?.deadline ?? ""),
         dots,
-        runText: `${run}/${RUN_TARGET}`,
+        runText: run.target ? `${run.done}/${run.target}` : "",
         runLabel: c.run,
         bonusLabel: streakCents > 0 ? c.bonus(money(streakCents, lang)) : "",
         weekPct: Math.max(0, Math.round(Number(me?.week_pct) || 0)),

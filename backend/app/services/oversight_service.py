@@ -19,6 +19,7 @@ from app.models.consequence import Consequence
 from app.models.gig import GigClaim, GigClaimStatus
 from app.models.notification import Notification, NotificationType
 from app.models.task_assignment import (
+    CLOSED_STATUSES,
     ApprovalStatus,
     AssignmentStatus,
     TaskAssignment,
@@ -62,8 +63,8 @@ class OversightService:
     ) -> dict[UUID, tuple[int, int, int]]:
         """Per kid (total, done, open) over today's NON-bonus assignments — the
         set get_daily_progress counts as required_total / required_completed.
-        Cancelled rows count in the total and never as done, exactly like the
-        kid's own "N/M hoy"; open = PENDING or OVERDUE."""
+        Closed rows (cancelled, taken by a sibling) are left out, exactly like
+        the kid's own "N/M hoy"; open = PENDING or OVERDUE."""
         q = (
             select(
                 TaskAssignment.assigned_to,
@@ -80,6 +81,7 @@ class OversightService:
                 TaskAssignment.family_id == family_id,
                 TaskAssignment.assigned_date == today,
                 TaskTemplate.is_bonus.is_(False),
+                TaskAssignment.status.notin_(CLOSED_STATUSES),
             )
             .group_by(TaskAssignment.assigned_to)
         )

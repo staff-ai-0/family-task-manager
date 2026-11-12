@@ -206,14 +206,14 @@ class TestWhoAndWhen:
         today = _wednesday()
         await _at_risk_kid(db_session, test_child_user, today)
         from app.services import ping_service
-        real = ping_service._safe_zoneinfo
+        real = ping_service.safe_zoneinfo
 
         def flaky(name):
             if name == "Etc/GMT+1":
                 raise RuntimeError("boom")
             return real(name)
 
-        with patch.object(ping_service, "_safe_zoneinfo", side_effect=flaky):
+        with patch.object(ping_service, "safe_zoneinfo", side_effect=flaky):
             assert await PingService.run_evening_sweep(db_session, now=_at(today, 18)) == 1
 
     async def test_a_teen_is_pinged_like_a_child(self, db_session, test_family, test_teen_user):

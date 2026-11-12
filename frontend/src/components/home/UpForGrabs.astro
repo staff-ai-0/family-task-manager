@@ -38,7 +38,7 @@ const blockedHint = takeBlockHint(takeBlock, lang);
 <script>
     import { queueToast } from "../../lib/dialogs";
     import { showToast } from "../../lib/toast";
-    import { earlyBirdCopy, takeErrorMessage } from "../../lib/earlyBird";
+    import { earlyBirdCopy, takeErrorMessage, takeErrorReason } from "../../lib/earlyBird";
 
     function initUpForGrabs() {
         const root = document.querySelector<HTMLElement>("[data-up-for-grabs]");
@@ -59,14 +59,13 @@ const blockedHint = takeBlockHint(takeBlock, lang);
                         window.location.reload();
                         return;
                     }
-                    let detail = "";
+                    let reason = "";
                     try {
-                        const body = await res.json();
-                        detail = typeof body?.detail === "string" ? body.detail : "";
+                        reason = takeErrorReason(await res.json());
                     } catch {
                         /* non-JSON error body */
                     }
-                    showToast(takeErrorMessage(detail, lang), "error");
+                    showToast(takeErrorMessage(reason, lang), "error");
                 } catch {
                     showToast(earlyBirdCopy(lang).takeFailed, "error");
                 }

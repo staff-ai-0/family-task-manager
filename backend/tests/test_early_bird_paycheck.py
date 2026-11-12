@@ -188,3 +188,38 @@ async def test_current_week_bonus_counts_from_sunday_r1(ctx):
     after = datetime.combine(sunday, time(10, 30), tzinfo=MX)
     assert await EarlyBirdService.week_bonus_cents(db, fam.id, kid.id, monday, 4000, before) == 0
     assert await EarlyBirdService.week_bonus_cents(db, fam.id, kid.id, monday, 4000, after) == 200
+
+
+@pytest.mark.asyncio
+async def test_outstanding_weeks_carry_the_week_pct(ctx):
+    """The payouts page labels '+N % madrugador' from the week itself, not from
+    a second family fetch with a hard-coded fallback."""
+    db, fam, kid, last = ctx
+    await _setup(db, fam, kid, week_pct=7)
+    await _four_early(db, fam, kid, last)
+    weeks = await BankService.list_outstanding_weeks(db, kid, fam.id)
+    w = next(x for x in weeks if x["week_of"] == last)
+    assert w["early_bird_bonus_cents"] > 0 and w["early_bird_week_pct"] == 7
+
+
+@pytest.mark.asyncio
+async def test_outstanding_scan_loads_early_bird_config_once(ctx):
+    """8 lookback weeks must not reload the family's Early Bird config 8 times."""
+    from sqlalchemy import event
+
+    db, fam, kid, last = ctx
+    await _four_early(db, fam, kid, last)
+    await _four_early(db, fam, kid, last - timedelta(days=7))
+    loads = []
+
+    def count(conn, cursor, statement, *args):
+        if "early_bird_deadline" in statement and "FROM families" in statement:
+            loads.append(statement)
+
+    engine = db.bind.sync_engine
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        await BankService.list_outstanding_weeks(db, kid, fam.id)
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+    assert len(loads) == 1, len(loads)

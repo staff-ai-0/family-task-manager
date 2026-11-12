@@ -246,3 +246,28 @@ async def test_prize_is_fixed_when_the_week_settles(ctx):
     assert await _credits(db, kid) == []
     await db.refresh(kid)
     assert kid.cash_cents == 0
+
+
+@pytest.mark.asyncio
+async def test_settled_window_costs_one_query_per_tick(ctx):
+    """The sweep runs every 5 minutes: once a teen's lookback weeks are all
+    settled, re-checking them must be a single read, not one per week."""
+    from sqlalchemy import event
+
+    db, fam, kid = ctx
+    await _build(db, fam, kid, ["early", "missed", "early"])
+    await EarlyBirdService.run_sweep(db, _now())
+    cfg = await EarlyBirdService.config(db, fam.id)
+    statements = []
+
+    def count(conn, cursor, statement, *args):
+        statements.append(statement)
+
+    engine = db.bind.sync_engine
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        settled, paid = await EarlyBirdService._settle(db, cfg, fam.id, kid.id, _now())
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+    assert (settled, paid) == (0, 0)
+    assert len(statements) == 1, statements

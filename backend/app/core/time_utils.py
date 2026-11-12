@@ -8,6 +8,8 @@ through TaskAssignmentService._family_local_today (family timezone); pure
 bookkeeping dates use these UTC helpers.
 """
 from datetime import date, datetime, timezone
+from typing import Optional
+from zoneinfo import ZoneInfo
 
 
 def utcnow() -> datetime:
@@ -18,3 +20,11 @@ def utcnow() -> datetime:
 def utc_today() -> date:
     """Today's date on the UTC clock (host-timezone independent)."""
     return datetime.now(timezone.utc).date()
+
+
+def safe_zoneinfo(tz_name: Optional[str]) -> ZoneInfo:
+    """ZoneInfo for a stored family timezone; UTC when unset or unknown."""
+    try:
+        return ZoneInfo(tz_name or "UTC")
+    except Exception:
+        return ZoneInfo("UTC")

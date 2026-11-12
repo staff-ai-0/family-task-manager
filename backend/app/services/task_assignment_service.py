@@ -14,7 +14,7 @@ from datetime import datetime, date, timedelta, timezone
 from uuid import UUID
 
 from app.models.task_template import TaskTemplate, AssignmentType
-from app.models.task_assignment import TaskAssignment, AssignmentStatus, ApprovalStatus
+from app.models.task_assignment import CLOSED_STATUSES, TaskAssignment, AssignmentStatus, ApprovalStatus
 from app.models.user import User, APPROVAL_APPROVED
 from app.models.point_transaction import PointTransaction, TransactionType
 from app.core.exceptions import (
@@ -212,9 +212,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     TaskAssignment.family_id == family_id,
                     TaskAssignment.week_of >= start,
                     TaskAssignment.week_of < week_monday,
-                    TaskAssignment.status.notin_(
-                        (AssignmentStatus.CANCELLED, AssignmentStatus.TAKEN)
-                    ),
+                    TaskAssignment.status.notin_(CLOSED_STATUSES),
                 )
             )
             .group_by(TaskAssignment.assigned_to)
@@ -2829,8 +2827,11 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             db, family_id, check_date, user_id
         )
 
-        required_assignments = [a for a in assignments if not a.template.is_bonus]
-        bonus_assignments = [a for a in assignments if a.template.is_bonus]
+        # Closed rows (cancelled, taken by a sibling) are not to do — counting
+        # them would keep "N/M today" from ever completing.
+        live = [a for a in assignments if a.status not in CLOSED_STATUSES]
+        required_assignments = [a for a in live if not a.template.is_bonus]
+        bonus_assignments = [a for a in live if a.template.is_bonus]
 
         required_completed = sum(
             1 for a in required_assignments if a.status == AssignmentStatus.COMPLETED

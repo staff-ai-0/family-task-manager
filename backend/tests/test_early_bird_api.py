@@ -152,7 +152,7 @@ async def test_take_endpoint_409_race(
     assert first.status_code == 200
     h = await _login(client, other.email)
     second = await client.post(f"/api/early-bird/grabs/{a.id}/take", headers=h)
-    assert second.status_code == 409 and second.json()["detail"] == "already_taken"
+    assert second.status_code == 409 and second.json()["message"] == "already_taken"
 
 
 async def test_take_own_chore_403(client, db_session, test_family, test_teen_user, after_deadline):
@@ -160,7 +160,7 @@ async def test_take_own_chore_403(client, db_session, test_family, test_teen_use
     a = await _chore(db_session, test_family, test_teen_user, _today())
     r = await client.post(f"/api/early-bird/grabs/{a.id}/take",
                           headers=await _login(client, "teen@test.com"))
-    assert r.status_code == 403 and r.json()["detail"] == "own_chore"
+    assert r.status_code == 403 and r.json()["message"] == "own_chore"
 
 
 async def test_take_before_deadline_400(client, db_session, test_family, test_teen_user,
@@ -171,7 +171,7 @@ async def test_take_before_deadline_400(client, db_session, test_family, test_te
     monkeypatch.setattr(EarlyBirdService, "_now", staticmethod(lambda now=None: now or early))
     r = await client.post(f"/api/early-bird/grabs/{a.id}/take",
                           headers=await _login(client, "child@test.com"))
-    assert r.status_code == 400 and r.json()["detail"] == "not_grabbable"
+    assert r.status_code == 400 and r.json()["message"] == "not_grabbable"
 
 
 async def test_take_cross_family_404(client, db_session, test_family, test_child_user,
@@ -207,7 +207,7 @@ async def test_family_overview_parent_only(client, db_session, test_family, test
     rows = r.json()
     assert [x["user_id"] for x in rows] == [str(test_teen_user.id)]
     assert set(rows[0]) == {"user_id", "name", "today", "week", "week_result", "run_weeks",
-                          "weeks_to_payout"}
+                          "weeks_to_payout", "streak_weeks"}
     assert len(rows[0]["week"]) == 7
 
 

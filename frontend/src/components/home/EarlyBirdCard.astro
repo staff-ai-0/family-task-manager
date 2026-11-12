@@ -65,7 +65,7 @@ const dotCls: Record<string, string> = {
                 if (timer) window.clearInterval(timer);
                 return;
             }
-            label.textContent = earlyBirdCopy(lang).left(countdownLabel(target, now, lang));
+            label.textContent = earlyBirdCopy(lang).left(countdownLabel(target, now));
         };
         timer = window.setInterval(tick, 30000);
     }

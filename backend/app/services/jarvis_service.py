@@ -39,7 +39,7 @@ from app.models.kid_pet import KidPet
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.user import User, UserRole
 from app.services.analytics_service import AnalyticsService
-from app.services.bank_service import _safe_zoneinfo
+from app.core.time_utils import safe_zoneinfo
 from app.services.guide_context import build_support_context
 from app.services.jarvis_pending_action_service import PendingActionService
 from app.core.time_utils import utc_today
@@ -203,7 +203,7 @@ async def _family_today(db: AsyncSession, family_id: UUID) -> date:
     tz_name = (
         await db.execute(select(Family.timezone).where(Family.id == family_id))
     ).scalar_one_or_none()
-    return datetime.now(_safe_zoneinfo(tz_name)).date()
+    return datetime.now(safe_zoneinfo(tz_name)).date()
 
 
 MAX_HISTORY_TURNS = 12

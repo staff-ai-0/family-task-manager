@@ -8,6 +8,7 @@
  */
 import { TASK_PRESETS } from "@lib/task-presets";
 import { buttonClass } from "@lib/buttonClasses";
+import EveningChoreToggle from "./tasks/EveningChoreToggle.astro";
 
 interface Props {
     lang: "en" | "es";
@@ -292,18 +293,7 @@ const dowLabels = lang === "es"
                 </div>
 
                 <!-- 5b. Early bird exemption (hidden for bonus tasks) -->
-                <div class="flex items-center gap-3 py-1" id="tcm-evening-wrap">
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input id="tcm-evening" type="checkbox" class="sr-only peer" />
-                        <div class="w-9 h-5 bg-brand-cream-deep rounded-full peer peer-checked:bg-brand-sky-deep peer-focus:ring-2 peer-focus:ring-sky-300 transition-colors after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-brand-cream after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
-                    </label>
-                    <div>
-                        <span class="text-sm font-medium text-brand-ink">{lang === "es" ? "Tarea de la tarde — sin hora límite" : "Evening chore — no deadline"}</span>
-                        <p class="text-xs text-brand-ink-soft">
-                            {lang === "es" ? "Queda fuera del plazo del madrugador." : "Exempt from the early-bird deadline."}
-                        </p>
-                    </div>
-                </div>
+                <EveningChoreToggle lang={lang} wrapId="tcm-evening-wrap" inputId="tcm-evening" />
 
                 <!-- Points (explicit at create time, not silently zeroed) -->
                 <div class="flex items-center gap-3 py-1">

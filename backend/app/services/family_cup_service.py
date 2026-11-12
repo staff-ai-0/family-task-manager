@@ -37,6 +37,7 @@ from app.models.family import Family
 from app.models.family_cup import FamilyCupSeason
 from app.models.point_transaction import PointTransaction
 from app.models.task_assignment import (
+    CLOSED_STATUSES,
     ApprovalStatus,
     AssignmentStatus,
     TaskAssignment,
@@ -235,14 +236,9 @@ class FamilyCupService:
                     .where(
                         and_(
                             base_where,
-                            TaskAssignment.status.notin_(
-                                (
-                                    AssignmentStatus.CANCELLED,
-                                    # Early Bird: the owner's row is a miss;
-                                    # the taker's row carries the chore.
-                                    AssignmentStatus.TAKEN,
-                                )
-                            ),
+                            # Early Bird: the owner's TAKEN row is a miss;
+                            # the taker's row carries the chore.
+                            TaskAssignment.status.notin_(CLOSED_STATUSES),
                         )
                     )
                 )

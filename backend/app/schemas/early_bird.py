@@ -48,3 +48,4 @@ class FamilyTeen(BaseModel):
     week_result: str
     run_weeks: int
     weeks_to_payout: int
+    streak_weeks: int

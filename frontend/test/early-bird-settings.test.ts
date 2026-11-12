@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPayload, centsToPesos, daysFromFamily, daysToPayload, pesosToCents } from "../src/lib/earlyBirdSettings";
+import { buildPayload, centsToPesos, daysFromFamily, daysToPayload, pesosToCents, teenTodayLabel } from "../src/lib/earlyBirdSettings";
 
 const base = { enabled: true, deadline: "11:00", days: [0, 1, 2, 3, 4, 5, 6], bonusPct: 20, weekPct: 5, streakPesos: 500 };
 
@@ -27,5 +27,16 @@ describe("early bird settings", () => {
         expect(buildPayload({ ...base, bonusPct: 101 })).toEqual({ ok: false, field: "bonus" });
         expect(buildPayload({ ...base, weekPct: 51 })).toEqual({ ok: false, field: "week" });
         expect(buildPayload({ ...base, streakPesos: 10001 })).toEqual({ ok: false, field: "streak" });
+    });
+});
+
+describe("teenTodayLabel", () => {
+    it("words a teen's day for the parent", () => {
+        expect(teenTodayLabel("early", "es")).toBe("Hoy: a tiempo");
+        expect(teenTodayLabel("missed", "en")).toBe("Today: missed");
+    });
+    it("is empty for no state or an unknown one", () => {
+        expect(teenTodayLabel(null, "es")).toBe("");
+        expect(teenTodayLabel("future", "en")).toBe("");
     });
 });

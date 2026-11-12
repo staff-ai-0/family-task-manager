@@ -40,6 +40,14 @@ class AssignmentStatus(str, enum.Enum):
     TAKEN = "taken"  # Early Bird: the original owner lost it to someone who took it
 
 
+# A row nobody still has to do: waived (CANCELLED) or handed over (TAKEN — the
+# taker's own row carries the chore). Neither "to do" nor "done", so to-do
+# counters and lists leave them out. Ledger-style readers that must still see
+# a taken chore as the owner's loss (paycheck units, streak, pings) test TAKEN
+# themselves on purpose.
+CLOSED_STATUSES = (AssignmentStatus.CANCELLED, AssignmentStatus.TAKEN)
+
+
 class ApprovalStatus(str, enum.Enum):
     """Gig approval lifecycle."""
     NONE = "none"
