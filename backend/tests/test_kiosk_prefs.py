@@ -341,3 +341,34 @@ class TestOnboardingFlyerStep:
         assert state.flyer_scanned is True
         # all_done must NOT depend on the optional flyer step
         assert state.all_done is False
+
+
+class TestSnapshotClosedRows:
+    @pytest.mark.asyncio
+    async def test_cancelled_and_taken_chores_are_not_listed_as_to_do(
+        self, client, db_session, test_family, test_child_user, kiosk_device
+    ):
+        from datetime import datetime, timedelta
+        from uuid import uuid4
+        from zoneinfo import ZoneInfo
+
+        from app.models.task_assignment import AssignmentStatus, TaskAssignment
+        from app.models.task_template import AssignmentType, TaskTemplate
+
+        tz = ZoneInfo(test_family.timezone or "UTC")
+        today = datetime.now(tz).date()
+        t = TaskTemplate(id=uuid4(), title="Dishes", points=10, interval_days=1,
+                         assignment_type=AssignmentType.AUTO, is_bonus=False,
+                         is_active=True, family_id=test_family.id)
+        db_session.add(t)
+        await db_session.flush()
+        for st in (AssignmentStatus.PENDING, AssignmentStatus.CANCELLED, AssignmentStatus.TAKEN):
+            db_session.add(TaskAssignment(
+                family_id=test_family.id, template_id=t.id, assigned_to=test_child_user.id,
+                status=st, assigned_date=today, week_of=today - timedelta(days=today.weekday())))
+        await db_session.commit()
+
+        data = (await client.get(f"/api/kiosk/snapshot?token={kiosk_device.token}")).json()
+        kid = next(m for m in data["members"] if m["id"] == str(test_child_user.id))
+        assert kid["tasks_today"] == 1
+        assert len([x for x in data["tasks"] if x["title"] == "Dishes"]) == 1

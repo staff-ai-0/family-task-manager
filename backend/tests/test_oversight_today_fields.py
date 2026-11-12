@@ -48,6 +48,7 @@ async def _seed_mixed_day(db, family, kid):
     await _assign(db, fid, chore, kid, today, AssignmentStatus.COMPLETED)
     await _assign(db, fid, chore, kid, today, AssignmentStatus.COMPLETED, ApprovalStatus.PENDING)
     await _assign(db, fid, chore, kid, today, AssignmentStatus.CANCELLED)
+    await _assign(db, fid, chore, kid, today, AssignmentStatus.TAKEN)
     await _assign(db, fid, bonus, kid, today, AssignmentStatus.PENDING)
     await _assign(db, fid, chore, kid, today - timedelta(days=1), AssignmentStatus.OVERDUE)
     await _assign(db, fid, chore, kid, today - timedelta(days=3), AssignmentStatus.PENDING)
@@ -73,8 +74,9 @@ class TestTodayCounts:
         overdue = await TaskAssignmentService.list_open_mandatory_before(
             db_session, test_child_user.id, test_family.id, today,
         )
-        # pending + completed + completed-awaiting-approval + cancelled (bonus excluded)
-        assert card.required_total_today == progress["required_total"] == 4
+        # pending + completed + completed-awaiting-approval; closed rows
+        # (cancelled, taken by a sibling) are neither to do nor done.
+        assert card.required_total_today == progress["required_total"] == 3
         assert card.required_done_today == progress["required_completed"] == 2
         assert card.required_open_today == 1
         assert card.overdue_count == len(overdue) == 2

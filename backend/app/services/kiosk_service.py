@@ -31,7 +31,7 @@ from app.models.gig import GigClaim, GigClaimStatus, GigOffering
 from app.models.kiosk_device import KioskDevice
 from app.models.point_transaction import PointTransaction
 from app.models.shopping import ShoppingItem, ShoppingList
-from app.models.task_assignment import AssignmentStatus, TaskAssignment
+from app.models.task_assignment import CLOSED_STATUSES, AssignmentStatus, TaskAssignment
 from app.models.user import UserRole
 from app.schemas.kiosk import (
     KidChore,
@@ -227,7 +227,7 @@ class KioskService:
                     TaskAssignment.family_id == family_id,
                     TaskAssignment.assigned_to == member.id,
                     TaskAssignment.assigned_date == today_local,
-                    TaskAssignment.status != AssignmentStatus.CANCELLED,
+                    TaskAssignment.status.notin_(CLOSED_STATUSES),
                 )
             )
         )
@@ -360,6 +360,7 @@ class KioskService:
                 and_(
                     TaskAssignment.family_id == family_id,
                     TaskAssignment.assigned_date == today_local,
+                    TaskAssignment.status.notin_(CLOSED_STATUSES),
                 )
             )
         )
