@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countdownLabel, earlyBirdCopy, earlyBirdView, takeBlockHint, takeErrorMessage, takeErrorReason, paycheckBonusLine } from "../src/lib/earlyBird";
+import { countdownLabel, earlyBirdCopy, earlyBirdView, runProgress, takeBlockHint, takeErrorMessage, takeErrorReason, paycheckBonusLine } from "../src/lib/earlyBird";
 
 const d = (s: string) => new Date(s);
 
@@ -21,7 +21,7 @@ const me = (over: Record<string, unknown> = {}) => ({
     ],
     week_result: "in_progress",
     run_weeks: 1,
-    streak_weeks: 1,
+    streak_weeks: 3,
     streak_cents: 0,
     week_pct: 5,
     bonus_pct: 20,
@@ -33,13 +33,13 @@ const me = (over: Record<string, unknown> = {}) => ({
 
 describe("countdownLabel", () => {
     it("minutes only under an hour", () => {
-        expect(countdownLabel(d("2026-11-09T11:00:00-06:00"), d("2026-11-09T10:15:00-06:00"), "es")).toBe("45 min");
+        expect(countdownLabel(d("2026-11-09T11:00:00-06:00"), d("2026-11-09T10:15:00-06:00"))).toBe("45 min");
     });
     it("hours and zero-padded minutes", () => {
-        expect(countdownLabel(d("2026-11-09T11:00:00-06:00"), d("2026-11-09T09:55:00-06:00"), "en")).toBe("1 h 05 min");
+        expect(countdownLabel(d("2026-11-09T11:00:00-06:00"), d("2026-11-09T09:55:00-06:00"))).toBe("1 h 05 min");
     });
     it("past target reads as zero", () => {
-        expect(countdownLabel(d("2026-11-09T11:00:00-06:00"), d("2026-11-09T11:30:00-06:00"), "es")).toBe("0 min");
+        expect(countdownLabel(d("2026-11-09T11:00:00-06:00"), d("2026-11-09T11:30:00-06:00"))).toBe("0 min");
     });
 });
 
@@ -90,6 +90,10 @@ describe("earlyBirdView", () => {
         )!;
         expect(v.applies).toBe(false);
         expect(v.grabs).toHaveLength(1);
+    });
+    it("run target comes from the API, not a frontend copy", () => {
+        const v = earlyBirdView(me({ run_weeks: 5, streak_weeks: 4 }), "es", d("2026-11-09T09:00:00-06:00"))!;
+        expect(v.runText).toBe("1/4");
     });
     it("run text is progress toward the next payout (run % 3)", () => {
         const t = (r: number) => earlyBirdView(me({ run_weeks: r }), "es", d("2026-11-09T09:00:00-06:00"))!.runText;
@@ -148,5 +152,15 @@ describe("takeErrorReason", () => {
     it("is empty for anything else", () => {
         expect(takeErrorReason(null)).toBe("");
         expect(takeErrorReason({ detail: [{ msg: "x" }] })).toBe("");
+    });
+});
+
+describe("runProgress", () => {
+    it("is the run toward the next payout, sized by the API", () => {
+        expect(runProgress({ run_weeks: 4, streak_weeks: 3 })).toEqual({ done: 1, target: 3 });
+        expect(runProgress({ run_weeks: 0, streak_weeks: 3 })).toEqual({ done: 0, target: 3 });
+    });
+    it("has no target when the API sends none", () => {
+        expect(runProgress({ run_weeks: 2 })).toEqual({ done: 0, target: 0 });
     });
 });

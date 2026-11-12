@@ -207,7 +207,7 @@ async def test_family_overview_parent_only(client, db_session, test_family, test
     rows = r.json()
     assert [x["user_id"] for x in rows] == [str(test_teen_user.id)]
     assert set(rows[0]) == {"user_id", "name", "today", "week", "week_result", "run_weeks",
-                          "weeks_to_payout"}
+                          "weeks_to_payout", "streak_weeks"}
     assert len(rows[0]["week"]) == 7
 
 

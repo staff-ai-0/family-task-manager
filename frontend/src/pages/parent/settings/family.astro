@@ -2,7 +2,8 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../lib/api";
 import { buttonClass } from "../../../lib/buttonClasses";
-import { centsToPesos, daysFromFamily } from "../../../lib/earlyBirdSettings";
+import { centsToPesos, daysFromFamily, teenTodayLabel } from "../../../lib/earlyBirdSettings";
+import { runProgress } from "../../../lib/earlyBird";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -27,9 +28,6 @@ const ebDayNames = lang === "es" ? ["L", "M", "X", "J", "V", "S", "D"] : ["M", "
 const ebDayLong = lang === "es"
     ? ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     : ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const ebTodayLabel: Record<string, string> = lang === "es"
-    ? { early: "Hoy: a tiempo", pending: "Hoy: en espera", open: "Hoy: en curso", missed: "Hoy: se pasó", neutral: "Hoy: sin tareas", future: "" }
-    : { early: "Today: on time", pending: "Today: waiting", open: "Today: in progress", missed: "Today: missed", neutral: "Today: no chores", future: "" };
 
 // Common North-American + Latin-American zones bubbled to the top, then everything else.
 const PRIORITY_TZ = [
@@ -288,14 +286,16 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
                     const week: any[] = Array.isArray(t.week) ? t.week : [];
                     const early = week.filter((d) => d.state === "early").length;
                     const counted = week.filter((d) => !["neutral", "future", "open"].includes(d.state)).length;
+                    const today = teenTodayLabel(t.today, lang);
+                    const run = runProgress(t);
                     return (
                         <li class="py-2 text-sm text-brand-ink flex flex-wrap items-center justify-between gap-x-3">
                             <span class="font-semibold">{t.name}</span>
                             <span class="text-xs text-brand-ink-soft">
-                                {ebTodayLabel[t.today] ?? ""}{ebTodayLabel[t.today] ? " · " : ""}
+                                {today}{today ? " · " : ""}
                                 {lang === "es" ? `${early}/${counted} días temprano` : `${early}/${counted} days early`}
-                                {" · "}
-                                {lang === "es" ? `racha ${(t.run_weeks ?? 0) % 3}/3 semanas` : `run ${(t.run_weeks ?? 0) % 3}/3 weeks`}
+                                {run.target > 0 && " · "}
+                                {run.target > 0 && (lang === "es" ? `racha ${run.done}/${run.target} semanas` : `run ${run.done}/${run.target} weeks`)}
                             </span>
                         </li>
                     );

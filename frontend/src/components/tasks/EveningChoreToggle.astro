@@ -1,0 +1,28 @@
+---
+/**
+ * "Evening chore — no deadline" switch (task_templates.early_bird_exempt):
+ * the chore stays out of the Early Bird deadline. Shared by the create modal
+ * and the template edit page; each page drives it by its own ids / form name.
+ */
+interface Props {
+    lang: "es" | "en" | string;
+    wrapId: string;
+    inputId?: string;
+    name?: string;
+    checked?: boolean;
+    hidden?: boolean;
+}
+const { lang, wrapId, inputId, name, checked = false, hidden = false } = Astro.props;
+const es = lang === "es";
+---
+
+<div class="flex items-center gap-3 py-1" id={wrapId} hidden={hidden}>
+    <label class="relative inline-flex items-center cursor-pointer">
+        <input id={inputId} name={name} type="checkbox" class="sr-only peer" checked={checked} />
+        <div class="w-9 h-5 bg-brand-cream-deep rounded-full peer peer-checked:bg-brand-sky-deep peer-focus:ring-2 peer-focus:ring-sky-300 transition-colors after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-brand-cream after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+    </label>
+    <div>
+        <span class="text-sm font-medium text-brand-ink">{es ? "Tarea de la tarde — sin hora límite" : "Evening chore — no deadline"}</span>
+        <p class="text-xs text-brand-ink-soft">{es ? "Queda fuera del plazo del madrugador." : "Exempt from the early-bird deadline."}</p>
+    </div>
+</div>
