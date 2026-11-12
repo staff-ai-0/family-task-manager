@@ -122,6 +122,13 @@ export function takeErrorMessage(detail: string, lang: Lang): string {
     return c.errors[detail] ?? c.takeFailed;
 }
 
+/** The reason key of a failed take: the API's error body carries it in
+ * "message" (FamilyAppException handlers) or "detail" (FastAPI). */
+export function takeErrorReason(body: any): string {
+    const reason = body?.message ?? body?.detail;
+    return typeof reason === "string" ? reason : "";
+}
+
 /** Why the caller can take none of the grabs (`take_block` from the API), or
  * null. Lets the list disable its Take buttons instead of failing on tap. */
 export function takeBlockHint(block: string | null | undefined, lang: Lang): string | null {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countdownLabel, earlyBirdCopy, earlyBirdView, takeBlockHint, takeErrorMessage, paycheckBonusLine } from "../src/lib/earlyBird";
+import { countdownLabel, earlyBirdCopy, earlyBirdView, takeBlockHint, takeErrorMessage, takeErrorReason, paycheckBonusLine } from "../src/lib/earlyBird";
 
 const d = (s: string) => new Date(s);
 
@@ -137,5 +137,16 @@ describe("takeBlockHint", () => {
     it("is null when nothing blocks the caller", () => {
         expect(takeBlockHint(null, "es")).toBeNull();
         expect(takeBlockHint("", "en")).toBeNull();
+    });
+});
+
+describe("takeErrorReason", () => {
+    it("reads the reason key from the API error body", () => {
+        expect(takeErrorReason({ error: "conflict", message: "already_taken", status_code: 409 })).toBe("already_taken");
+        expect(takeErrorReason({ detail: "kids_only" })).toBe("kids_only");
+    });
+    it("is empty for anything else", () => {
+        expect(takeErrorReason(null)).toBe("");
+        expect(takeErrorReason({ detail: [{ msg: "x" }] })).toBe("");
     });
 });
