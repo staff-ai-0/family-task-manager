@@ -1,4 +1,5 @@
 """Early Bird: up-for-grabs list and take-over."""
+import asyncio
 from datetime import date, datetime, time, timedelta, timezone
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -279,7 +280,7 @@ async def test_taken_row_cannot_be_patched(ctx):
     await EarlyBirdService.take(db, fam_id, taker, a_id, now=_at(day, 11, 5))
     for kw in ({"status": AssignmentStatus.PENDING}, {"status": AssignmentStatus.CANCELLED},
                {"assigned_to": taker_id}, {"assigned_date": day + timedelta(days=1)}):
-        with pytest.raises(ValidationException, match="taken_row_locked"):
+        with pytest.raises(ValidationException, match="Madrugador"):
             await TaskAssignmentService.patch_assignment(db, a_id, fam_id, **kw)
         await db.rollback()
     a = await db.get(TaskAssignment, a_id, populate_existing=True)
@@ -294,7 +295,7 @@ async def test_taken_row_cannot_be_deleted(ctx):
     a_id, fam_id = a.id, fam.id
     row = await EarlyBirdService.take(db, fam_id, taker, a_id, now=_at(day, 11, 5))
     row_id = row.id
-    with pytest.raises(ValidationException, match="taken_row_locked"):
+    with pytest.raises(ValidationException, match="Madrugador"):
         await TaskAssignmentService.delete_by_id(db, a_id, fam_id)
     await db.rollback()
     assert (await db.get(TaskAssignment, a_id)) is not None
@@ -312,3 +313,62 @@ async def test_chore_taken_notification_uses_owner_language(ctx):
     n = (await db.execute(select(Notification).where(
         Notification.user_id == owner.id, Notification.type == "chore_taken"))).scalars().one()
     assert "Lavar platos" in (n.title + (n.body or ""))
+
+
+async def test_takers_row_cannot_be_moved_cancelled_or_deleted(ctx):
+    """The taker's row holds the chore now: cancelling, moving or deleting it
+    would leave the owner's row TAKEN with nobody doing the chore."""
+    db, fam, owner, taker, tpl, a, day = ctx
+    fam_id, owner_id = fam.id, owner.id
+    row = await EarlyBirdService.take(db, fam_id, taker, a.id, now=_at(day, 11, 5))
+    row_id = row.id
+    for kw in ({"status": AssignmentStatus.CANCELLED}, {"assigned_to": owner_id},
+               {"assigned_date": day + timedelta(days=1)}):
+        with pytest.raises(ValidationException, match="Madrugador"):
+            await TaskAssignmentService.patch_assignment(db, row_id, fam_id, **kw)
+        await db.rollback()
+    with pytest.raises(ValidationException, match="Madrugador"):
+        await TaskAssignmentService.delete_by_id(db, row_id, fam_id)
+    await db.rollback()
+    row = await db.get(TaskAssignment, row_id, populate_existing=True)
+    assert row is not None and row.status == AssignmentStatus.PENDING
+
+
+async def test_takers_completed_row_can_still_be_reopened(ctx):
+    """Sending the taker's own work back for a redo keeps the chore with them."""
+    db, fam, owner, taker, tpl, a, day = ctx
+    fam_id = fam.id
+    row = await EarlyBirdService.take(db, fam_id, taker, a.id, now=_at(day, 11, 5))
+    row_id = row.id
+    row.status = AssignmentStatus.COMPLETED
+    row.completed_at = _at(day, 12, 0)
+    await db.commit()
+    out = await TaskAssignmentService.patch_assignment(
+        db, row_id, fam_id, status=AssignmentStatus.PENDING)
+    assert out.status == AssignmentStatus.PENDING
+
+
+async def test_two_takes_at_once_leave_the_kid_with_one(ctx, test_engine):
+    """'Finish yours first' must hold under a double tap on two grabs."""
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    db, fam, owner, taker, tpl, a, day = ctx
+    tpl2 = await _tpl(db, fam, title="Trash")
+    b = await _assign(db, owner, tpl2, day)
+    fam_id, taker_id, ids = fam.id, taker.id, (a.id, b.id)
+    factory = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def one(aid):
+        async with factory() as s:
+            kid = (await s.execute(select(User).where(User.id == taker_id))).scalar_one()
+            return await EarlyBirdService.take(s, fam_id, kid, aid, now=_at(day, 11, 5))
+
+    results = await asyncio.gather(*(one(i) for i in ids), return_exceptions=True)
+    taken = [r for r in results if isinstance(r, TaskAssignment)]
+    refused = [r for r in results if isinstance(r, ForbiddenException)]
+    assert len(taken) == 1 and len(refused) == 1, results
+    assert "finish_yours_first" in str(refused[0])
+    held = (await db.execute(select(TaskAssignment).where(
+        TaskAssignment.assigned_to == taker_id,
+        TaskAssignment.taken_from_id.is_not(None)))).scalars().all()
+    assert len(held) == 1

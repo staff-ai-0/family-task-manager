@@ -134,10 +134,15 @@ class BaseFamilyService(Generic[ModelType]):
         """
         # First verify entity exists and belongs to family
         entity = await cls.get_by_id(db, entity_id, family_id)
+        cls._check_deletable(entity)
 
         # Delete the entity
         await db.delete(entity)
         await db.commit()
+
+    @classmethod
+    def _check_deletable(cls, entity: ModelType) -> None:
+        """Hook: raise to refuse deleting ``entity``. Default allows it."""
 
     @classmethod
     async def update_by_id(

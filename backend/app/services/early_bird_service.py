@@ -247,6 +247,10 @@ class EarlyBirdService:
             raise ConflictException("already_taken")
         if owner_row.assigned_to == taker.id:
             raise ForbiddenException("own_chore")
+        # Serialize one kid's takes: "finish yours first" below reads the
+        # taker's open chores, and two takes of different grabs at once would
+        # otherwise both see none. Locked after the owner row (fixed order).
+        await db.execute(select(User.id).where(User.id == taker.id).with_for_update())
 
         cfg = await EarlyBirdService.config(db, family_id)
         now = EarlyBirdService._now(now)
