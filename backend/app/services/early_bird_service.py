@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from types import SimpleNamespace
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 from uuid import UUID
@@ -24,7 +23,6 @@ from app.models.cash_transaction import CashTransactionType
 from app.models.early_bird_week import EarlyBirdWeek
 from app.models.family import Family
 from app.models.notification import NotificationType as NT
-from app.models.point_transaction import PointTransaction  # noqa: F401
 from app.models.task_assignment import AssignmentStatus, TaskAssignment
 from app.models.task_template import TaskTemplate
 from app.models.user import User, UserRole
@@ -42,6 +40,7 @@ from app.services.early_bird_rules import (
     is_active_day,
     pays_streak,
     reminder_stage,
+    role_may_take,
     week_bonus,
     week_eligible,
     week_result,
@@ -58,6 +57,7 @@ class GrabRow:
     points: int
     owner_id: UUID
     owner_name: str
+    allowed_roles: Optional[list[str]] = None
 
 
 class EarlyBirdService:
@@ -67,6 +67,21 @@ class EarlyBirdService:
     async def config(db: AsyncSession, family_id: UUID) -> EarlyBirdConfig:
         fam = (await db.execute(select(Family).where(Family.id == family_id))).scalar_one()
         return EarlyBirdConfig.from_family(fam)
+
+    @staticmethod
+    async def _members(db: AsyncSession, family_id: UUID, roles) -> list:
+        """(id, name, role) of the family's participating members in ``roles``,
+        by name. Plain rows, not ORM entities: a sweep rollback would expire
+        entities mid-loop."""
+        from app.services.task_assignment_service import TaskAssignmentService as TAS
+
+        return (await db.execute(
+            select(User.id, User.name, User.role).where(
+                User.family_id == family_id,
+                User.role.in_(roles),
+                TAS._participating_member_clause(),
+            ).order_by(User.name)
+        )).all()
 
     @staticmethod
     def _covered_stmt(
@@ -133,13 +148,22 @@ class EarlyBirdService:
         single place a week's result is computed. Days without covered rows are
         absent (neutral). A review still pending counts once the week is
         PENDING_GRACE_DAYS past its end."""
+        rows = await EarlyBirdService.covered_rows(
+            db, cfg, family_id, user_id, monday, monday + timedelta(days=6)
+        )
+        return EarlyBirdService._week_from_rows(cfg, rows, monday, now)
+
+    @staticmethod
+    def _week_from_rows(
+        cfg: EarlyBirdConfig, rows: list[CoveredRow], monday: date, now: datetime
+    ) -> tuple[str, dict[date, str]]:
+        """week_status over already-fetched covered rows of that week."""
         sunday = monday + timedelta(days=6)
         today = now.astimezone(cfg.tz).date()
         # Controller ruling: a week is "over" for early-bird purposes at
         # Sunday's R1 (the early cutoff) — nothing earlier can still change.
         week_over = now >= day_times(cfg, sunday).r1
         grace = today > sunday + timedelta(days=PENDING_GRACE_DAYS)
-        rows = await EarlyBirdService.covered_rows(db, cfg, family_id, user_id, monday, sunday)
         by_day: dict[date, list[str]] = {}
         for r in rows:
             by_day.setdefault(r.assigned_date, []).append(
@@ -159,10 +183,12 @@ class EarlyBirdService:
         monday: date,
         base_cents: int,
         now: Optional[datetime] = None,
+        cfg: Optional[EarlyBirdConfig] = None,
     ) -> int:
         """The +week_pct % on a chore paycheck of ``base_cents`` (0 unless the
-        week is a clean early week)."""
-        cfg = await EarlyBirdService.config(db, family_id)
+        week is a clean early week). Pass ``cfg`` when scanning many weeks."""
+        if cfg is None:
+            cfg = await EarlyBirdService.config(db, family_id)
         if not cfg.enabled or cfg.week_pct <= 0 or base_cents <= 0:
             return 0
         result, _ = await EarlyBirdService.week_status(
@@ -202,9 +228,30 @@ class EarlyBirdService:
                 points=int(a.template.effective_points),
                 owner_id=a.assigned_to,
                 owner_name=a.assigned_user.name,
+                allowed_roles=a.template.allowed_roles,
             )
             for a in (await db.execute(stmt)).scalars().all()
         ]
+
+    @staticmethod
+    async def _not_kid(db: AsyncSession, taker: User) -> bool:
+        from app.services.task_assignment_service import TaskAssignmentService as TAS
+
+        if taker.role not in (UserRole.CHILD, UserRole.TEEN):
+            return True
+        participates = (await db.execute(
+            select(func.count()).select_from(User).where(
+                User.id == taker.id, TAS._participating_member_clause())
+        )).scalar_one()
+        return not participates
+
+    @staticmethod
+    async def _has_own_open(db: AsyncSession, taker: User, today: Optional[date]) -> bool:
+        from app.services.task_assignment_service import TaskAssignmentService as TAS
+
+        if today is None:
+            today = await TAS._family_local_today(db, taker.family_id)
+        return await TAS.has_open_mandatory_through(db, taker.id, taker.family_id, today)
 
     @staticmethod
     async def can_take(
@@ -212,21 +259,23 @@ class EarlyBirdService:
         today: Optional[date] = None,
     ) -> Optional[str]:
         """Reason key the taker may not take this chore, or None."""
-        from app.services.task_assignment_service import TaskAssignmentService as TAS
-
-        if taker.role not in (UserRole.CHILD, UserRole.TEEN):
+        if await EarlyBirdService._not_kid(db, taker):
             return "not_kid"
-        participates = (await db.execute(
-            select(func.count()).select_from(User).where(
-                User.id == taker.id, TAS._participating_member_clause())
-        )).scalar_one()
-        if not participates:
-            return "not_kid"
-        if template.allowed_roles and taker.role.value not in template.allowed_roles:
+        if not role_may_take(template.allowed_roles, taker.role.value):
             return "role_not_allowed"
-        if today is None:
-            today = await TAS._family_local_today(db, taker.family_id)
-        if await TAS.has_open_mandatory_through(db, taker.id, taker.family_id, today):
+        if await EarlyBirdService._has_own_open(db, taker, today):
+            return "finish_yours_first"
+        return None
+
+    @staticmethod
+    async def caller_block(
+        db: AsyncSession, taker: User, today: Optional[date] = None
+    ) -> Optional[str]:
+        """Why the taker can take NO grab at all (not_kid / finish_yours_first),
+        or None — the per-chore role rule is can_take's."""
+        if await EarlyBirdService._not_kid(db, taker):
+            return "not_kid"
+        if await EarlyBirdService._has_own_open(db, taker, today):
             return "finish_yours_first"
         return None
 
@@ -308,9 +357,10 @@ class EarlyBirdService:
         week_status; never recomputes rules."""
         today = now.astimezone(cfg.tz).date()
         monday = today - timedelta(days=today.weekday())
-        result, days = await EarlyBirdService.week_status(
-            db, cfg, family_id, user_id, monday, now
+        rows = await EarlyBirdService.covered_rows(
+            db, cfg, family_id, user_id, monday, monday + timedelta(days=6)
         )
+        result, days = EarlyBirdService._week_from_rows(cfg, rows, monday, now)
         week = []
         for i in range(7):
             d = monday + timedelta(days=i)
@@ -331,6 +381,12 @@ class EarlyBirdService:
             "week_result": result,
             "run_weeks": int(last or 0),
             "weeks_to_payout": STREAK_WEEKS - (int(last or 0) % STREAK_WEEKS),
+            "streak_weeks": STREAK_WEEKS,
+            "open_today": sum(
+                1 for r in rows
+                if r.assigned_date == today
+                and r.status in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE)
+            ),
         }
 
     @staticmethod
@@ -366,20 +422,9 @@ class EarlyBirdService:
         if user.role == UserRole.TEEN:
             out["applies"] = True
             out.update(await EarlyBirdService._teen_view(db, cfg, user.family_id, user.id, now))
-            if is_active_day(cfg, today):
-                todays = await EarlyBirdService.covered_rows(
-                    db, cfg, user.family_id, user.id, today, today)
-                out["open_today"] = sum(
-                    1 for r in todays
-                    if r.status in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE))
 
         rows = await EarlyBirdService.grabbable(db, user.family_id, now)
         if rows:
-            allowed = dict((await db.execute(
-                select(TaskAssignment.id, TaskTemplate.allowed_roles)
-                .join(TaskTemplate, TaskTemplate.id == TaskAssignment.template_id)
-                .where(TaskAssignment.id.in_([g.assignment_id for g in rows]))
-            )).all())
             es = (getattr(user, "preferred_lang", None) or "en") == "es"
             out["grabs"] = [
                 {
@@ -389,39 +434,22 @@ class EarlyBirdService:
                     "owner_name": g.owner_name,
                 }
                 for g in rows
-                if g.owner_id != user.id
-                and (not allowed.get(g.assignment_id) or user.role.value in allowed[g.assignment_id])
+                if g.owner_id != user.id and role_may_take(g.allowed_roles, user.role.value)
             ]
             if out["grabs"]:
-                out["take_block"] = await EarlyBirdService._caller_block(db, user, today)
+                out["take_block"] = await EarlyBirdService.caller_block(db, user, today)
         return out
-
-    @staticmethod
-    async def _caller_block(db, user: User, today: date) -> Optional[str]:
-        """Caller-level take block: not_kid / finish_yours_first, else None."""
-        reason = await EarlyBirdService.can_take(
-            db, user, SimpleNamespace(allowed_roles=None), today
-        )
-        return reason if reason in ("not_kid", "finish_yours_first") else None
 
     @staticmethod
     async def family_overview(
         db: AsyncSession, parent: User, now: Optional[datetime] = None
     ) -> list[dict]:
         """One entry per participating TEEN of the parent's family."""
-        from app.services.task_assignment_service import TaskAssignmentService as TAS
-
         now = EarlyBirdService._now(now)
         cfg = await EarlyBirdService.config(db, parent.family_id)
         if not cfg.enabled:
             return []
-        teens = (await db.execute(
-            select(User).where(
-                User.family_id == parent.family_id,
-                User.role == UserRole.TEEN,
-                TAS._participating_member_clause(),
-            ).order_by(User.name)
-        )).scalars().all()
+        teens = await EarlyBirdService._members(db, parent.family_id, (UserRole.TEEN,))
         out = []
         for t in teens:
             view = await EarlyBirdService._teen_view(db, cfg, parent.family_id, t.id, now)
@@ -509,15 +537,7 @@ class EarlyBirdService:
 
     @staticmethod
     async def _sweep_settle(db, cfg, fam_id, now, out) -> None:
-        from app.services.task_assignment_service import TaskAssignmentService as TAS
-
-        teens = (await db.execute(
-            select(User.id).where(
-                User.family_id == fam_id,
-                User.role == UserRole.TEEN,
-                TAS._participating_member_clause(),
-            )
-        )).scalars().all()
+        teens = [m.id for m in await EarlyBirdService._members(db, fam_id, (UserRole.TEEN,))]
         for uid in teens:
             try:
                 settled, paid = await EarlyBirdService._settle(db, cfg, fam_id, uid, now)
@@ -529,18 +549,10 @@ class EarlyBirdService:
 
     @staticmethod
     async def _sweep_reminders(db, cfg, fam_id, now, today, out) -> None:
-        from app.services.task_assignment_service import TaskAssignmentService as TAS
-
         times = day_times(cfg, today)
         stage = reminder_stage(now, times)
         if stage in ("r1", "r2"):
-            teens = (await db.execute(
-                select(User.id).where(
-                    User.family_id == fam_id,
-                    User.role == UserRole.TEEN,
-                    TAS._participating_member_clause(),
-                )
-            )).scalars().all()
+            teens = [m.id for m in await EarlyBirdService._members(db, fam_id, (UserRole.TEEN,))]
             since = times.r1 if stage == "r1" else times.r2
             for uid in teens:
                 try:
@@ -558,33 +570,31 @@ class EarlyBirdService:
     # ------------------------------------------------------------- settlement
 
     @staticmethod
-    async def settle_teen(db, cfg, family_id, user_id, now) -> int:
-        """Settle every finished, undecided week of one teen (oldest first) and
-        pay the streak bonus. Returns the number of payouts."""
-        return (await EarlyBirdService._settle(db, cfg, family_id, user_id, now))[1]
-
-    @staticmethod
     async def _settle(db, cfg, family_id, user_id, now) -> tuple[int, int]:
-        """(weeks settled, payouts). Idempotent: UNIQUE(user_id, week_of) +
-        ON CONFLICT DO NOTHING for the row, guarded UPDATE (paid_at IS NULL)
-        for the money."""
-        if not cfg.enabled:
-            return 0, 0
+        """(weeks settled, payouts) for one teen's finished weeks, oldest first.
+        Idempotent: UNIQUE(user_id, week_of) + ON CONFLICT DO NOTHING for the
+        row, guarded UPDATE (paid_at IS NULL) for the money. One query when
+        every week in the window is already settled (the 5-minute steady
+        state); ineligible weeks are skipped without touching the DB."""
         this_monday = now.astimezone(cfg.tz).date()
         this_monday -= timedelta(days=this_monday.weekday())
+        first = this_monday - timedelta(weeks=SETTLE_LOOKBACK_WEEKS)
+        weeks = await EarlyBirdService._week_rows(
+            db, user_id, first - timedelta(days=7), this_monday - timedelta(days=7)
+        )
         settled = paid = 0
         for k in range(SETTLE_LOOKBACK_WEEKS, 0, -1):
             monday = this_monday - timedelta(weeks=k)
-            existing = await EarlyBirdService._week_row(db, user_id, monday)
+            existing = weeks.get(monday)
             if existing is None:
+                if not week_eligible(cfg, monday):
+                    continue
                 result, _ = await EarlyBirdService.week_status(
                     db, cfg, family_id, user_id, monday, now
                 )
-                if result == "ineligible":
-                    continue
                 if result in ("pending", "in_progress"):
                     break  # later weeks wait so runs are computed in order
-                prev = await EarlyBirdService._week_row(db, user_id, monday - timedelta(days=7))
+                prev = weeks.get(monday - timedelta(days=7))
                 run = next_run(prev.run_weeks if prev is not None else 0, result)
                 # The prize is fixed when the week settles (like the quest
                 # bonus): a run-3 week settled under a $0 prize earned nothing,
@@ -597,7 +607,8 @@ class EarlyBirdService:
                     .on_conflict_do_nothing(index_elements=["user_id", "week_of"])
                 )
                 await db.commit()
-                existing = await EarlyBirdService._week_row(db, user_id, monday)
+                existing = (await EarlyBirdService._week_rows(db, user_id, monday, monday)).get(monday)
+                weeks[monday] = existing
                 settled += 1
             if (
                 existing is not None
@@ -613,12 +624,20 @@ class EarlyBirdService:
         return settled, paid
 
     @staticmethod
-    async def _week_row(db, user_id, monday) -> Optional[EarlyBirdWeek]:
-        return (await db.execute(
-            select(EarlyBirdWeek)
-            .where(EarlyBirdWeek.user_id == user_id, EarlyBirdWeek.week_of == monday)
-            .execution_options(populate_existing=True)
-        )).scalar_one_or_none()
+    async def _week_rows(db, user_id, first: date, last: date) -> dict:
+        """{week_of: row} of a teen's settled weeks in [first, last]. Plain
+        column rows, not entities: _pay_streak may roll back mid-loop."""
+        rows = (await db.execute(
+            select(
+                EarlyBirdWeek.id, EarlyBirdWeek.week_of, EarlyBirdWeek.result,
+                EarlyBirdWeek.run_weeks, EarlyBirdWeek.bonus_cents, EarlyBirdWeek.paid_at,
+            ).where(
+                EarlyBirdWeek.user_id == user_id,
+                EarlyBirdWeek.week_of >= first,
+                EarlyBirdWeek.week_of <= last,
+            )
+        )).all()
+        return {r.week_of: r for r in rows}
 
     @staticmethod
     async def _pay_streak(db, family_id, user_id, row_id, run, cents, now) -> bool:
@@ -659,15 +678,9 @@ class EarlyBirdService:
         # Per-parent rows (a user_id=None family broadcast is never pushed and
         # would also show the teen's payout to the teen and siblings).
         try:
-            from app.services.task_assignment_service import TaskAssignmentService as TAS
-
-            parent_ids = (await db.execute(
-                select(User.id).where(
-                    User.family_id == family_id,
-                    User.role == UserRole.PARENT,
-                    TAS._participating_member_clause(),
-                )
-            )).scalars().all()
+            parent_ids = [
+                m.id for m in await EarlyBirdService._members(db, family_id, (UserRole.PARENT,))
+            ]
         except Exception:
             log.exception("early bird payout parent lookup failed")
             parent_ids = []
@@ -705,38 +718,25 @@ class EarlyBirdService:
     async def _push_grabs(db, cfg, fam_id, now, deadline, today) -> int:
         from app.services.notification_service import NotificationService
         from app.services.ping_service import PingService
-        from app.services.task_assignment_service import TaskAssignmentService as TAS
 
         grabs = await EarlyBirdService.grabbable(db, fam_id, now)
         if not grabs:
             return 0
-        allowed = dict((await db.execute(
-            select(TaskAssignment.id, TaskTemplate.allowed_roles)
-            .join(TaskTemplate, TaskTemplate.id == TaskAssignment.template_id)
-            .where(TaskAssignment.id.in_([g.assignment_id for g in grabs]))
-        )).all())
         owner_n: dict[UUID, int] = {}
         for g in grabs:
             owner_n[g.owner_id] = owner_n.get(g.owner_id, 0) + 1
-        members = (await db.execute(
-            select(User.id, User.role).where(
-                User.family_id == fam_id,
-                User.role.in_([UserRole.CHILD, UserRole.TEEN]),
-                TAS._participating_member_clause(),
-            )
-        )).all()
+        members = await EarlyBirdService._members(
+            db, fam_id, (UserRole.CHILD, UserRole.TEEN)
+        )
         midnight = datetime.combine(today + timedelta(days=1), time.min, tzinfo=cfg.tz)
         sent = 0
-        for uid, role in members:
+        for uid, _name, role in members:
             try:
                 if uid in owner_n:
                     n = owner_n[uid]
                     key = "grabs_owner_one" if n == 1 else "grabs_owner"
                 else:
-                    n = sum(
-                        1 for g in grabs
-                        if not allowed.get(g.assignment_id) or role.value in allowed[g.assignment_id]
-                    )
+                    n = sum(1 for g in grabs if role_may_take(g.allowed_roles, role.value))
                     if n < 1:
                         continue
                     key = "grabs_open_one" if n == 1 else "grabs_open"

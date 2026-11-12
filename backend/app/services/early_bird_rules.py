@@ -187,6 +187,11 @@ def pays_streak(result: str, run: int) -> bool:
     return result == "early" and run > 0 and run % STREAK_WEEKS == 0
 
 
+def role_may_take(allowed_roles, role_value: str) -> bool:
+    """A template's ``allowed_roles`` (empty/None = everyone) admits the role."""
+    return not allowed_roles or role_value in allowed_roles
+
+
 def early_bonus_points(effective_points: int, pct: int) -> int:
     if effective_points <= 0 or pct <= 0:
         return 0
