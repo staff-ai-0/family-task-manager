@@ -553,3 +553,49 @@ async def test_late_redo_counts_late_for_the_ladder(ctx, test_parent_user):
         db, cfg, fam.id, owner.id, day, day)}
     assert covered[row.id].status == AssignmentStatus.COMPLETED
     assert completed_in_time(covered[row.id], cfg, grace=True) is False
+
+
+# ------------------------------------------------ gate cost (Early Bird off)
+
+async def _statements(db, coro):
+    from sqlalchemy import event
+    seen = []
+    bind = db.get_bind()
+    sync_engine = getattr(bind, "sync_engine", bind)
+
+    def grab(conn, cursor, statement, *a):
+        seen.append(" ".join(statement.split()).lower())
+
+    event.listen(sync_engine, "before_cursor_execute", grab)
+    try:
+        result = await coro
+    finally:
+        event.remove(sync_engine, "before_cursor_execute", grab)
+    return result, seen
+
+
+async def test_gate_with_early_bird_off_is_the_plain_count(ctx):
+    """Early Bird off: the bonus/gig gate is the pre-feature COUNT — it never
+    loads assignment rows or their templates (it runs on every gig list/claim)."""
+    db, fam, owner, tpl, a, day = ctx
+    fam.early_bird_enabled = False
+    await db.commit()
+    for expect in (True, False):
+        if not expect:
+            a.status = AssignmentStatus.COMPLETED
+            await db.commit()
+        got, seen = await _statements(db, TaskAssignmentService.has_open_mandatory_through(
+            db, owner.id, fam.id, day, now=_at(day, 21, 0)))
+        assert got is expect
+        assert any(s.startswith("select count(*)") for s in seen), seen
+        assert not any(s.startswith("select task_assignments.id") for s in seen), seen
+        assert not any(s.startswith("select task_templates") for s in seen), seen
+
+
+async def test_gate_with_early_bird_on_still_drops_expired_rows(ctx):
+    """Early Bird on: the same call keeps the R6 rule (expired = resolved)."""
+    db, fam, owner, tpl, a, day = ctx
+    assert await TaskAssignmentService.has_open_mandatory_through(
+        db, owner.id, fam.id, day, now=_at(day, 20, 29)) is True
+    assert await TaskAssignmentService.has_open_mandatory_through(
+        db, owner.id, fam.id, day, now=_at(day, 20, 30)) is False

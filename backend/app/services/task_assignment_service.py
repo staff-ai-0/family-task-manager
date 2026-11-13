@@ -1545,27 +1545,46 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         Carry-over semantics: an unfinished mandatory from yesterday
         blocks today's gigs. CANCELLED counts as resolved (parent waived).
         Future-dated mandatory rows are intentionally ignored.
+
+        Runs on every gig list/claim, so it stays a COUNT unless Early Bird is
+        on AND something is open: only then are the open rows loaded to drop
+        the ones expired for their owner (chore rules v2, R6).
         """
-        q = (
+        open_filter = and_(
+            TaskAssignment.assigned_to == user_id,
+            TaskAssignment.family_id == family_id,
+            TaskAssignment.assigned_date <= through_date,
+            TaskTemplate.is_bonus.is_(False),
+            TaskAssignment.status.in_(
+                [AssignmentStatus.PENDING, AssignmentStatus.OVERDUE]
+            ),
+        )
+        open_count = (await db.execute(
+            select(func.count())
+            .select_from(TaskAssignment)
+            .join(TaskTemplate, TaskAssignment.template_id == TaskTemplate.id)
+            .where(open_filter)
+        )).scalar_one()
+        if open_count == 0:
+            return False
+        from app.services.early_bird_service import EarlyBirdService
+
+        cfg = await EarlyBirdService.config(db, family_id)
+        if not cfg.enabled:
+            return True  # pre-feature rule: any open mandatory blocks
+        open_rows = (await db.execute(
             select(TaskAssignment)
             .options(selectinload(TaskAssignment.template))
             .join(TaskTemplate, TaskAssignment.template_id == TaskTemplate.id)
-            .where(
-                and_(
-                    TaskAssignment.assigned_to == user_id,
-                    TaskAssignment.family_id == family_id,
-                    TaskAssignment.assigned_date <= through_date,
-                    TaskTemplate.is_bonus.is_(False),
-                    TaskAssignment.status.in_(
-                        [AssignmentStatus.PENDING, AssignmentStatus.OVERDUE]
-                    ),
-                )
-            )
-        )
-        open_rows = list((await db.execute(q)).scalars().all())
+            .where(open_filter)
+        )).scalars().all()
+        now = now if now is not None else datetime.now(timezone.utc)
         # Rows expired for their owner (Early Bird cutoff passed) are the
-        # family's now, not blockers (chore rules v2, R6).
-        return bool(await TaskAssignmentService.drop_expired(db, family_id, open_rows, now))
+        # family's now, not blockers.
+        return any(
+            not TaskAssignmentService.expired_for_owner(cfg, r, r.template, now)
+            for r in open_rows
+        )
 
     @staticmethod
     async def list_open_mandatory_before(
