@@ -118,3 +118,42 @@ def test_round_trip(scratch_dsn):
     _alembic(dsn, "upgrade", "head")
     assert "taken" in _labels(dsn, "assignmentstatus")
     assert "BONUS" in _labels(dsn, "cashtransactiontype")
+
+
+def test_chore_rules_v2_round_trip(scratch_dsn):
+    dsn = scratch_dsn
+    _alembic(dsn, "upgrade", "early_bird_past_periods")
+    _insert(dsn, "families", id=uuid.uuid4(), name="Old")
+    _alembic(dsn, "upgrade", "head")
+    new = {"chore_cutoff", "grab_window_end", "teen_alarm_1", "teen_alarm_2", "rules_version"}
+    assert new <= _cols(dsn, "families")
+    row = _sql(dsn, "SELECT chore_cutoff::text AS c, grab_window_end::text AS g, "
+                    "teen_alarm_1::text AS a1, teen_alarm_2::text AS a2, rules_version AS v, "
+                    "early_bird_streak_cents AS s FROM families")[0]
+    assert (row["c"], row["g"], row["a1"], row["a2"], row["v"]) == (
+        "20:30:00", "22:30:00", "15:00:00", "19:00:00", 1)
+    assert row["s"] == 50000  # existing family is not rewritten
+
+    _alembic(dsn, "downgrade", "early_bird_past_periods")
+    assert not (new & _cols(dsn, "families"))
+    _alembic(dsn, "upgrade", "head")
+    assert new <= _cols(dsn, "families")
+
+
+def test_marked_done_by_parent_round_trip(scratch_dsn):
+    dsn = scratch_dsn
+    _alembic(dsn, "upgrade", "chore_rules_v2")
+    fam, usr, tpl = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    _insert(dsn, "families", id=fam, name="F")
+    _insert(dsn, "users", id=usr, email=f"{usr}@x.com", family_id=fam, role="TEEN")
+    _insert(dsn, "task_templates", id=tpl, family_id=fam, assignment_type="auto")
+    _insert(dsn, "task_assignments", id=uuid.uuid4(), template_id=tpl, assigned_to=usr,
+            family_id=fam, status="pending", approval_status="none",
+            assigned_date=date(2026, 11, 2), week_of=date(2026, 11, 2))
+    assert "marked_done_by_parent" not in _cols(dsn, "task_assignments")
+    _alembic(dsn, "upgrade", "head")
+    assert _sql(dsn, "SELECT marked_done_by_parent AS m FROM task_assignments")[0]["m"] is False
+    _alembic(dsn, "downgrade", "chore_rules_v2")
+    assert "marked_done_by_parent" not in _cols(dsn, "task_assignments")
+    _alembic(dsn, "upgrade", "head")
+    assert "marked_done_by_parent" in _cols(dsn, "task_assignments")

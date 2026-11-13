@@ -27,7 +27,7 @@ from app.models.notification import Notification, NotificationType as NT
 # The UX-D4a smart reminders (streak at risk / quest nudge) supersede too.
 SUPERSEDING_TYPES = frozenset({
     NT.TASK_DUE, NT.TASK_ASSIGNED, NT.PARENT_NUDGE, NT.STREAK_AT_RISK, NT.QUEST_NUDGE,
-    NT.DEADLINE_SOON, NT.UP_FOR_GRABS,
+    NT.DEADLINE_SOON, NT.UP_FOR_GRABS, NT.CHORE_ALARM,
 })
 
 # The unread badge only counts the last N days. Older unread rows stay in the
@@ -105,35 +105,45 @@ _COPY = {
         "title": {"es": "🏁 Te falta 1 para tu misión de la semana", "en": "🏁 1 away from this week's quest"},
         "body": {"es": "Complétala y gana +{bonus} puntos.", "en": "Finish it for +{bonus} points."},
     },
+    "chore_alarm": {
+        "type": NT.CHORE_ALARM,
+        "title": {"es": "⏰ Te faltan {n} tareas hoy", "en": "⏰ {n} chores left today"},
+        "body": {"es": "Te faltan {n} tareas hoy — vencen a las {cutoff}.", "en": "{n} chores left today — due by {cutoff}."},
+    },
+    "chore_alarm_one": {
+        "type": NT.CHORE_ALARM,
+        "title": {"es": "⏰ Te falta 1 tarea hoy", "en": "⏰ 1 chore left today"},
+        "body": {"es": "Te falta 1 tarea hoy — vence a las {cutoff}.", "en": "1 chore left today — due by {cutoff}."},
+    },
     "deadline_r1": {
         "type": NT.DEADLINE_SOON,
         "title": {"es": "⏰ Falta 1 hora", "en": "⏰ 1 hour left"},
-        "body": {"es": "Termina tus {n} tareas antes de las {deadline} o quedan libres para tus hermanos.", "en": "Finish your {n} chores before {deadline} or they go up for grabs."},
+        "body": {"es": "Termina tus {n} tareas antes de las {deadline} y gana el bono madrugador.", "en": "Finish your {n} chores before {deadline} to earn the early bird bonus."},
     },
     "deadline_r1_one": {
         "type": NT.DEADLINE_SOON,
         "title": {"es": "⏰ Falta 1 hora", "en": "⏰ 1 hour left"},
-        "body": {"es": "Termina tu tarea antes de las {deadline} o queda libre para tus hermanos.", "en": "Finish your chore before {deadline} or it goes up for grabs."},
+        "body": {"es": "Termina tu tarea antes de las {deadline} y gana el bono madrugador.", "en": "Finish your chore before {deadline} to earn the early bird bonus."},
     },
     "deadline_r2": {
         "type": NT.DEADLINE_SOON,
         "title": {"es": "⚠️ Faltan 30 minutos", "en": "⚠️ 30 minutes left"},
-        "body": {"es": "A las {deadline} tus {n} tareas quedan libres para tus hermanos.", "en": "At {deadline} your {n} chores are up for grabs."},
+        "body": {"es": "Aún llegas al bono madrugador: termina tus {n} tareas antes de las {deadline}.", "en": "There's still time for the early bird bonus: finish your {n} chores before {deadline}."},
     },
     "deadline_r2_one": {
         "type": NT.DEADLINE_SOON,
         "title": {"es": "⚠️ Faltan 30 minutos", "en": "⚠️ 30 minutes left"},
-        "body": {"es": "A las {deadline} tu tarea queda libre para tus hermanos.", "en": "At {deadline} your chore is up for grabs."},
+        "body": {"es": "Aún llegas al bono madrugador: termina tu tarea antes de las {deadline}.", "en": "There's still time for the early bird bonus: finish your chore before {deadline}."},
     },
     "grabs_owner": {
         "type": NT.UP_FOR_GRABS,
         "title": {"es": "⏰ Se acabó el tiempo", "en": "⏰ Time's up"},
-        "body": {"es": "{n} de tus tareas quedaron libres. Hazlas antes de que alguien las tome.", "en": "{n} of your chores are up for grabs. Do them before someone takes them."},
+        "body": {"es": "{n} de tus tareas ya quedaron libres para la familia.", "en": "{n} of your chores are open to the family now."},
     },
     "grabs_owner_one": {
         "type": NT.UP_FOR_GRABS,
         "title": {"es": "⏰ Se acabó el tiempo", "en": "⏰ Time's up"},
-        "body": {"es": "Tu tarea quedó libre. Hazla antes de que alguien la tome.", "en": "Your chore is up for grabs. Do it before someone takes it."},
+        "body": {"es": "Tu tarea ya quedó libre para la familia.", "en": "Your chore is open to the family now."},
     },
     "grabs_open": {
         "type": NT.UP_FOR_GRABS,

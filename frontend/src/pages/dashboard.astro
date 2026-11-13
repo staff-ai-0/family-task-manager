@@ -140,7 +140,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
         meter={meter}
         counter={counter}
         progress={progress}
-        earlyBirdPct={earlyBirdResp?.week_pct ?? 0}
+        earlyBirdPct={earlyBirdResp?.week_ladder?.bonus_pct ?? 0}
     />
 
     <Fragment slot="banner">

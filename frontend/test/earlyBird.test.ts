@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { countdownLabel, earlyBirdCopy, earlyBirdView, runProgress, takeBlockHint, takeErrorMessage, takeErrorReason, paycheckBonusLine } from "../src/lib/earlyBird";
+import { countdownLabel, earlyBirdCopy, earlyBirdView, grabItems, ladderMessage, payoutWeekNotes, runProgress, takeBlockHint, takeErrorMessage, takeErrorReason, paycheckBonusLine } from "../src/lib/earlyBird";
 
 const d = (s: string) => new Date(s);
 
@@ -7,7 +9,7 @@ const me = (over: Record<string, unknown> = {}) => ({
     enabled: true,
     applies: true,
     deadline: "11:00",
-    cutoff_at: "2026-11-09T10:00:00-06:00",
+    cutoff_at: "2026-11-09T20:30:00-06:00",
     deadline_at: "2026-11-09T11:00:00-06:00",
     today: "open",
     week: [
@@ -23,7 +25,7 @@ const me = (over: Record<string, unknown> = {}) => ({
     run_weeks: 1,
     streak_weeks: 3,
     streak_cents: 0,
-    week_pct: 5,
+    week_ladder: { completed_pct: 0, early_pct: 0, tier: "neutral", bonus_pct: 0, final: false },
     bonus_pct: 20,
     open_today: 1,
     grabs: [],
@@ -48,35 +50,46 @@ describe("earlyBirdView", () => {
         expect(earlyBirdView(me({ applies: false }), "es", d("2026-11-09T09:00:00-06:00"))).toBeNull();
         expect(earlyBirdView(null, "es", d("2026-11-09T09:00:00-06:00"))).toBeNull();
     });
-    it("on_track before the cutoff", () => {
+    it("on_track before the 11:00 deadline, counting to the deadline", () => {
         const v = earlyBirdView(me(), "es", d("2026-11-09T09:00:00-06:00"))!;
         expect(v.state).toBe("on_track");
         expect(v.runText).toBe("1/3");
         expect(v.dots).toHaveLength(7);
-        expect(v.countdown).toBe("1 h 00 min");
-    });
-    it("before_deadline between cutoff and deadline, counting to the deadline", () => {
-        const v = earlyBirdView(me(), "en", d("2026-11-09T10:20:00-06:00"))!;
-        expect(v.state).toBe("before_deadline");
-        expect(v.countdown).toBe("40 min");
-        expect(v.headline).toContain("11:00");
+        expect(v.countdown).toBe("2 h 00 min");
         expect(v.targetAt).toBe(d("2026-11-09T11:00:00-06:00").toISOString());
     });
-    it("missed with open chores still counts down to the deadline", () => {
-        const v = earlyBirdView(me({ today: "missed", open_today: 1 }), "en", d("2026-11-09T10:20:00-06:00"))!;
-        expect(v.state).toBe("before_deadline");
-        expect(v.countdown).toBe("40 min");
+    it("before_cutoff between the deadline and the evening cutoff, counting to the cutoff", () => {
+        const v = earlyBirdView(me(), "en", d("2026-11-09T19:30:00-06:00"))!;
+        expect(v.state).toBe("before_cutoff");
+        expect(v.countdown).toBe("1 h 00 min");
+        expect(v.headline).toContain("cutoff");
+        expect(v.targetAt).toBe(d("2026-11-09T20:30:00-06:00").toISOString());
+    });
+    it("missed with open chores still counts down to the cutoff", () => {
+        const v = earlyBirdView(me({ today: "missed", open_today: 1 }), "en", d("2026-11-09T19:30:00-06:00"))!;
+        expect(v.state).toBe("before_cutoff");
+        expect(v.countdown).toBe("1 h 00 min");
     });
     it("missed with nothing open is plain missed, no countdown", () => {
-        const v = earlyBirdView(me({ today: "missed", open_today: 0 }), "en", d("2026-11-09T10:20:00-06:00"))!;
+        const v = earlyBirdView(me({ today: "missed", open_today: 0 }), "en", d("2026-11-09T19:30:00-06:00"))!;
         expect(v.state).toBe("missed");
         expect(v.countdown).toBe("");
         expect(v.targetAt).toBe("");
     });
-    it("late after the deadline", () => {
-        const v = earlyBirdView(me(), "en", d("2026-11-09T11:05:00-06:00"))!;
+    it("late after the cutoff: chores are open to the family", () => {
+        const v = earlyBirdView(me(), "en", d("2026-11-09T21:00:00-06:00"))!;
         expect(v.state).toBe("late");
         expect(v.countdown).toBe("");
+        expect(v.headline.toLowerCase()).toContain("family");
+    });
+    it("carries the weekly ladder message", () => {
+        const v = earlyBirdView(me({ week_ladder: { completed_pct: 52, early_pct: 0, tier: "no_pay", bonus_pct: 0, final: false } }), "es", d("2026-11-09T09:00:00-06:00"))!;
+        expect(v.ladderText).toBe("Llevas 52 %: necesitas 60 % para cobrar");
+        expect(v.paycheckBonusPct).toBe(0);
+    });
+    it("exposes the earned paycheck bonus pct from the ladder", () => {
+        const v = earlyBirdView(me({ week_ladder: { completed_pct: 100, early_pct: 92, tier: "bonus", bonus_pct: 10, final: false } }), "es", d("2026-11-09T09:00:00-06:00"))!;
+        expect(v.paycheckBonusPct).toBe(10);
     });
     it("early when today is early", () => {
         const v = earlyBirdView(me({ today: "early" }), "en", d("2026-11-09T09:00:00-06:00"))!;
@@ -105,14 +118,24 @@ describe("earlyBirdView", () => {
 });
 
 describe("takeErrorMessage", () => {
-    it("known reasons are distinct and non-empty", () => {
-        const keys = ["already_taken", "finish_yours_first", "role_not_allowed", "own_chore", "not_grabbable"];
-        const msgs = keys.map((k) => takeErrorMessage(k, "es"));
-        msgs.forEach((m) => expect(m.length).toBeGreaterThan(0));
-        expect(new Set(msgs).size).toBe(keys.length);
+    // Every reason key EarlyBirdService.take / can_take still raises.
+    const keys = ["grab_window_closed", "not_eligible", "own_chore", "already_taken", "role_not_allowed", "not_grabbable"];
+    it("every new reason key has distinct non-empty copy in ES and EN", () => {
+        for (const lang of ["es", "en"] as const) {
+            const msgs = keys.map((k) => takeErrorMessage(k, lang));
+            expect(new Set(msgs).size).toBe(keys.length);
+            const generic = takeErrorMessage("zzz", lang);
+            msgs.forEach((m) => { expect(m.length).toBeGreaterThan(0); expect(m).not.toBe(generic); });
+        }
     });
-    it("unknown reason falls back to a generic message", () => {
-        expect(takeErrorMessage("zzz", "en").length).toBeGreaterThan(0);
+    it("words the role and not-grabbable refusals", () => {
+        expect(takeErrorMessage("role_not_allowed", "es")).toBe("Tu perfil no puede tomar esta tarea");
+        expect(takeErrorMessage("role_not_allowed", "en")).toBe("Your profile can't take this chore");
+        expect(takeErrorMessage("not_grabbable", "es")).toBe("Esta tarea ya no se puede tomar");
+        expect(takeErrorMessage("not_grabbable", "en")).toBe("This chore can't be taken anymore");
+    });
+    it("dead reasons fall back to the generic message", () => {
+        for (const k of ["not_kid", "finish_yours_first"]) expect(takeErrorMessage(k, "en")).toBe(takeErrorMessage("zzz", "en"));
     });
 });
 
@@ -134,9 +157,8 @@ describe("copy", () => {
 
 describe("takeBlockHint", () => {
     it("explains a caller-level block so the Take buttons can be disabled up front", () => {
-        expect(takeBlockHint("finish_yours_first", "es")).toBe("Termina primero tus tareas");
-        expect(takeBlockHint("finish_yours_first", "en")).toBe("Finish your own chores first");
-        expect(takeBlockHint("not_kid", "en")).toBeTruthy();
+        expect(takeBlockHint("not_eligible", "es")).toBeTruthy();
+        expect(takeBlockHint("not_eligible", "en")).toBe(takeErrorMessage("not_eligible", "en"));
     });
     it("is null when nothing blocks the caller", () => {
         expect(takeBlockHint(null, "es")).toBeNull();
@@ -162,5 +184,105 @@ describe("runProgress", () => {
     });
     it("has no target when the API sends none", () => {
         expect(runProgress({ run_weeks: 2 })).toEqual({ done: 0, target: 0 });
+    });
+});
+
+describe("payoutWeekNotes", () => {
+    it("explains a no_pay week", () => {
+        expect(payoutWeekNotes({ ladder_tier: "no_pay", ladder_final: true, is_current_week: false }, "es")).toEqual(["Menos de 60 % completado — sin pago base"]);
+        expect(payoutWeekNotes({ ladder_tier: "no_pay", ladder_final: true }, "en")).toEqual(["Under 60% completed — no base pay"]);
+    });
+    it("flags a past week that is not final as provisional", () => {
+        expect(payoutWeekNotes({ ladder_tier: "per_task", ladder_final: false, is_current_week: false }, "es")).toEqual(["Pendiente de revisión — semana provisional"]);
+    });
+    it("never calls a neutral week provisional (Early Bird off, or a CHILD the ladder does not cover)", () => {
+        expect(payoutWeekNotes({ ladder_tier: "neutral", ladder_final: false, is_current_week: false }, "es")).toEqual([]);
+        expect(payoutWeekNotes({ ladder_tier: "neutral", ladder_final: false, is_current_week: false }, "en")).toEqual([]);
+    });
+    it("says nothing for the current week, final weeks, bonus weeks or old payloads", () => {
+        expect(payoutWeekNotes({ ladder_tier: "bonus", ladder_final: false, is_current_week: true }, "es")).toEqual([]);
+        expect(payoutWeekNotes({ ladder_tier: "bonus", ladder_final: true, is_current_week: false }, "es")).toEqual([]);
+        expect(payoutWeekNotes({}, "es")).toEqual([]);
+    });
+});
+
+describe("grabItems", () => {
+    it("maps API rows, preferring the Spanish title in es and honouring can_take", () => {
+        const rows = [
+            { assignment_id: "a", title: "Dishes", title_es: "Trastes", points: 10, owner_name: "Sam", can_take: true },
+            { assignment_id: "b", title: "Trash", title_es: null, points: 5, owner_name: "Lu", can_take: false },
+        ];
+        const es = grabItems(rows, "es");
+        expect(es.map((g) => g.title)).toEqual(["Trastes", "Trash"]);
+        expect(es.map((g) => g.canTake)).toEqual([true, false]);
+        expect(grabItems(rows, "en")[0].title).toBe("Dishes");
+    });
+    it("is empty for a non-list", () => {
+        expect(grabItems(null, "es")).toEqual([]);
+    });
+});
+
+const L = (completed_pct: number, early_pct: number, tier: string, bonus_pct: number, final = false) => ({ completed_pct, early_pct, tier, bonus_pct, final });
+
+describe("ladderMessage deadline", () => {
+    it("names the family's early deadline, never a fixed 11:00", () => {
+        for (const lang of ["es", "en"] as const) {
+            const m = ladderMessage(L(100, 85, "bonus", 5), lang, "10:00");
+            expect(m).toContain("10:00");
+            expect(m).not.toContain("11:00");
+            expect(ladderMessage(L(100, 85, "bonus", 5), lang, "11:00")).toContain("11:00");
+        }
+    });
+    it("without a deadline the hint stays generic", () => {
+        expect(ladderMessage(L(100, 85, "bonus", 5), "en")).not.toMatch(/\d\d:\d\d/);
+    });
+});
+
+describe("ladderMessage", () => {
+    it("under 60 %: how far from being paid", () => {
+        expect(ladderMessage(L(52, 0, "no_pay", 0), "es")).toBe("Llevas 52 %: necesitas 60 % para cobrar");
+        expect(ladderMessage(L(52, 0, "no_pay", 0), "en")).toBe("You're at 52%: you need 60% to get paid");
+    });
+    it("60-99 %: each task pays, and 100 % unlocks the early bonus", () => {
+        const es = ladderMessage(L(80, 40, "per_task", 0), "es");
+        expect(es).toContain("80 %");
+        expect(es).toContain("100 %");
+        expect(ladderMessage(L(80, 40, "per_task", 0), "en")).toContain("every task you finish pays");
+    });
+    it("100 % with early share: earned tier and the next one", () => {
+        expect(ladderMessage(L(100, 85, "bonus", 5), "es")).toContain("+5 %");
+        expect(ladderMessage(L(100, 85, "bonus", 5), "es")).toContain("+10 %");
+        expect(ladderMessage(L(100, 85, "bonus", 5), "en")).toContain("90%");
+        expect(ladderMessage(L(100, 10, "bonus", 0), "es")).toContain("+5 %");
+        expect(ladderMessage(L(100, 100, "bonus", 15), "es")).toContain("+15 %");
+        expect(ladderMessage(L(100, 100, "bonus", 15), "es")).not.toContain("si todo");
+    });
+    it("final weeks read as closed results", () => {
+        expect(ladderMessage(L(100, 100, "bonus", 15, true), "es")).toBe("Semana cerrada: 100 % — +15 % de madrugador");
+        expect(ladderMessage(L(100, 100, "bonus", 15, true), "en")).toBe("Week closed: 100% — +15% early bird");
+        expect(ladderMessage(L(100, 50, "bonus", 0, true), "en")).toBe("Week closed: 100% — no early bird bonus");
+        expect(ladderMessage(L(55, 0, "no_pay", 0, true), "es")).toBe("Semana cerrada: 55 % — sin pago base");
+        expect(ladderMessage(L(80, 0, "per_task", 0, true), "en")).toBe("Week closed: 80% — each task paid");
+    });
+    it("empty for a week with no chores or no data", () => {
+        expect(ladderMessage(L(0, 0, "neutral", 0), "es")).toBe("");
+        expect(ladderMessage(undefined, "es")).toBe("");
+    });
+});
+
+describe("GrabsCard take confirmation", () => {
+    const src = readFileSync(fileURLToPath(new URL("../src/components/home/GrabsCard.astro", import.meta.url)), "utf8");
+    it("asks through confirmSheet before the take request (a take is irreversible)", () => {
+        expect(src).toMatch(/import \{[^}]*\bconfirmSheet\b[^}]*\} from "\.\.\/\.\.\/lib\/dialogs"/);
+        const ask = src.indexOf("await confirmSheet(");
+        const post = src.indexOf("fetch(`/api/early-bird/grabs/");
+        expect(ask).toBeGreaterThan(-1);
+        expect(post).toBeGreaterThan(ask);
+    });
+    it("has the confirm copy in both languages", () => {
+        expect(earlyBirdCopy("es").takeConfirmTitle).toBe("¿Tomar esta tarea?");
+        expect(earlyBirdCopy("es").takeConfirmBody).toBe("Quedará a tu nombre y no se puede deshacer.");
+        expect(earlyBirdCopy("en").takeConfirmTitle).toBe("Take this chore?");
+        expect(earlyBirdCopy("en").takeConfirmBody).toBe("It will be yours and it can't be undone.");
     });
 });

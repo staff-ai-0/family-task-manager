@@ -9,7 +9,7 @@ from app.services.early_bird_rules import (
     GRABS_PUSH_WINDOW, PENDING_GRACE_DAYS, R1_BEFORE, R2_BEFORE, SETTLE_LOOKBACK_WEEKS,
     STREAK_WEEKS, CoveredRow, EarlyBirdConfig, chore_state, day_result, day_times,
     early_bonus_points, is_active_day, next_run, pays_streak, reminder_stage,
-    week_bonus, week_eligible, week_result,
+    week_eligible, week_ladder, week_result,
 )
 
 MX = ZoneInfo("America/Mexico_City")
@@ -19,7 +19,8 @@ SAT = date(2026, 11, 7)   # Saturday
 
 def cfg(**kw):
     base = dict(enabled=True, enabled_at=datetime(2026, 10, 1, tzinfo=MX), deadline=time(11, 0),
-                days=None, bonus_pct=20, week_pct=5, streak_cents=5000, tz=MX)
+                days=None, bonus_pct=20, week_pct=5, streak_cents=5000, tz=MX,
+                cutoff=time(20, 30), grab_end=time(22, 30), alarm_1=time(15, 0), alarm_2=time(19, 0))
     base.update(kw)
     return EarlyBirdConfig(**base)
 
@@ -45,7 +46,8 @@ def test_from_family():
     fam = SimpleNamespace(early_bird_enabled=True, early_bird_enabled_at=None,
                           early_bird_deadline=time(11), early_bird_days=[0, 2],
                           early_bird_bonus_pct=20, early_bird_week_pct=5,
-                          early_bird_streak_cents=100, timezone="America/Mexico_City")
+                          early_bird_streak_cents=100, timezone="America/Mexico_City",
+                          chore_cutoff=time(20, 30), grab_window_end=time(22, 30), teen_alarm_1=time(15, 0), teen_alarm_2=time(19, 0))
     c = EarlyBirdConfig.from_family(fam)
     assert c.days == frozenset({0, 2}) and c.tz == MX and c.enabled_at is None
     fam.early_bird_days = None
@@ -66,13 +68,13 @@ def test_is_active_day():
     assert is_active_day(cfg(days=frozenset({5})), SAT)
     assert not is_active_day(cfg(enabled=False), MON)
     assert not is_active_day(cfg(enabled_at=None), MON)
-    assert not is_active_day(cfg(enabled_at=at(10)), MON)       # r1 == enabled_at
-    assert is_active_day(cfg(enabled_at=at(9, 59)), MON)
+    assert not is_active_day(cfg(enabled_at=at(11)), MON)       # deadline == enabled_at
+    assert is_active_day(cfg(enabled_at=at(10, 59)), MON)
 
 
 def test_week_eligible():
     assert week_eligible(cfg(), MON)
-    assert not week_eligible(cfg(enabled_at=at(10, 0, 1)), MON)
+    assert not week_eligible(cfg(enabled_at=at(11, 0, 1)), MON)
     assert not week_eligible(cfg(enabled=False), MON)
     assert not week_eligible(cfg(enabled_at=None), MON)
 
@@ -80,10 +82,10 @@ def test_week_eligible():
 def test_chore_state_boundary():
     c = cfg()
     now = at(12)
-    assert chore_state(row(completed_at=at(9, 59, 59)), c, now) == "early"
-    assert chore_state(row(completed_at=at(10)), c, now) == "missed"
-    # aware datetime in another zone compares correctly: 15:59:59 UTC == 09:59:59 MX
-    utc = datetime(2026, 11, 2, 15, 59, 59, tzinfo=timezone.utc)
+    assert chore_state(row(completed_at=at(10, 59, 59)), c, now) == "early"
+    assert chore_state(row(completed_at=at(11)), c, now) == "missed"
+    # aware datetime in another zone compares correctly: 16:59:59 UTC == 10:59:59 MX
+    utc = datetime(2026, 11, 2, 16, 59, 59, tzinfo=timezone.utc)
     assert chore_state(row(completed_at=utc), c, now) == "early"
 
 
@@ -101,15 +103,30 @@ def test_chore_state_variants():
     p = row(approval=AP.PENDING, completed_at=e)
     assert chore_state(p, c, now) == "pending"
     assert chore_state(p, c, now, grace=True) == "early"
-    assert chore_state(row(approval=AP.PENDING, completed_at=at(10, 5)), c, now, grace=True) == "missed"
+    assert chore_state(row(approval=AP.PENDING, completed_at=at(11, 5)), c, now, grace=True) == "missed"
+
+
+def test_chore_state_parent_marked_is_never_early():
+    """A parent's retroactive "mark done" is a record, not the teen finishing
+    early: even stamped 10:30 (before the 11:00 deadline) the day is not early,
+    whatever the review says."""
+    c = cfg()
+    for approval in (AP.APPROVED, AP.NONE, AP.PENDING):
+        marked = CoveredRow(uuid4(), MON, AS.COMPLETED, approval, "full", at(10, 30),
+                            parent_marked=True)
+        assert chore_state(marked, c, at(12)) == "missed", approval
+        assert chore_state(marked, c, at(12), grace=True) == "missed", approval
+    # Same row without the marker is early: the marker alone flips it.
+    plain = CoveredRow(uuid4(), MON, AS.COMPLETED, AP.APPROVED, "full", at(10, 30))
+    assert chore_state(plain, c, at(12)) == "early"
 
 
 def test_chore_state_open():
     c = cfg()
     for st in (AS.PENDING, AS.OVERDUE, AS.CLAIMED):
-        assert chore_state(row(status=st), c, at(9)) == "open"
-        assert chore_state(row(status=st), c, at(10)) == "missed"
-    assert chore_state(row(status=AS.PENDING), c, at(9, 59, 59)) == "open"
+        assert chore_state(row(status=st), c, at(10)) == "open"
+        assert chore_state(row(status=st), c, at(11)) == "missed"
+    assert chore_state(row(status=AS.PENDING), c, at(10, 59, 59)) == "open"
 
 
 def test_day_result():
@@ -157,16 +174,27 @@ def test_reminder_stage():
     assert reminder_stage(t.r2 - timedelta(seconds=1), t) == "r1"
     assert reminder_stage(t.r2, t) == "r2"
     assert reminder_stage(t.deadline - timedelta(seconds=1), t) == "r2"
-    assert reminder_stage(t.deadline, t) == "grabs"
-    assert reminder_stage(t.deadline + GRABS_PUSH_WINDOW - timedelta(seconds=1), t) == "grabs"
-    assert reminder_stage(t.deadline + GRABS_PUSH_WINDOW, t) is None
+    # the grabs push fires at the cutoff (20:30), not at the 11:00 deadline
+    assert reminder_stage(t.deadline, t) is None
+    assert reminder_stage(t.cutoff - timedelta(seconds=1), t) is None
+    assert reminder_stage(t.cutoff, t) == "grabs"
+    assert reminder_stage(t.cutoff + GRABS_PUSH_WINDOW - timedelta(seconds=1), t) == "grabs"
+    assert reminder_stage(t.cutoff + GRABS_PUSH_WINDOW, t) is None
 
 
-def test_week_bonus():
-    assert week_bonus(80000, 5, "early") == 4000
-    assert week_bonus(80000, 5, "pending") == 0
-    assert week_bonus(0, 5, "early") == 0
-    assert week_bonus(80000, 0, "early") == 0
+def test_ladder_percentages_floor_like_the_ladder():
+    """The flat weekly bonus (week_bonus) is retired: the pay ladder's money
+    lives in BankService._ladder_adjust (test_chore_ladder_paycheck.py). What
+    the rules still own is the meter: floored percentages, so the shown % never
+    claims a rung week_ladder did not grant."""
+    r = week_ladder(119, 159, 200)       # 59.5 % completed, 79.5 % early
+    assert (r.tier, r.completed_pct, r.early_pct) == ("no_pay", 59, 79)
+    r = week_ladder(120, 120, 200)
+    assert (r.tier, r.completed_pct) == ("per_task", 60)
+    r = week_ladder(200, 160, 200)
+    assert (r.tier, r.bonus_pct, r.completed_pct, r.early_pct) == ("bonus", 5, 100, 80)
+    r = week_ladder(0, 0, 0)
+    assert (r.tier, r.completed_pct, r.early_pct) == ("neutral", 0, 0)
 
 
 def test_off_on_toggle_keeps_weeks_that_ran_under_the_earlier_period():
@@ -195,6 +223,7 @@ def test_from_family_reads_past_periods():
                           early_bird_deadline=time(11), early_bird_days=None,
                           early_bird_bonus_pct=20, early_bird_week_pct=5,
                           early_bird_streak_cents=100, timezone="America/Mexico_City",
+                          chore_cutoff=time(20, 30), grab_window_end=time(22, 30), teen_alarm_1=time(15, 0), teen_alarm_2=time(19, 0),
                           early_bird_past_periods=[["2026-10-01T00:00:00+00:00",
                                                     "2026-10-20T12:00:00+00:00"]])
     c = EarlyBirdConfig.from_family(fam)

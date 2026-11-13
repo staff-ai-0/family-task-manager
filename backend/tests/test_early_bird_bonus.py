@@ -95,7 +95,7 @@ async def test_complete_before_cutoff_awards_bonus(ctx):
 async def test_complete_at_cutoff_no_bonus(ctx):
     db, fam, kid, day = ctx
     a = await _assign(db, kid, await _template(db, fam), day)
-    await _complete(db, a, kid, _local(day, 10, 0))
+    await _complete(db, a, kid, _local(day, 11, 0))
     await db.refresh(kid)
     assert a.early_bonus_points is None
     assert await _bonus_rows(db, kid) == []
@@ -168,6 +168,23 @@ async def test_proof_chore_rejected_no_bonus(ctx, test_parent_user):
     await _approve(ctx[0], a, approve=False)
     assert a.early_bonus_points is None
     assert await _bonus_rows(ctx[0], ctx[2]) == []
+
+
+async def test_parent_marked_same_morning_never_earns_the_early_bonus(ctx, test_parent_user):
+    """Marked done by a parent at 10:30 — before the 11:00 deadline — and
+    approved in full: a retroactive record never earns the +20 % early bonus."""
+    db, fam, kid, day = ctx
+    a = await _assign(db, kid, await _template(db, fam), day)
+    with patch("app.services.task_assignment_service.datetime", _frozen(_local(day, 10, 30))):
+        await TaskAssignmentService.mark_done_for_kid(
+            db, a.id, fam.id, test_parent_user.id, note="she did it")
+    await db.refresh(a)
+    assert a.marked_done_by_parent is True
+    assert a.completed_at == _local(day, 10, 30)
+    await _approve(db, a, approve=True, grade="full")
+    assert a.approval_status == ApprovalStatus.APPROVED
+    assert a.early_bonus_points is None
+    assert await _bonus_rows(db, kid) == []
 
 
 async def test_bonus_idempotent(ctx):

@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from typing import Dict, Any, Optional
 
 from app.core.exceptions import (
+    ChoreExpiredException,
     ConflictException,
     NotFoundException,
     ValidationException,
@@ -57,6 +58,21 @@ async def conflict_handler(request: Request, exc: ConflictException) -> JSONResp
     """Handle 409 Conflict errors"""
     return create_error_response(
         status_code=status.HTTP_409_CONFLICT, message=str(exc), error_type="conflict"
+    )
+
+
+async def chore_expired_handler(
+    request: Request, exc: ChoreExpiredException
+) -> JSONResponse:
+    """409 with a machine-readable ``code`` the kid UI keys its copy on."""
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "error": "conflict",
+            "code": "chore_expired",
+            "message": str(exc) or "chore_expired",
+            "status_code": status.HTTP_409_CONFLICT,
+        },
     )
 
 
@@ -177,6 +193,7 @@ def register_exception_handlers(app):
     app.add_exception_handler(ValidationException, validation_handler)
     app.add_exception_handler(ForbiddenException, forbidden_handler)
     app.add_exception_handler(ConflictException, conflict_handler)
+    app.add_exception_handler(ChoreExpiredException, chore_expired_handler)
     app.add_exception_handler(UnauthorizedException, unauthorized_handler)
     app.add_exception_handler(InsufficientPointsError, insufficient_points_handler)
     app.add_exception_handler(ConsequenceActiveError, consequence_active_handler)

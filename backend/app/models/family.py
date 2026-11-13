@@ -64,7 +64,16 @@ class Family(Base):
     early_bird_days = Column(JSONB, nullable=True)
     early_bird_bonus_pct = Column(Integer, nullable=False, default=20, server_default="20")
     early_bird_week_pct = Column(Integer, nullable=False, default=5, server_default="5")
-    early_bird_streak_cents = Column(Integer, nullable=False, default=50000, server_default="50000")
+    # New families default to 38000; server_default stays 50000 on purpose so
+    # existing rows are not rewritten (only the Python default changed).
+    early_bird_streak_cents = Column(Integer, nullable=False, default=38000, server_default="50000")
+    # Chore rules v2: day cutoff, end of the up-for-grabs window, the two teen
+    # alarms, and a counter bumped whenever a rule-defining setting changes.
+    chore_cutoff = Column(Time, nullable=False, default=time(20, 30), server_default="20:30")
+    grab_window_end = Column(Time, nullable=False, default=time(22, 30), server_default="22:30")
+    teen_alarm_1 = Column(Time, nullable=False, default=time(15, 0), server_default="15:00")
+    teen_alarm_2 = Column(Time, nullable=False, default=time(19, 0), server_default="19:00")
+    rules_version = Column(Integer, nullable=False, default=1, server_default="1")
     # UX-D4b mystery box: points maximum for the fallback bonus. NULL = an
     # existing family that has not decided (boxes off; one-time parent-hub
     # card), 0 = off by choice, > 0 = on. New families default to 20.

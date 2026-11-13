@@ -12,6 +12,8 @@ from app.models.task_assignment import ApprovalStatus, AssignmentStatus
 from app.core.time_utils import safe_zoneinfo
 
 STREAK_WEEKS = 3
+# R1/R2 are reminder offsets only (first / second teen push); the early
+# cutoff everywhere is the deadline itself.
 R1_BEFORE = timedelta(minutes=60)
 R2_BEFORE = timedelta(minutes=30)
 GRABS_PUSH_WINDOW = timedelta(minutes=60)
@@ -36,10 +38,15 @@ class EarlyBirdConfig:
     week_pct: int
     streak_cents: int
     tz: ZoneInfo
+    cutoff: time  # chores must be done before this to count as completed
+    grab_end: time  # end of the up-for-grabs window
+    alarm_1: time  # first teen chore alarm (family-local)
+    alarm_2: time  # second teen chore alarm
     # Earlier on-periods, closed by a switch-off: ((start, end), ...). The
     # current period is (enabled_at, open). Kept so an off->on toggle does not
     # retroactively make the weeks that already ran under the feature ineligible.
     past_periods: tuple[tuple[datetime, datetime], ...] = ()
+    rules_version: int = 1
 
     @classmethod
     def from_family(cls, fam) -> "EarlyBirdConfig":
@@ -53,6 +60,11 @@ class EarlyBirdConfig:
             week_pct=fam.early_bird_week_pct,
             streak_cents=fam.early_bird_streak_cents,
             tz=safe_zoneinfo(fam.timezone),
+            cutoff=fam.chore_cutoff,
+            grab_end=fam.grab_window_end,
+            alarm_1=fam.teen_alarm_1,
+            alarm_2=fam.teen_alarm_2,
+            rules_version=int(getattr(fam, "rules_version", None) or 1),
             past_periods=tuple(
                 (datetime.fromisoformat(start), datetime.fromisoformat(end))
                 for start, end in (getattr(fam, "early_bird_past_periods", None) or ())
@@ -65,11 +77,47 @@ class DayTimes:
     r1: datetime
     r2: datetime
     deadline: datetime
+    cutoff: datetime
+    grab_end: datetime
 
 
 def day_times(cfg: EarlyBirdConfig, day: date) -> DayTimes:
     deadline = datetime.combine(day, cfg.deadline, tzinfo=cfg.tz)
-    return DayTimes(r1=deadline - R1_BEFORE, r2=deadline - R2_BEFORE, deadline=deadline)
+    return DayTimes(
+        r1=deadline - R1_BEFORE,
+        r2=deadline - R2_BEFORE,
+        deadline=deadline,
+        cutoff=datetime.combine(day, cfg.cutoff, tzinfo=cfg.tz),
+        grab_end=datetime.combine(day, cfg.grab_end, tzinfo=cfg.tz),
+    )
+
+
+# Several ticks of the */5 sweep, so a late or missed tick still sends that
+# day's alarm. Single send per slot: the send record is checked since the
+# slot's START (PingService._has_ping_since), so later ticks send nothing.
+ALARM_WINDOW = timedelta(minutes=30)
+
+
+def alarm_slot_start(cfg: EarlyBirdConfig, day: date, slot: str) -> datetime:
+    t = cfg.alarm_1 if slot == "a1" else cfg.alarm_2
+    return datetime.combine(day, t, tzinfo=cfg.tz)
+
+
+def alarm_slot(cfg: EarlyBirdConfig, now: datetime) -> Optional[Literal["a1", "a2"]]:
+    """"a1"/"a2" during the ALARM_WINDOW starting at ``alarm_1``/``alarm_2``
+    family-local on an active day, else None. A window never runs past the
+    day's cutoff (the chores are no longer the teen's after it), and when two
+    windows overlap the later alarm is the live one."""
+    local = now.astimezone(cfg.tz)
+    day = local.date()
+    if not is_active_day(cfg, day):
+        return None
+    cutoff = day_times(cfg, day).cutoff
+    for slot in ("a2", "a1"):
+        start = alarm_slot_start(cfg, day, slot)
+        if start <= local < min(start + ALARM_WINDOW, cutoff):
+            return slot
+    return None
 
 
 def _on_periods(cfg: EarlyBirdConfig) -> list[tuple[datetime, Optional[datetime]]]:
@@ -105,15 +153,15 @@ def close_period(past: Optional[list], start: datetime, end: datetime) -> list:
 def is_active_day(cfg: EarlyBirdConfig, day: date) -> bool:
     if cfg.days is not None and day.weekday() not in cfg.days:
         return False
-    r1 = day_times(cfg, day).r1
-    return _on_throughout(cfg, r1, r1)
+    deadline = day_times(cfg, day).deadline
+    return _on_throughout(cfg, deadline, deadline)
 
 
 def week_eligible(cfg: EarlyBirdConfig, monday: date) -> bool:
-    """On from before Monday's R1 through Sunday's R1 (when the week is over)
+    """On from before Monday's deadline through Sunday's deadline (when the week is over)
     without a switch-off: the week you switch it on never counts."""
     return _on_throughout(
-        cfg, day_times(cfg, monday).r1, day_times(cfg, monday + timedelta(days=6)).r1
+        cfg, day_times(cfg, monday).deadline, day_times(cfg, monday + timedelta(days=6)).deadline
     )
 
 
@@ -125,15 +173,23 @@ class CoveredRow:
     approval: ApprovalStatus
     grade: Optional[str]
     completed_at: Optional[datetime]
+    # Set by the parent's retroactive "mark done" (explicit action): counts as
+    # completed whatever completed_at says, and is never early (chore_state,
+    # done_early, EarlyBirdService.maybe_award_early_bonus).
+    parent_marked: bool = False
 
 
 ChoreState = Literal["early", "pending", "open", "missed"]
 
 
 def chore_state(row: CoveredRow, cfg: EarlyBirdConfig, now: datetime, *, grace: bool = False) -> ChoreState:
-    r1 = day_times(cfg, row.assigned_date).r1
+    deadline = day_times(cfg, row.assigned_date).deadline
     if row.status == AssignmentStatus.COMPLETED:
-        if row.completed_at is None or row.completed_at >= r1:
+        # A parent's retroactive "mark done" is never early (done, not early),
+        # whatever its completed_at or review says.
+        if row.parent_marked:
+            return "missed"
+        if row.completed_at is None or row.completed_at >= deadline:
             return "missed"
         if row.grade in ("missed", "partial"):
             return "missed"
@@ -143,8 +199,75 @@ def chore_state(row: CoveredRow, cfg: EarlyBirdConfig, now: datetime, *, grace: 
             return "early" if grace else "pending"
         return "missed"
     if row.status in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE, AssignmentStatus.CLAIMED):
-        return "open" if now < r1 else "missed"
+        return "open" if now < deadline else "missed"
     return "missed"
+
+
+def completed_in_time(row: CoveredRow, cfg: EarlyBirdConfig, *, grace: bool = False) -> bool:
+    """Counts as completed for the weekly ladder: done before the day's cutoff
+    (a parent-marked row is exempt from the time test), not graded
+    missed/partial, and approved (or pending review when ``grace``)."""
+    if row.status != AssignmentStatus.COMPLETED or row.completed_at is None:
+        return False
+    if not row.parent_marked and row.completed_at >= day_times(cfg, row.assigned_date).cutoff:
+        return False
+    if row.grade in ("missed", "partial"):
+        return False
+    if row.approval in (ApprovalStatus.NONE, ApprovalStatus.APPROVED):
+        return True
+    return row.approval == ApprovalStatus.PENDING and grace
+
+
+def done_early(row: CoveredRow, cfg: EarlyBirdConfig, *, grace: bool = False) -> bool:
+    """Completed in time AND before the deadline (11:00, not R1)."""
+    return (
+        not row.parent_marked
+        and completed_in_time(row, cfg, grace=grace)
+        and row.completed_at < day_times(cfg, row.assigned_date).deadline
+    )
+
+
+@dataclass(frozen=True)
+class LadderResult:
+    tier: Literal["neutral", "no_pay", "per_task", "bonus"]
+    bonus_pct: int
+    completed: int
+    early: int
+    total: int
+    # True once the week can no longer change (Sunday's cutoff has passed);
+    # filled by the service, never by week_ladder.
+    final: bool = False
+
+    # Floored on purpose: a rounded 59.5 % would read "60 %" on a week the
+    # ladder (cross-multiplied, exact) puts in no_pay.
+    @property
+    def completed_pct(self) -> int:
+        return self.completed * 100 // self.total if self.total > 0 else 0
+
+    @property
+    def early_pct(self) -> int:
+        return self.early * 100 // self.total if self.total > 0 else 0
+
+
+def week_ladder(completed: int, early: int, total: int) -> LadderResult:
+    """Weekly pay tier from counts. Integer cross-multiplication only; every
+    boundary is inclusive."""
+    def result(tier, pct=0):
+        return LadderResult(tier, pct, completed, early, total)
+
+    if total <= 0:
+        return result("neutral")
+    if completed * 100 < 60 * total:
+        return result("no_pay")
+    if completed != total:
+        return result("per_task")
+    if early * 100 >= 100 * total:
+        return result("bonus", 15)
+    if early * 100 >= 90 * total:
+        return result("bonus", 10)
+    if early * 100 >= 80 * total:
+        return result("bonus", 5)
+    return result("bonus", 0)
 
 
 def day_result(states: list[str]) -> Literal["early", "missed", "pending", "open", "neutral"]:
@@ -203,12 +326,16 @@ def reminder_stage(now: datetime, t: DayTimes) -> Optional[Literal["r1", "r2", "
         return "r1"
     if t.r2 <= now < t.deadline:
         return "r2"
-    if t.deadline <= now < t.deadline + GRABS_PUSH_WINDOW:
+    if t.cutoff <= now < min(t.grab_end, t.cutoff + GRABS_PUSH_WINDOW):
         return "grabs"
     return None
 
 
-def week_bonus(base_cents: int, pct: int, result: str) -> int:
-    if result == "early" and base_cents > 0 and pct > 0:
-        return base_cents * pct // 100
-    return 0
+def grab_window_open(now: datetime, t: DayTimes) -> bool:
+    """The up-for-grabs window: cutoff <= now < grab_end (family-local day)."""
+    return t.cutoff <= now < t.grab_end
+
+
+def chore_expired(now: datetime, t: DayTimes) -> bool:
+    """True once the day's cutoff has passed: the owner can no longer complete."""
+    return now >= t.cutoff

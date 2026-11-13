@@ -7,6 +7,7 @@ Each assignment has a specific date and tracks completion status.
 """
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Column,
     String,
@@ -20,6 +21,7 @@ from sqlalchemy import (
     Text,
     Enum as SQLEnum,
 )
+from sqlalchemy import false
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -151,6 +153,11 @@ class TaskAssignment(Base):
 
     # Completion
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    # True when a parent recorded the completion retroactively
+    # (mark_done_for_kid); such a row counts as done whatever completed_at says.
+    marked_done_by_parent = Column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     claimed_at = Column(DateTime(timezone=True), nullable=True)
 
     # Early Bird take-over: the new assignment points at the one it replaced

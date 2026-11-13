@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.family import Family
 from app.models.gig import GigClaim, GigClaimStatus
@@ -126,8 +127,9 @@ class PingService:
         family_id = user.family_id
         if user.role in KID_ROLES:
             today = await TaskAssignmentService._user_local_today(db, user.id)
-            return int((await db.execute(
-                select(func.count()).select_from(TaskAssignment)
+            open_rows = list((await db.execute(
+                select(TaskAssignment)
+                .options(selectinload(TaskAssignment.template))
                 .join(TaskTemplate, TaskTemplate.id == TaskAssignment.template_id)
                 .where(
                     TaskAssignment.family_id == family_id,
@@ -136,7 +138,10 @@ class PingService:
                     TaskAssignment.status.in_(_OPEN),
                     TaskAssignment.assigned_date <= today,
                 )
-            )).scalar() or 0)
+            )).scalars().all())
+            # Chores expired for their owner (Early Bird cutoff) are the
+            # family's now: not waiting on this kid any more.
+            return len(await TaskAssignmentService.drop_expired(db, family_id, open_rows))
         if user.role != UserRole.PARENT:
             return 0
         tasks = (await db.execute(

@@ -3,7 +3,12 @@
  * `detail` (English, technical); map known cases to bilingual copy. Shared by
  * the form (302 + flash) and JSON (deck) modes of /api/assignments/complete.
  */
-export function completeErrorMessage(status: number, detail: string, es: boolean): string {
+export function completeErrorMessage(status: number, detail: string, es: boolean, code = ""): string {
+    // Owner completed a chore after the evening cutoff: it is open to the
+    // family now. Not a retry hint — retrying can never succeed.
+    if (code === "chore_expired") {
+        return es ? "Esta tarea ya quedó libre para la familia" : "This chore is open to the family now";
+    }
     if (detail.includes(" / ")) {
         // Backend already ships bilingual "es / en" copy — pick a side.
         const [esPart, enPart] = detail.split(" / ");

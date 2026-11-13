@@ -462,19 +462,26 @@ graph TD
 
 ### Madrugador
 
-Una forma de premiar a los adolescentes por hacer sus tareas temprano. Se activa en **Configuración > Familia > Madrugador** (viene apagado).
+Una forma de premiar a los adolescentes por hacer sus tareas temprano, y de ponerle un final claro al día de tareas. Se activa en **Configuración > Familia > Madrugador** (viene apagado).
 
-- **Hora límite y recordatorios**: tú eliges la hora límite (por defecto 11:00, entre 07:00 y 22:00) y los días en que aplica (por defecto todos). Tus adolescentes reciben un aviso 1 hora y 30 minutos antes, mientras les queden tareas abiertas.
-- **Para tomar**: al pasar la hora, las tareas que sigan abiertas ese día quedan libres, **solo ese mismo día**. Otro niño puede tomarla, pero solo después de terminar las suyas. Quien la toma gana los puntos; el adolescente que la dejó los pierde (aparece como "Tomada").
-- **Tres premios**, cada uno ajustable (0 lo apaga):
-  1. **Más puntos por tarea temprana**: +20% de los puntos de la tarea si se hace antes del primer aviso (1 hora antes de la hora límite).
-  2. **Cheque semanal**: +5% en el cheque semanal de tareas en una semana donde todos los días con tareas fueron a tiempo. Lo ves en pagos como "incl. +5% madrugador".
-  3. **Tres semanas seguidas**: cada 3ª semana temprana consecutiva paga $500 MXN.
-- **Tareas de la tarde**: marca **"Tarea de la tarde - sin hora límite"** en la plantilla (por ejemplo "lavar los platos de la cena") y queda fuera del plazo. Las tareas bonus nunca cuentan.
-- **"Marcar hecha" por un padre**: si marcas una tarea como hecha antes del corte, cuenta como temprana.
-- Una calificación parcial o fallida rompe el día temprano; una tarea en espera de tu revisión aparece como pendiente hasta que la califiques.
+- **Una sola hora "temprana"**: la **hora madrugadora** que tú eliges (por defecto 11:00, entre 07:00 y 22:00), en los días que elijas (por defecto todos). Es la única hora que cuenta como temprano: para los puntos extra por tarea, para el bono semanal y para el premio de 3 semanas. Tus adolescentes reciben un aviso 1 hora y 30 minutos antes, mientras les queden tareas abiertas.
+- **Hora de corte de la tarde**: una tarea sigue siendo de quien la tiene hasta la **hora de corte** (por defecto 20:30). Después ya no puede terminarla y no cuenta como hecha.
+- **Para tomar**: desde la hora de corte hasta el **fin de "para tomar"** (por defecto 22:30), las tareas de ese día que sigan abiertas quedan libres para cualquier miembro de la familia, hijos y padres. Quien la toma gana los puntos; quien la dejó los pierde (aparece como "Tomada"). Al cerrar ese horario, la tarea que nadie tomó queda como no hecha.
+- **Alarmas para adolescentes**: dos avisos al día (por defecto 15:00 y 19:00, siempre antes de la hora de corte) a los adolescentes que aún tengan tareas pendientes ese día.
+- **Escalera de pago semanal** para adolescentes (en el cheque semanal de tareas, en todos los modos salvo la mesada fija), según las tareas de la semana (lunes a domingo) hechas antes de la hora de corte:
+  - **Menos de 60 %**: sin pago base esa semana.
+  - **De 60 a 99 %**: cada tarea completada paga su propio valor.
+  - **100 %**: todas las tareas pagan **y además** un bono según cuántas se hicieron antes de la hora madrugadora: 80 % o más temprano +5 %, 90 % o más +10 %, 100 % +15 %. Con menos de 80 % temprano no hay bono.
 
-La misma pantalla muestra el estado de cada adolescente: hoy, días tempranos de la semana y la racha hacia el premio de 3 semanas. La semana en que lo activas no cuenta para los premios semanales.
+  La pantalla de pagos explica por qué una semana pagó lo que pagó. Una semana es provisional hasta que termina y calificas las tareas que esperan tu revisión.
+- **Dos premios más**, cada uno ajustable (0 lo apaga):
+  1. **Más puntos por tarea temprana**: +20 % de los puntos de la tarea si se hace antes de la hora madrugadora.
+  2. **Tres semanas seguidas**: cada 3ª semana temprana consecutiva (todos los días con tareas hechos antes de la hora madrugadora) paga un premio, $380 MXN por defecto en familias nuevas.
+- **Tareas de la tarde**: marca **"Tarea de la tarde — sin hora límite"** en la plantilla (por ejemplo "lavar los platos de la cena") y queda fuera de la hora madrugadora, de la hora de corte y de la escalera. Las tareas bonus nunca cuentan.
+- **"Marcar hecha" por un padre**: una tarea que marcas como hecha cuenta como hecha para la semana (aunque sea después de la hora de corte), pero nunca como temprana.
+- Una calificación parcial o fallida cuenta como no hecha para la escalera y rompe el día temprano; una tarea en espera de tu revisión aparece como pendiente hasta que la califiques.
+
+La misma pantalla muestra el estado de cada adolescente: hoy, días tempranos de la semana y la racha hacia el premio de 3 semanas. En su inicio, cada adolescente ve el porcentaje de la semana y lo que le paga. La semana en que lo activas no cuenta para los premios semanales.
 
 ---
 

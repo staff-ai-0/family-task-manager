@@ -62,8 +62,9 @@ async def _chore(db, family, kid, day, title="Dishes", title_es=None):
 
 @pytest.fixture
 def after_deadline(monkeypatch):
-    """Freeze the service clock at 11:05 family-local today."""
-    fixed = _at(_today(), 11, 5)
+    """Freeze the service clock at 21:00 family-local today (inside the
+    20:30-22:30 grab window; was 11:05 before chore rules v2)."""
+    fixed = _at(_today(), 21, 0)
     monkeypatch.setattr(EarlyBirdService, "_now", staticmethod(lambda now=None: now or fixed))
     return fixed
 
@@ -76,13 +77,14 @@ async def test_me_teen_shape(client, db_session, test_family, test_teen_user):
     b = r.json()
     assert set(b) == {"enabled", "applies", "deadline", "cutoff_at", "deadline_at", "today",
                       "week", "week_result", "run_weeks", "weeks_to_payout", "streak_weeks", "streak_cents",
-                      "week_pct", "bonus_pct", "grabs", "take_block", "open_today"}
+                      "week_ladder", "bonus_pct", "grabs", "take_block", "open_today",
+                      "grab_end_at", "rules_version", "teen_alarm_1", "teen_alarm_2"}
     assert b["enabled"] is True and b["applies"] is True and b["deadline"] == "11:00"
     assert len(b["week"]) == 7 and b["week"][0]["date"] <= b["week"][6]["date"]
     assert b["streak_weeks"] == 3 and b["run_weeks"] == 0
     assert b["today"] in ("open", "missed")
     assert b["cutoff_at"] and b["deadline_at"]
-    assert isinstance(b["streak_cents"], int) and isinstance(b["week_pct"], int)
+    assert isinstance(b["streak_cents"], int) and "week_pct" not in b
 
 
 async def test_me_open_today_counts_open_chores(client, db_session, test_family, test_teen_user):
@@ -163,15 +165,15 @@ async def test_take_own_chore_403(client, db_session, test_family, test_teen_use
     assert r.status_code == 403 and r.json()["message"] == "own_chore"
 
 
-async def test_take_before_deadline_400(client, db_session, test_family, test_teen_user,
+async def test_take_before_cutoff_409(client, db_session, test_family, test_teen_user,
                                         test_child_user, monkeypatch):
     await _enable(db_session, test_family)
     a = await _chore(db_session, test_family, test_teen_user, _today())
-    early = _at(_today(), 9, 0)
+    early = _at(_today(), 11, 5)
     monkeypatch.setattr(EarlyBirdService, "_now", staticmethod(lambda now=None: now or early))
     r = await client.post(f"/api/early-bird/grabs/{a.id}/take",
                           headers=await _login(client, "child@test.com"))
-    assert r.status_code == 400 and r.json()["message"] == "not_grabbable"
+    assert r.status_code == 409 and r.json()["message"] == "grab_window_closed"
 
 
 async def test_take_cross_family_404(client, db_session, test_family, test_child_user,
@@ -188,12 +190,15 @@ async def test_take_cross_family_404(client, db_session, test_family, test_child
     assert r.status_code == 404
 
 
-async def test_take_parent_403(client, db_session, test_family, test_parent_user, test_teen_user):
+async def test_take_parent_allowed(client, db_session, test_family, test_parent_user,
+                                   test_teen_user, after_deadline):
+    # was 403 (kids only); chore rules v2 lets any active member take
     await _enable(db_session, test_family)
     a = await _chore(db_session, test_family, test_teen_user, _today())
     r = await client.post(f"/api/early-bird/grabs/{a.id}/take",
                           headers=await _login(client, "parent@test.com"))
-    assert r.status_code == 403
+    assert r.status_code == 200, r.text
+    assert r.json()["assigned_to"] == str(test_parent_user.id)
 
 
 async def test_family_overview_parent_only(client, db_session, test_family, test_parent_user,
@@ -207,7 +212,8 @@ async def test_family_overview_parent_only(client, db_session, test_family, test
     rows = r.json()
     assert [x["user_id"] for x in rows] == [str(test_teen_user.id)]
     assert set(rows[0]) == {"user_id", "name", "today", "week", "week_result", "run_weeks",
-                          "weeks_to_payout", "streak_weeks"}
+                          "weeks_to_payout", "streak_weeks", "week_ladder"}
+    assert set(rows[0]["week_ladder"]) == {"completed_pct", "early_pct", "tier", "bonus_pct", "final"}
     assert len(rows[0]["week"]) == 7
 
 
@@ -274,3 +280,102 @@ async def test_me_grabs_exclude_other_family_chores(
     await _chore(db_session, test_family, test_teen_user, _today(), title="Mine")
     b = (await client.get("/api/early-bird/me", headers=await _login(client, "child@test.com"))).json()
     assert [g["title"] for g in b["grabs"]] == ["Mine"]
+
+
+# ---------------------------------------------------------------- task 6b
+
+async def test_me_times_ladder_and_config(client, db_session, test_family, test_teen_user):
+    """cutoff_at is the EVENING cutoff, deadline_at the 11:00 early deadline,
+    grab_end_at the window end (America/Mexico_City, UTC-6)."""
+    await _enable(db_session, test_family)
+    await _chore(db_session, test_family, test_teen_user, _today())
+    b = (await client.get("/api/early-bird/me", headers=await _login(client, "teen@test.com"))).json()
+    assert "week_pct" not in b
+    day = _today()
+
+    def same(iso, hh, mm):
+        return datetime.fromisoformat(iso) == _at(day, hh, mm)
+
+    assert same(b["deadline_at"], 11, 0)
+    assert same(b["cutoff_at"], 20, 30)
+    assert same(b["grab_end_at"], 22, 30)
+    assert b["teen_alarm_1"] == "15:00" and b["teen_alarm_2"] == "19:00"
+    assert b["rules_version"] == test_family.rules_version and isinstance(b["rules_version"], int)
+    w = b["week_ladder"]
+    assert set(w) == {"completed_pct", "early_pct", "tier", "bonus_pct", "final"}
+    assert w["completed_pct"] == 0 and w["early_pct"] == 0 and w["final"] is False
+    for k in ("completed_pct", "early_pct", "bonus_pct"):
+        assert type(w[k]) is int
+    assert isinstance(w["tier"], str)
+
+
+async def test_me_week_ladder_counts(db_session, test_family, test_teen_user):
+    await _enable(db_session, test_family)
+    now = _at(_today(), 21, 0)
+    a = await _chore(db_session, test_family, test_teen_user, _today(), title="A")
+    await _chore(db_session, test_family, test_teen_user, _today(), title="B")
+    a.status = AssignmentStatus.COMPLETED
+    a.completed_at = _at(_today(), 9, 0)
+    await db_session.commit()
+    out = await EarlyBirdService.me(db_session, test_teen_user, now=now)
+    w = out["week_ladder"]
+    assert w["completed_pct"] == 50 and w["early_pct"] == 50
+    mom = await _user(db_session, test_family, "Mom2", UserRole.PARENT)
+    fam = await EarlyBirdService.family_overview(db_session, mom, now=now)
+    assert fam[0]["week_ladder"] == w
+
+
+async def test_grabs_endpoint_all_roles(
+        client, db_session, test_family, test_teen_user, test_child_user,
+        test_parent_user, after_deadline):
+    await _enable(db_session, test_family)
+    await _chore(db_session, test_family, test_teen_user, _today(), title="Mine")
+    await _chore(db_session, test_family, test_child_user, _today(), title="Kid")
+    for email, own in (("teen@test.com", "Mine"), ("child@test.com", "Kid"),
+                       ("parent@test.com", None)):
+        r = await client.get("/api/early-bird/grabs", headers=await _login(client, email))
+        assert r.status_code == 200
+        rows = {g["title"]: g for g in r.json()}
+        assert set(rows) == {"Mine", "Kid"}
+        for title, g in rows.items():
+            assert g["can_take"] is (title != own)
+            assert set(g) >= {"assignment_id", "title", "title_es", "points",
+                              "owner_id", "owner_name", "can_take"}
+            assert type(g["points"]) is int
+
+
+async def test_grabs_empty_before_window_and_when_off(
+        client, db_session, test_family, test_teen_user, test_child_user, monkeypatch):
+    await _enable(db_session, test_family)
+    await _chore(db_session, test_family, test_teen_user, _today())
+    early = _at(_today(), 12, 0)
+    monkeypatch.setattr(EarlyBirdService, "_now", staticmethod(lambda now=None: now or early))
+    h = await _login(client, "child@test.com")
+    assert (await client.get("/api/early-bird/grabs", headers=h)).json() == []
+    late = _at(_today(), 21, 0)
+    monkeypatch.setattr(EarlyBirdService, "_now", staticmethod(lambda now=None: now or late))
+    assert len((await client.get("/api/early-bird/grabs", headers=h)).json()) == 1
+    test_family.early_bird_enabled = False
+    await db_session.commit()
+    assert (await client.get("/api/early-bird/grabs", headers=h)).json() == []
+
+
+async def test_grabs_exclude_other_family_and_need_auth(
+        client, db_session, test_family, test_teen_user, test_parent_user, after_deadline):
+    await _enable(db_session, test_family)
+    other = Family(name="Other fam", timezone="America/Mexico_City")
+    db_session.add(other)
+    await db_session.commit()
+    await _enable(db_session, other)
+    stranger = await _user(db_session, other, "Stranger")
+    await _chore(db_session, other, stranger, _today(), title="Foreign")
+    await _chore(db_session, test_family, test_teen_user, _today(), title="Mine")
+    r = await client.get("/api/early-bird/grabs", headers=await _login(client, "parent@test.com"))
+    assert [g["title"] for g in r.json()] == ["Mine"]
+    assert (await client.get("/api/early-bird/grabs")).status_code == 401
+
+
+def test_grabs_proxy_covered_by_catch_all():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2] / "frontend/src/pages/api/early-bird"
+    assert (root / "[...path].ts").exists()
