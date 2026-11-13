@@ -20,7 +20,7 @@ SAT = date(2026, 11, 7)   # Saturday
 def cfg(**kw):
     base = dict(enabled=True, enabled_at=datetime(2026, 10, 1, tzinfo=MX), deadline=time(11, 0),
                 days=None, bonus_pct=20, week_pct=5, streak_cents=5000, tz=MX,
-                cutoff=time(20, 30), grab_end=time(22, 30))
+                cutoff=time(20, 30), grab_end=time(22, 30), alarm_1=time(15, 0), alarm_2=time(19, 0))
     base.update(kw)
     return EarlyBirdConfig(**base)
 
@@ -47,7 +47,7 @@ def test_from_family():
                           early_bird_deadline=time(11), early_bird_days=[0, 2],
                           early_bird_bonus_pct=20, early_bird_week_pct=5,
                           early_bird_streak_cents=100, timezone="America/Mexico_City",
-                          chore_cutoff=time(20, 30), grab_window_end=time(22, 30))
+                          chore_cutoff=time(20, 30), grab_window_end=time(22, 30), teen_alarm_1=time(15, 0), teen_alarm_2=time(19, 0))
     c = EarlyBirdConfig.from_family(fam)
     assert c.days == frozenset({0, 2}) and c.tz == MX and c.enabled_at is None
     fam.early_bird_days = None
@@ -208,7 +208,7 @@ def test_from_family_reads_past_periods():
                           early_bird_deadline=time(11), early_bird_days=None,
                           early_bird_bonus_pct=20, early_bird_week_pct=5,
                           early_bird_streak_cents=100, timezone="America/Mexico_City",
-                          chore_cutoff=time(20, 30), grab_window_end=time(22, 30),
+                          chore_cutoff=time(20, 30), grab_window_end=time(22, 30), teen_alarm_1=time(15, 0), teen_alarm_2=time(19, 0),
                           early_bird_past_periods=[["2026-10-01T00:00:00+00:00",
                                                     "2026-10-20T12:00:00+00:00"]])
     c = EarlyBirdConfig.from_family(fam)

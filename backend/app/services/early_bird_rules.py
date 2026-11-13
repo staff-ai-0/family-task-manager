@@ -40,6 +40,8 @@ class EarlyBirdConfig:
     tz: ZoneInfo
     cutoff: time  # chores must be done before this to count as completed
     grab_end: time  # end of the up-for-grabs window
+    alarm_1: time  # first teen chore alarm (family-local)
+    alarm_2: time  # second teen chore alarm
     # Earlier on-periods, closed by a switch-off: ((start, end), ...). The
     # current period is (enabled_at, open). Kept so an off->on toggle does not
     # retroactively make the weeks that already ran under the feature ineligible.
@@ -59,6 +61,8 @@ class EarlyBirdConfig:
             tz=safe_zoneinfo(fam.timezone),
             cutoff=fam.chore_cutoff,
             grab_end=fam.grab_window_end,
+            alarm_1=fam.teen_alarm_1,
+            alarm_2=fam.teen_alarm_2,
             past_periods=tuple(
                 (datetime.fromisoformat(start), datetime.fromisoformat(end))
                 for start, end in (getattr(fam, "early_bird_past_periods", None) or ())
@@ -84,6 +88,28 @@ def day_times(cfg: EarlyBirdConfig, day: date) -> DayTimes:
         cutoff=datetime.combine(day, cfg.cutoff, tzinfo=cfg.tz),
         grab_end=datetime.combine(day, cfg.grab_end, tzinfo=cfg.tz),
     )
+
+
+ALARM_WINDOW = timedelta(minutes=5)  # one tick of the */5 sweep
+
+
+def alarm_slot_start(cfg: EarlyBirdConfig, day: date, slot: str) -> datetime:
+    t = cfg.alarm_1 if slot == "a1" else cfg.alarm_2
+    return datetime.combine(day, t, tzinfo=cfg.tz)
+
+
+def alarm_slot(cfg: EarlyBirdConfig, now: datetime) -> Optional[Literal["a1", "a2"]]:
+    """"a1"/"a2" during the 5 minutes starting at ``alarm_1``/``alarm_2``
+    family-local on an active day, else None (matches the */5 job)."""
+    local = now.astimezone(cfg.tz)
+    day = local.date()
+    if not is_active_day(cfg, day):
+        return None
+    for slot in ("a1", "a2"):
+        start = alarm_slot_start(cfg, day, slot)
+        if start <= local < start + ALARM_WINDOW:
+            return slot
+    return None
 
 
 def _on_periods(cfg: EarlyBirdConfig) -> list[tuple[datetime, Optional[datetime]]]:

@@ -398,7 +398,7 @@ def _late_redo_not_counted(a):
     tz = ZoneInfo("America/Mexico_City")
     cfg = EarlyBirdConfig(
         enabled=True, enabled_at=None, deadline=time(11), days=None, bonus_pct=0,
-        week_pct=0, streak_cents=0, tz=tz, cutoff=time(20, 30), grab_end=time(22, 30),
+        week_pct=0, streak_cents=0, tz=tz, cutoff=time(20, 30), grab_end=time(22, 30), alarm_1=time(15, 0), alarm_2=time(19, 0),
     )
     late = datetime.combine(a.assigned_date, time(23, 0), tzinfo=tz)
     row = CoveredRow(a.id, a.assigned_date, AssignmentStatus.COMPLETED, ApprovalStatus.APPROVED,

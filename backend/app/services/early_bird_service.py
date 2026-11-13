@@ -27,6 +27,8 @@ from app.models.task_assignment import ApprovalStatus, AssignmentStatus, TaskAss
 from app.models.task_template import TaskTemplate
 from app.models.user import User, UserRole
 from app.services.early_bird_rules import (
+    alarm_slot,
+    alarm_slot_start,
     CoveredRow,
     PENDING_GRACE_DAYS,
     SETTLE_LOOKBACK_WEEKS,
@@ -544,7 +546,7 @@ class EarlyBirdService:
         subscription: rows carry ``expires_at`` so they never go stale.
         Returns counts; ``settled``/``paid`` are filled by the settlement step."""
         now = EarlyBirdService._now(now)
-        out = {"reminders": 0, "grabs": 0, "settled": 0, "paid": 0}
+        out = {"reminders": 0, "grabs": 0, "alarms": 0, "settled": 0, "paid": 0}
         # Plain rows, not ORM entities: a rollback below would expire entities.
         fam_ids = (await db.execute(
             select(Family.id).where(
@@ -579,6 +581,18 @@ class EarlyBirdService:
     @staticmethod
     async def _sweep_reminders(db, cfg, fam_id, now, today, out) -> None:
         times = day_times(cfg, today)
+        slot = alarm_slot(cfg, now)
+        if slot:
+            since = alarm_slot_start(cfg, today, slot)
+            teens = [m.id for m in await EarlyBirdService._members(db, fam_id, (UserRole.TEEN,))]
+            for uid in teens:
+                try:
+                    out["alarms"] += await EarlyBirdService._alarm(
+                        db, cfg, fam_id, uid, today, slot, since
+                    )
+                except Exception:
+                    log.exception("early bird alarm failed for user %s", uid)
+                    await db.rollback()
         stage = reminder_stage(now, times)
         if stage in ("r1", "r2"):
             teens = [m.id for m in await EarlyBirdService._members(db, fam_id, (UserRole.TEEN,))]
@@ -740,6 +754,26 @@ class EarlyBirdService:
             db, fam_id, key, user_id=uid,
             params={"n": n, "deadline": cfg.deadline.strftime("%H:%M")},
             link="/dashboard", expires_at=deadline, push_tag="ftm-early-bird",
+        )
+        return 1
+
+    @staticmethod
+    async def _alarm(db, cfg, fam_id, uid, today, slot, since) -> int:
+        """One teen chore alarm per slot per day. Counts like ``_remind``."""
+        from app.services.notification_service import NotificationService
+        from app.services.ping_service import PingService
+
+        rows = await EarlyBirdService.covered_rows(db, cfg, fam_id, uid, today, today)
+        n = sum(1 for r in rows if r.status in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE))
+        if n < 1:
+            return 0
+        if await PingService._has_ping_since(db, fam_id, uid, (NT.CHORE_ALARM,), since):
+            return 0
+        await NotificationService.create_localized(
+            db, fam_id, "chore_alarm" + ("_one" if n == 1 else ""), user_id=uid,
+            params={"n": n, "cutoff": cfg.cutoff.strftime("%H:%M")},
+            link="/dashboard", expires_at=day_times(cfg, today).cutoff,
+            push_tag="ftm-chore-alarm",
         )
         return 1
 

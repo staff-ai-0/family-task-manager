@@ -23,7 +23,7 @@ def cfg(enabled=True, enabled_at=datetime(2026, 10, 1, tzinfo=MX)):
     return EarlyBirdConfig(
         enabled=enabled, enabled_at=enabled_at, deadline=time(11, 0), days=None,
         bonus_pct=20, week_pct=5, streak_cents=5000, tz=MX,
-        cutoff=time(20, 30), grab_end=time(22, 30),
+        cutoff=time(20, 30), grab_end=time(22, 30), alarm_1=time(15, 0), alarm_2=time(19, 0),
     )
 
 

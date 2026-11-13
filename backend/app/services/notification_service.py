@@ -27,7 +27,7 @@ from app.models.notification import Notification, NotificationType as NT
 # The UX-D4a smart reminders (streak at risk / quest nudge) supersede too.
 SUPERSEDING_TYPES = frozenset({
     NT.TASK_DUE, NT.TASK_ASSIGNED, NT.PARENT_NUDGE, NT.STREAK_AT_RISK, NT.QUEST_NUDGE,
-    NT.DEADLINE_SOON, NT.UP_FOR_GRABS,
+    NT.DEADLINE_SOON, NT.UP_FOR_GRABS, NT.CHORE_ALARM,
 })
 
 # The unread badge only counts the last N days. Older unread rows stay in the
@@ -104,6 +104,16 @@ _COPY = {
         "type": NT.QUEST_NUDGE,
         "title": {"es": "🏁 Te falta 1 para tu misión de la semana", "en": "🏁 1 away from this week's quest"},
         "body": {"es": "Complétala y gana +{bonus} puntos.", "en": "Finish it for +{bonus} points."},
+    },
+    "chore_alarm": {
+        "type": NT.CHORE_ALARM,
+        "title": {"es": "⏰ Te faltan {n} tareas hoy", "en": "⏰ {n} chores left today"},
+        "body": {"es": "Te faltan {n} tareas hoy — vencen a las {cutoff}.", "en": "{n} chores left today — due by {cutoff}."},
+    },
+    "chore_alarm_one": {
+        "type": NT.CHORE_ALARM,
+        "title": {"es": "⏰ Te falta 1 tarea hoy", "en": "⏰ 1 chore left today"},
+        "body": {"es": "Te falta 1 tarea hoy — vence a las {cutoff}.", "en": "1 chore left today — due by {cutoff}."},
     },
     "deadline_r1": {
         "type": NT.DEADLINE_SOON,
