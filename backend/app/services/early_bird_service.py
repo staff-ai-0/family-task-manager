@@ -554,6 +554,7 @@ class EarlyBirdService:
             template.is_bonus
             or template.early_bird_exempt
             or assignment.taken_from_id is not None
+            or assignment.marked_done_by_parent  # a parent's record, never early
             or assignment.early_bonus_points is not None
             or credit_pct != 100
             or assignment.completed_at is None

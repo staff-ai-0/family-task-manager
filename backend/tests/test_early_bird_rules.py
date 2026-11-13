@@ -106,6 +106,21 @@ def test_chore_state_variants():
     assert chore_state(row(approval=AP.PENDING, completed_at=at(11, 5)), c, now, grace=True) == "missed"
 
 
+def test_chore_state_parent_marked_is_never_early():
+    """A parent's retroactive "mark done" is a record, not the teen finishing
+    early: even stamped 10:30 (before the 11:00 deadline) the day is not early,
+    whatever the review says."""
+    c = cfg()
+    for approval in (AP.APPROVED, AP.NONE, AP.PENDING):
+        marked = CoveredRow(uuid4(), MON, AS.COMPLETED, approval, "full", at(10, 30),
+                            parent_marked=True)
+        assert chore_state(marked, c, at(12)) == "missed", approval
+        assert chore_state(marked, c, at(12), grace=True) == "missed", approval
+    # Same row without the marker is early: the marker alone flips it.
+    plain = CoveredRow(uuid4(), MON, AS.COMPLETED, AP.APPROVED, "full", at(10, 30))
+    assert chore_state(plain, c, at(12)) == "early"
+
+
 def test_chore_state_open():
     c = cfg()
     for st in (AS.PENDING, AS.OVERDUE, AS.CLAIMED):

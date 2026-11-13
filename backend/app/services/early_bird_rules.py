@@ -168,7 +168,8 @@ class CoveredRow:
     grade: Optional[str]
     completed_at: Optional[datetime]
     # Set by the parent's retroactive "mark done" (explicit action): counts as
-    # completed whatever completed_at says.
+    # completed whatever completed_at says, and is never early (chore_state,
+    # done_early, EarlyBirdService.maybe_award_early_bonus).
     parent_marked: bool = False
 
 
@@ -178,6 +179,10 @@ ChoreState = Literal["early", "pending", "open", "missed"]
 def chore_state(row: CoveredRow, cfg: EarlyBirdConfig, now: datetime, *, grace: bool = False) -> ChoreState:
     deadline = day_times(cfg, row.assigned_date).deadline
     if row.status == AssignmentStatus.COMPLETED:
+        # A parent's retroactive "mark done" is never early (done, not early),
+        # whatever its completed_at or review says.
+        if row.parent_marked:
+            return "missed"
         if row.completed_at is None or row.completed_at >= deadline:
             return "missed"
         if row.grade in ("missed", "partial"):
