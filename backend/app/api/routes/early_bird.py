@@ -9,7 +9,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.exceptions import ForbiddenException
 from app.models.user import User, UserRole
-from app.schemas.early_bird import EarlyBirdMe, FamilyTeen
+from app.schemas.early_bird import EarlyBirdMe, FamilyTeen, GrabListItem
 from app.schemas.task_assignment import TaskAssignmentResponse
 from app.services.early_bird_service import EarlyBirdService
 
@@ -31,6 +31,15 @@ async def my_early_bird(
 ) -> dict:
     _kid_only(current_user)
     return await EarlyBirdService.me(db, current_user)
+
+
+@router.get("/grabs", response_model=List[GrabListItem])
+async def list_grabs(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list:
+    # Any authenticated family member, parents included (not kid-only like /me).
+    return await EarlyBirdService.grab_list(db, current_user)
 
 
 @router.post("/grabs/{assignment_id}/take", response_model=TaskAssignmentResponse)

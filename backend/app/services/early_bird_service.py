@@ -383,6 +383,16 @@ class EarlyBirdService:
     # ------------------------------------------------------------ API payloads
 
     @staticmethod
+    def _ladder_dict(r: LadderResult) -> dict:
+        return {
+            "completed_pct": int(r.completed_pct),
+            "early_pct": int(r.early_pct),
+            "tier": str(r.tier),
+            "bonus_pct": int(r.bonus_pct),
+            "final": bool(r.final),
+        }
+
+    @staticmethod
     async def _teen_view(db, cfg, family_id, user_id, now) -> dict:
         """today / week / week_result / run_weeks for one teen. Reuses
         week_status; never recomputes rules."""
@@ -392,6 +402,7 @@ class EarlyBirdService:
             db, cfg, family_id, user_id, monday, monday + timedelta(days=6)
         )
         result, days = EarlyBirdService._week_from_rows(cfg, rows, monday, now)
+        ladder = EarlyBirdService._metrics_from_rows(cfg, rows, monday, now)
         week = []
         for i in range(7):
             d = monday + timedelta(days=i)
@@ -410,6 +421,7 @@ class EarlyBirdService:
             "today": today_state,
             "week": week,
             "week_result": result,
+            "week_ladder": EarlyBirdService._ladder_dict(ladder),
             "run_weeks": int(last or 0),
             "weeks_to_payout": STREAK_WEEKS - (int(last or 0) % STREAK_WEEKS),
             "streak_weeks": STREAK_WEEKS,
@@ -431,6 +443,11 @@ class EarlyBirdService:
             "deadline": cfg.deadline.strftime("%H:%M"),
             "cutoff_at": None,
             "deadline_at": None,
+            "grab_end_at": None,
+            "rules_version": int(cfg.rules_version),
+            "teen_alarm_1": cfg.alarm_1.strftime("%H:%M"),
+            "teen_alarm_2": cfg.alarm_2.strftime("%H:%M"),
+            "week_ladder": EarlyBirdService._ladder_dict(week_ladder(0, 0, 0)),
             "today": None,
             "week": [],
             "week_result": "ineligible",
@@ -438,7 +455,6 @@ class EarlyBirdService:
             "weeks_to_payout": STREAK_WEEKS,
             "streak_weeks": STREAK_WEEKS,
             "streak_cents": int(cfg.streak_cents),
-            "week_pct": int(cfg.week_pct),
             "bonus_pct": int(cfg.bonus_pct),
             "grabs": [],
             "take_block": None,
@@ -449,7 +465,8 @@ class EarlyBirdService:
         today = now.astimezone(cfg.tz).date()
         if is_active_day(cfg, today):
             t = day_times(cfg, today)
-            out["cutoff_at"], out["deadline_at"] = t.deadline, t.deadline
+            out["cutoff_at"], out["deadline_at"] = t.cutoff, t.deadline
+            out["grab_end_at"] = t.grab_end
         if user.role == UserRole.TEEN:
             out["applies"] = True
             out.update(await EarlyBirdService._teen_view(db, cfg, user.family_id, user.id, now))
@@ -469,6 +486,31 @@ class EarlyBirdService:
             ]
             if out["grabs"]:
                 out["take_block"] = await EarlyBirdService.caller_block(db, user, today)
+        return out
+
+    @staticmethod
+    async def grab_list(
+        db: AsyncSession, user: User, now: Optional[datetime] = None
+    ) -> list[dict]:
+        """Up-for-grabs rows for ANY active member, each with the caller's own
+        can_take (the same eligibility as take: owner, role, membership)."""
+        rows = await EarlyBirdService.grabbable(db, user.family_id, now)
+        blocked = await EarlyBirdService.caller_block(db, user) is not None
+        out = []
+        for g in rows:
+            # Same two rules as can_take (membership, then the template's
+            # role list) plus "not your own chore"; membership is per caller.
+            ok = (
+                not blocked
+                and g.owner_id != user.id
+                and role_may_take(g.allowed_roles, user.role.value)
+            )
+            out.append({
+                "assignment_id": g.assignment_id, "title": g.title,
+                "title_es": g.title_es, "points": g.points,
+                "owner_id": g.owner_id, "owner_name": g.owner_name,
+                "can_take": ok,
+            })
         return out
 
     @staticmethod

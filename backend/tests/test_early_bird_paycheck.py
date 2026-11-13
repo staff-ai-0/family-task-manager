@@ -229,6 +229,21 @@ async def test_outstanding_weeks_carry_the_week_pct(ctx):
 
 
 @pytest.mark.asyncio
+async def test_outstanding_week_response_carries_ladder_keys(ctx):
+    from app.schemas.bank import PayoutPaycheckWeek
+
+    db, fam, kid, last = ctx
+    await _setup(db, fam, kid)
+    await _four_early(db, fam, kid, last)
+    weeks = await BankService.list_outstanding_weeks(db, kid, fam.id)
+    w = next(x for x in weeks if x["week_of"] == last)
+    assert {"ladder_tier", "completed_pct", "early_pct", "ladder_final"} <= set(w)
+    out = PayoutPaycheckWeek(**w).model_dump()
+    assert out["ladder_tier"] == "bonus" and out["completed_pct"] == 100
+    assert out["early_pct"] == 100 and out["ladder_final"] is True
+
+
+@pytest.mark.asyncio
 async def test_outstanding_scan_loads_early_bird_config_once(ctx):
     """8 lookback weeks must not reload the family's Early Bird config 8 times."""
     from sqlalchemy import event

@@ -46,6 +46,7 @@ class EarlyBirdConfig:
     # current period is (enabled_at, open). Kept so an off->on toggle does not
     # retroactively make the weeks that already ran under the feature ineligible.
     past_periods: tuple[tuple[datetime, datetime], ...] = ()
+    rules_version: int = 1
 
     @classmethod
     def from_family(cls, fam) -> "EarlyBirdConfig":
@@ -63,6 +64,7 @@ class EarlyBirdConfig:
             grab_end=fam.grab_window_end,
             alarm_1=fam.teen_alarm_1,
             alarm_2=fam.teen_alarm_2,
+            rules_version=int(getattr(fam, "rules_version", None) or 1),
             past_periods=tuple(
                 (datetime.fromisoformat(start), datetime.fromisoformat(end))
                 for start, end in (getattr(fam, "early_bird_past_periods", None) or ())

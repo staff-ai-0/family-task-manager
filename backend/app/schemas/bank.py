@@ -118,6 +118,11 @@ class PayoutPaycheckWeek(BaseModel):
     early_bird_bonus_cents: int = 0
     # The % behind early_bird_bonus_cents (0 when there is no bonus).
     early_bird_week_pct: int = 0
+    # Pay-ladder meter for the week (see ChorePaycheckPreview).
+    ladder_tier: str = "neutral"
+    completed_pct: int = 0
+    early_pct: int = 0
+    ladder_final: bool = False
     is_current_week: bool
     already_released: bool
     tasks: list[PayoutTaskDetail] = []

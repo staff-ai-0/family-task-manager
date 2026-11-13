@@ -13,6 +13,24 @@ class WeekDay(BaseModel):
     state: Literal["early", "pending", "open", "missed", "neutral", "future"]
 
 
+class WeekLadder(BaseModel):
+    completed_pct: int
+    early_pct: int
+    tier: str
+    bonus_pct: int
+    final: bool
+
+
+class GrabListItem(BaseModel):
+    assignment_id: UUID
+    title: str
+    title_es: Optional[str] = None
+    points: int
+    owner_id: UUID
+    owner_name: str
+    can_take: bool
+
+
 class GrabItem(BaseModel):
     assignment_id: UUID
     title: str
@@ -26,6 +44,11 @@ class EarlyBirdMe(BaseModel):
     deadline: str
     cutoff_at: Optional[datetime] = None
     deadline_at: Optional[datetime] = None
+    grab_end_at: Optional[datetime] = None
+    rules_version: int = 1
+    teen_alarm_1: str = "15:00"
+    teen_alarm_2: str = "19:00"
+    week_ladder: WeekLadder
     today: Optional[DayState] = None
     week: list[WeekDay]
     week_result: str
@@ -33,7 +56,6 @@ class EarlyBirdMe(BaseModel):
     weeks_to_payout: int
     streak_weeks: int
     streak_cents: int
-    week_pct: int
     bonus_pct: int
     grabs: list[GrabItem]
     take_block: Optional[str] = None
@@ -49,3 +71,4 @@ class FamilyTeen(BaseModel):
     run_weeks: int
     weeks_to_payout: int
     streak_weeks: int
+    week_ladder: WeekLadder
