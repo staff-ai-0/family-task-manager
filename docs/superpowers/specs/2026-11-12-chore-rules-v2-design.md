@@ -137,4 +137,9 @@ exact mirror of the real family (4 members) per repo convention.
 - **`week_ladder` naming**: the ladder object on `/api/early-bird/me` and `/family` is `week_ladder` (`week` is already the 7-day list). `/me` also gains `cutoff_at` (evening), `deadline_at` (11:00), `grab_end_at`, `rules_version`, alarm times.
 - **Grab list for every role**: `GET /api/early-bird/grabs` (+`can_take`) serves any active member, parents included; push to parents stays.
 - **`early_bird_week_pct` retired** (column kept, unread); new-family streak default 38000 cents, existing rows untouched.
-- Open decisions: a non-final release locks per-task pay without floor/bonus; the receipt oldest-unpaid fallback may propose a $0 no_pay week; taker rows never expire.
+- **Parent marks are never early everywhere**: `done_early` (ladder), `chore_state` (streak day) and `maybe_award_early_bonus` (+20 % per chore) all skip a `marked_done_by_parent` row.
+- **A parent send-back stays the kid's** (ruling R9): a proof chore reopened as PENDING + approval REJECTED is never expired for its owner — the redo is allowed after the cutoff (it counts late for the ladder), it keeps blocking the bonus/gig gates, and it is not up for grabs.
+- **Alarms**: both alarm times must be strictly before the cutoff; each slot is a 30-minute window from its time (clamped to the cutoff, the later slot wins an overlap), deduped by the send record since the slot start. The grabs push expires at `grab_window_end`.
+- **The ladder money lives only in `BankService._ladder_terms` / `_ladder_adjust`** (read by `_paycheck_projection`); `_early_bird_bonus`, named above, was deleted as dead code.
+- **Receipt fallback**: with no week number in the concept, the proposal skips unpaid weeks that owe nothing ($0 no_pay) while any week owes money.
+- Open decisions: a non-final release locks per-task pay without floor/bonus; taker rows never expire.
