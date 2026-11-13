@@ -82,11 +82,11 @@ async def _account(db, kid, mode):
     return acct
 
 
-async def _chore(db, family, kid, day, *, hh=None, grade=None):
+async def _chore(db, family, kid, day, *, hh=None, grade=None, exempt=False):
     """hh None = left open (PENDING); otherwise COMPLETED + APPROVED at hh:00."""
     t = TaskTemplate(id=uuid4(), title="Chore", points=POINTS, interval_days=1,
                      assignment_type=AssignmentType.AUTO, is_bonus=False, is_active=True,
-                     family_id=family.id)
+                     early_bird_exempt=exempt, family_id=family.id)
     db.add(t)
     await db.flush()
     done = hh is not None
@@ -419,6 +419,24 @@ async def test_chore_gated_partial_grade_fails_gate_without_bonus(ctx):
     await _week(db, fam, kid, LAST, early=9, partial=1)
     p = await _project(db, kid, fam)
     assert (p["amount_cents"], p["early_bird_bonus_cents"], p["ladder_tier"]) == (0, 0, "per_task")
+
+
+@pytest.mark.asyncio
+async def test_chore_gated_closed_gate_under_a_perfect_ladder_pays_nothing(ctx):
+    """An undone "evening" (early_bird_exempt) chore closes the gate but is not
+    covered, so the ladder still reads 10/10 all early (+15 %): 15 % of a closed
+    gate is 0, and the week must not be labelled with a % it did not pay."""
+    db, fam, kid = ctx
+    await _account(db, kid, "chore_gated")
+    await _week(db, fam, kid, LAST, early=10)
+    await _chore(db, fam, kid, LAST, exempt=True)  # left open
+    p = await _project(db, kid, fam)
+    assert (p["ladder_tier"], p["early_pct"]) == ("bonus", 100)
+    assert (p["amount_cents"], p["early_bird_bonus_cents"], p["early_bird_week_pct"]) == (0, 0, 0)
+    r = await BankService.release_chore_paycheck(db, kid, fam.id, LAST, entitled=False)
+    assert r["amount_cents"] == 0
+    _, rows = await _allowance(db, kid)
+    assert not any("madrugador" in (x.description or "") for x in rows)
 
 
 # ------------------------------------------------------- multi-week surfaces
