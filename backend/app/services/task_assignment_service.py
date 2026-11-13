@@ -2505,6 +2505,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 # redo the work (and it blocks gigs again until done).
                 assignment.status = AssignmentStatus.PENDING
                 assignment.completed_at = None
+                assignment.marked_done_by_parent = False
             from app.services.notification_service import NotificationService
             await db.commit()
             await NotificationService.create_localized(
@@ -2789,6 +2790,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             assignment.status = status
             if status == AssignmentStatus.PENDING:
                 assignment.completed_at = None
+                assignment.marked_done_by_parent = False
             if reopening_completed and template is not None and not template.is_bonus:
                 # Proof-required chores re-enter the queue on the next
                 # completion; clear the stale decision trail. The grade must

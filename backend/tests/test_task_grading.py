@@ -379,3 +379,57 @@ async def test_cancel_claws_back_credit_even_after_template_points_change(
     )
     await db_session.refresh(test_child_user)
     assert test_child_user.points == before
+
+
+async def _parent_marked_chore(db_session, family, child):
+    chore = await _make_chore_template(db_session, family, points=10)
+    a = await _make_pending(db_session, family, child, chore)
+    a.marked_done_by_parent = True
+    await db_session.commit()
+    return a
+
+
+def _late_redo_not_counted(a):
+    """A redo completed after the 20:30 cutoff must not inherit the exemption."""
+    from datetime import datetime, time
+    from zoneinfo import ZoneInfo
+    from app.services.early_bird_rules import CoveredRow, EarlyBirdConfig, completed_in_time
+
+    tz = ZoneInfo("America/Mexico_City")
+    cfg = EarlyBirdConfig(
+        enabled=True, enabled_at=None, deadline=time(11), days=None, bonus_pct=0,
+        week_pct=0, streak_cents=0, tz=tz, cutoff=time(20, 30), grab_end=time(22, 30),
+    )
+    late = datetime.combine(a.assigned_date, time(23, 0), tzinfo=tz)
+    row = CoveredRow(a.id, a.assigned_date, AssignmentStatus.COMPLETED, ApprovalStatus.APPROVED,
+                     None, late, parent_marked=bool(a.marked_done_by_parent))
+    assert not completed_in_time(row, cfg)
+
+
+@pytest.mark.asyncio
+async def test_proof_rejection_clears_parent_marked(
+    db_session, test_family, test_parent_user, test_child_user,
+):
+    a = await _parent_marked_chore(db_session, test_family, test_child_user)
+    await TaskAssignmentService.approve_gig(
+        db_session, a.id, test_family.id, test_parent_user.id,
+        approve=False, grade="missed",
+    )
+    await db_session.refresh(a)
+    assert a.status == AssignmentStatus.PENDING
+    assert a.marked_done_by_parent is False
+    _late_redo_not_counted(a)
+
+
+@pytest.mark.asyncio
+async def test_status_reopen_clears_parent_marked(
+    db_session, test_family, test_parent_user, test_child_user,
+):
+    a = await _parent_marked_chore(db_session, test_family, test_child_user)
+    await TaskAssignmentService.patch_assignment(
+        db_session, a.id, test_family.id, status=AssignmentStatus.PENDING,
+    )
+    await db_session.refresh(a)
+    assert a.status == AssignmentStatus.PENDING
+    assert a.marked_done_by_parent is False
+    _late_redo_not_counted(a)
