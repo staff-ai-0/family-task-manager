@@ -211,6 +211,20 @@ describe("grabItems", () => {
 
 const L = (completed_pct: number, early_pct: number, tier: string, bonus_pct: number, final = false) => ({ completed_pct, early_pct, tier, bonus_pct, final });
 
+describe("ladderMessage deadline", () => {
+    it("names the family's early deadline, never a fixed 11:00", () => {
+        for (const lang of ["es", "en"] as const) {
+            const m = ladderMessage(L(100, 85, "bonus", 5), lang, "10:00");
+            expect(m).toContain("10:00");
+            expect(m).not.toContain("11:00");
+            expect(ladderMessage(L(100, 85, "bonus", 5), lang, "11:00")).toContain("11:00");
+        }
+    });
+    it("without a deadline the hint stays generic", () => {
+        expect(ladderMessage(L(100, 85, "bonus", 5), "en")).not.toMatch(/\d\d:\d\d/);
+    });
+});
+
 describe("ladderMessage", () => {
     it("under 60 %: how far from being paid", () => {
         expect(ladderMessage(L(52, 0, "no_pay", 0), "es")).toBe("Llevas 52 %: necesitas 60 % para cobrar");

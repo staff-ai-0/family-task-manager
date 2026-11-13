@@ -1,12 +1,12 @@
 /**
- * Early Bird (11:00 chore deadline) kid/teen view-model. The ONLY place the
+ * Early Bird (early chore deadline) kid/teen view-model. The ONLY place the
  * kid-facing copy lives; all numbers and states come from the backend
  * (`GET /api/early-bird/me`, early_bird_service.py).
  */
 export type Lang = "es" | "en";
 
 export type DayState = "early" | "pending" | "open" | "missed" | "neutral" | "future";
-/** on_track = before the early deadline (11:00); before_cutoff = past it but the
+/** on_track = before the early deadline; before_cutoff = past it but the
  * chore is still the kid's until the evening cutoff; late = past the cutoff. */
 export type CardState = "early" | "on_track" | "before_cutoff" | "late" | "missed" | "idle";
 
@@ -193,9 +193,9 @@ const LADDER = {
     es: {
         noPay: (p: number) => `Llevas ${p} %: necesitas 60 % para cobrar`,
         perTask: (p: number) => `Llevas ${p} %: cada tarea que termines paga. Con 100 % te ganas el bono madrugador`,
-        bonus: (earned: number, next: number | null, nextAt: number) =>
+        bonus: (earned: number, next: number | null, nextAt: number, dl: string) =>
             (earned > 0 ? `Vas con +${earned} % de madrugador` : "Semana completa al 100 %") +
-            (next ? `. +${next} % si ${nextAt} % antes de las 11:00` : ""),
+            (next ? `. +${next} % si ${nextAt} % antes de ${dl ? `las ${dl}` : "la hora madrugadora"}` : ""),
         closed: (p: number, tail: string) => `Semana cerrada: ${p} % — ${tail}`,
         closedNoPay: "sin pago base",
         closedPerTask: "cada tarea pagó",
@@ -204,9 +204,9 @@ const LADDER = {
     en: {
         noPay: (p: number) => `You're at ${p}%: you need 60% to get paid`,
         perTask: (p: number) => `You're at ${p}%: every task you finish pays. Hit 100% to unlock the early bird bonus`,
-        bonus: (earned: number, next: number | null, nextAt: number) =>
+        bonus: (earned: number, next: number | null, nextAt: number, dl: string) =>
             (earned > 0 ? `You're on +${earned}% early bird` : "Week complete at 100%") +
-            (next ? `. +${next}% if ${nextAt}% before 11:00` : ""),
+            (next ? `. +${next}% if ${nextAt}% before ${dl || "the early deadline"}` : ""),
         closed: (p: number, tail: string) => `Week closed: ${p}% — ${tail}`,
         closedNoPay: "no base pay",
         closedPerTask: "each task paid",
@@ -215,7 +215,7 @@ const LADDER = {
 } as const;
 
 /** The kid's weekly paycheck status in one sentence, from `week_ladder`. */
-export function ladderMessage(ladder: Partial<WeekLadder> | null | undefined, lang: Lang): string {
+export function ladderMessage(ladder: Partial<WeekLadder> | null | undefined, lang: Lang, deadline = ""): string {
     if (!ladder || ladder.tier === "neutral" || !ladder.tier) return "";
     const t = LADDER[lang === "en" ? "en" : "es"];
     const pct = Math.max(0, Math.min(100, Math.trunc(Number(ladder.completed_pct) || 0)));
@@ -229,7 +229,7 @@ export function ladderMessage(ladder: Partial<WeekLadder> | null | undefined, la
     if (ladder.tier === "per_task") return t.perTask(pct);
     // bonus tier: 80 % early -> +5, 90 % -> +10, 100 % -> +15
     const next = earned < 5 ? [5, 80] : earned < 10 ? [10, 90] : earned < 15 ? [15, 100] : null;
-    return t.bonus(earned, next ? next[0] : null, next ? next[1] : 0);
+    return t.bonus(earned, next ? next[0] : null, next ? next[1] : 0, deadline);
 }
 
 const parse = (iso: unknown): Date | null => {
@@ -295,7 +295,7 @@ export function earlyBirdView(me: any, lang: Lang, now: Date): EarlyBirdView | n
         runText: run.target ? `${run.done}/${run.target}` : "",
         runLabel: c.run,
         bonusLabel: streakCents > 0 ? c.bonus(money(streakCents, lang)) : "",
-        ladderText: ladderMessage(me?.week_ladder, lang),
+        ladderText: ladderMessage(me?.week_ladder, lang, String(me?.deadline ?? "")),
         paycheckBonusPct: Math.max(0, Math.trunc(Number(me?.week_ladder?.bonus_pct) || 0)),
         targetAt: target ? target.toISOString() : "",
         grabs: grabItems(grabsRaw, lang),
