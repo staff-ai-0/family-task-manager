@@ -32,7 +32,7 @@ async def test_family_defaults(db_session):
     assert fam.early_bird_deadline == time(11, 0)
     assert fam.early_bird_bonus_pct == 20
     assert fam.early_bird_week_pct == 5
-    assert fam.early_bird_streak_cents == 50000
+    assert fam.early_bird_streak_cents == 38000
     assert fam.early_bird_days is None
 
 
@@ -123,7 +123,7 @@ async def test_family_update_validation(client, auth_headers, db_session, test_f
     assert (await patch(early_bird_deadline="nope")).status_code == 422
     r = await patch(early_bird_deadline="11:00")
     assert r.status_code == 200 and r.json()["early_bird_deadline"] == "11:00"
-    r = await patch(early_bird_deadline="22:00")
+    r = await patch(early_bird_deadline="22:00", chore_cutoff="23:00", grab_window_end="23:30")
     assert r.status_code == 200 and r.json()["early_bird_deadline"] == "22:00"
     assert (await patch(early_bird_days=[7])).status_code == 422
     assert (await patch(early_bird_days=[])).status_code == 422
@@ -134,7 +134,7 @@ async def test_family_update_validation(client, auth_headers, db_session, test_f
     r = await patch(early_bird_enabled=None)
     assert r.status_code == 200 and r.json()["early_bird_enabled"] is False
     body = (await client.get("/api/families/me", headers=auth_headers)).json()
-    assert body["early_bird_bonus_pct"] == 20 and body["early_bird_streak_cents"] == 50000
+    assert body["early_bird_bonus_pct"] == 20 and body["early_bird_streak_cents"] == 38000
 
 
 async def test_template_exempt_flag_roundtrip(client, auth_headers):

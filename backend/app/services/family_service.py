@@ -143,9 +143,38 @@ class FamilyService:
         for col in (
             "early_bird_enabled", "early_bird_deadline", "early_bird_bonus_pct",
             "early_bird_week_pct", "early_bird_streak_cents",
+            "chore_cutoff", "grab_window_end", "teen_alarm_1", "teen_alarm_2",
         ):  # NOT NULL columns: an explicit null means "leave as-is"
             if update_fields.get(col, 0) is None:
                 del update_fields[col]
+        # Chore rules v2: order checks run on the MERGED values, so moving the
+        # deadline past the stored cutoff is refused too.
+        merged = {
+            col: update_fields.get(col, getattr(family, col))
+            for col in (
+                "early_bird_deadline", "chore_cutoff", "grab_window_end",
+                "teen_alarm_1", "teen_alarm_2",
+            )
+        }
+        if any(c in update_fields for c in merged):
+            if merged["chore_cutoff"] <= merged["early_bird_deadline"]:
+                raise ValidationException("chore_cutoff must be after early_bird_deadline")
+            if merged["grab_window_end"] <= merged["chore_cutoff"]:
+                raise ValidationException("grab_window_end must be after chore_cutoff")
+            if merged["teen_alarm_1"] >= merged["teen_alarm_2"]:
+                raise ValidationException("teen_alarm_1 must be before teen_alarm_2")
+            if merged["teen_alarm_2"] > merged["chore_cutoff"]:
+                raise ValidationException("teen alarms must not be after chore_cutoff")
+        # Any real change to a rule-defining setting bumps rules_version in
+        # the same transaction (unchanged values do not).
+        if any(
+            col in update_fields and update_fields[col] != getattr(family, col)
+            for col in (
+                "chore_cutoff", "grab_window_end", "teen_alarm_1", "teen_alarm_2",
+                "early_bird_deadline", "early_bird_streak_cents",
+            )
+        ):
+            family.rules_version = (family.rules_version or 1) + 1
         turning_on = (
             update_fields.get("early_bird_enabled") is True
             and not family.early_bird_enabled

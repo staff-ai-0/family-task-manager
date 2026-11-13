@@ -32,6 +32,25 @@ def _parse_deadline(value):
     return parsed.replace(second=0, microsecond=0)
 
 
+def _parse_clock(value, name, lo, hi):
+    """Accept "HH:MM" (or a time) within [lo, hi], on a 5-minute step."""
+    if value is None or isinstance(value, time):
+        parsed = value
+    else:
+        try:
+            hh, mm = str(value).split(":")[:2]
+            parsed = time(int(hh), int(mm))
+        except (ValueError, TypeError):
+            raise ValueError(f"{name} must be HH:MM")
+    if parsed is None:
+        return parsed
+    if parsed.minute % 5 != 0 or parsed.second or not lo <= parsed <= hi:
+        raise ValueError(
+            f"{name} must be {lo.strftime('%H:%M')}-{hi.strftime('%H:%M')} in 5-minute steps"
+        )
+    return parsed.replace(second=0, microsecond=0)
+
+
 def _validate_iana_tz(value: Optional[str]) -> Optional[str]:
     if value is None:
         return value
@@ -85,6 +104,11 @@ class FamilyUpdate(BaseModel):
     early_bird_bonus_pct: Optional[int] = Field(None, ge=0, le=100)
     early_bird_week_pct: Optional[int] = Field(None, ge=0, le=50)
     early_bird_streak_cents: Optional[int] = Field(None, ge=0, le=1_000_000)
+    # Chore rules v2 (cross-field order is checked in FamilyService).
+    chore_cutoff: Optional[time] = None
+    grab_window_end: Optional[time] = None
+    teen_alarm_1: Optional[time] = None
+    teen_alarm_2: Optional[time] = None
     # Module registry: list of ENABLED togglable modules. None = leave as-is
     # on PATCH; stored NULL = all on. Must be a subset of TOGGLABLE_MODULES.
     enabled_modules: Optional[List[str]] = None
@@ -93,6 +117,21 @@ class FamilyUpdate(BaseModel):
     @classmethod
     def _check_deadline(cls, v):
         return _parse_deadline(v)
+
+    @field_validator("chore_cutoff", mode="before")
+    @classmethod
+    def _check_cutoff(cls, v):
+        return _parse_clock(v, "chore_cutoff", time(17, 0), time(23, 0))
+
+    @field_validator("grab_window_end", mode="before")
+    @classmethod
+    def _check_grab_end(cls, v):
+        return _parse_clock(v, "grab_window_end", time(0, 0), time(23, 30))
+
+    @field_validator("teen_alarm_1", "teen_alarm_2", mode="before")
+    @classmethod
+    def _check_alarm(cls, v):
+        return _parse_clock(v, "teen alarm", time(6, 0), time(23, 0))
 
     @field_validator("early_bird_days")
     @classmethod
@@ -163,12 +202,20 @@ class FamilyResponse(EntityResponse):
     early_bird_days: Optional[List[int]] = None  # NULL = every day
     early_bird_bonus_pct: int = 20
     early_bird_week_pct: int = 5
-    early_bird_streak_cents: int = 50000
+    early_bird_streak_cents: int = 38000
+    chore_cutoff: time = time(20, 30)
+    grab_window_end: time = time(22, 30)
+    teen_alarm_1: time = time(15, 0)
+    teen_alarm_2: time = time(19, 0)
+    rules_version: int = 1
     # Stored value: NULL = all modules on. Clients resolve via the same rule.
     enabled_modules: Optional[List[str]] = None
 
 
-    @field_serializer("early_bird_deadline")
+    @field_serializer(
+        "early_bird_deadline", "chore_cutoff", "grab_window_end",
+        "teen_alarm_1", "teen_alarm_2",
+    )
     def _ser_deadline(self, v: time) -> str:
         return v.strftime("%H:%M")
 

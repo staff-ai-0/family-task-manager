@@ -118,3 +118,23 @@ def test_round_trip(scratch_dsn):
     _alembic(dsn, "upgrade", "head")
     assert "taken" in _labels(dsn, "assignmentstatus")
     assert "BONUS" in _labels(dsn, "cashtransactiontype")
+
+
+def test_chore_rules_v2_round_trip(scratch_dsn):
+    dsn = scratch_dsn
+    _alembic(dsn, "upgrade", "early_bird_past_periods")
+    _insert(dsn, "families", id=uuid.uuid4(), name="Old")
+    _alembic(dsn, "upgrade", "head")
+    new = {"chore_cutoff", "grab_window_end", "teen_alarm_1", "teen_alarm_2", "rules_version"}
+    assert new <= _cols(dsn, "families")
+    row = _sql(dsn, "SELECT chore_cutoff::text AS c, grab_window_end::text AS g, "
+                    "teen_alarm_1::text AS a1, teen_alarm_2::text AS a2, rules_version AS v, "
+                    "early_bird_streak_cents AS s FROM families")[0]
+    assert (row["c"], row["g"], row["a1"], row["a2"], row["v"]) == (
+        "20:30:00", "22:30:00", "15:00:00", "19:00:00", 1)
+    assert row["s"] == 50000  # existing family is not rewritten
+
+    _alembic(dsn, "downgrade", "early_bird_past_periods")
+    assert not (new & _cols(dsn, "families"))
+    _alembic(dsn, "upgrade", "head")
+    assert new <= _cols(dsn, "families")
