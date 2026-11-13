@@ -429,16 +429,6 @@ async def test_receipt_confirm_pays_the_receipt_amount(ctx, test_parent_user, ea
     assert total == receipt and len(rows) == 1
 
 
-@pytest.mark.asyncio
-async def test_early_bird_bonus_derives_from_the_ladder(ctx):
-    db, fam, kid = ctx
-    await _week(db, fam, kid, LAST, early=10)
-    assert await BankService._early_bird_bonus(db, fam.id, kid.id, LAST, 12345) == (1851, 15)
-    await _week(db, fam, kid, LAST - timedelta(days=7), early=7, late=3)
-    assert await BankService._early_bird_bonus(
-        db, fam.id, kid.id, LAST - timedelta(days=7), 12345) == (0, 0)
-
-
 # ------------------------------------------------------- chore_gated reconcile
 
 @pytest.mark.asyncio

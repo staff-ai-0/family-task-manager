@@ -627,21 +627,6 @@ class BankService:
         return base, bonus, pct, metrics
 
     @staticmethod
-    async def _early_bird_bonus(
-        db: AsyncSession, family_id: UUID, user_id: UUID, week_monday: date, base: int,
-        cfg=None, now: Optional[datetime] = None,
-    ) -> tuple[int, int]:
-        """(bonus_cents, bonus_pct) — the ladder's early-share bonus on a chore
-        paycheck ``base`` (0 / 0 when not earned or the week is not final).
-        A view of _ladder_terms; the paycheck itself (projection, release,
-        receipt confirm) reads _paycheck_projection, which also applies the
-        no_pay floor this pair cannot express."""
-        _, bonus, pct, _ = await BankService._ladder_terms(
-            db, family_id, user_id, week_monday, base, cfg=cfg, now=now
-        )
-        return bonus, (pct if bonus > 0 else 0)
-
-    @staticmethod
     async def _paycheck_projection(
         db: AsyncSession, acct: KidBankAccount, family_id: UUID, week_monday: date,
         eb_cfg=None, now: Optional[datetime] = None,
