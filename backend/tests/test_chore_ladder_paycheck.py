@@ -24,7 +24,7 @@ from app.models.task_template import AssignmentType, TaskTemplate
 from app.models.user import User, UserRole
 from app.services.bank_service import BankService
 from app.services.early_bird_rules import week_ladder
-from app.services.payout_receipt_service import record_receipt
+from app.services.payout_receipt_service import propose, record_receipt
 
 MX = ZoneInfo("America/Mexico_City")
 MODES = ("chore_proportional", "chore_gated", "points_rate")
@@ -498,3 +498,36 @@ async def test_outstanding_weeks_carry_the_ladder(ctx):
     assert (w["amount_cents"], w["early_bird_bonus_cents"], w["early_bird_week_pct"]) == (
         7910 + 791, 791, 10)
     assert weeks[LAST - timedelta(days=7)]["amount_cents"] == 0
+
+
+@pytest.mark.asyncio
+async def test_receipt_fallback_skips_a_zero_no_pay_week(ctx):
+    """A $300 transfer with no week number lands on the week actually owed
+    (last week, $300), not on an older no_pay week projecting $0 — proposing
+    the $0 week would leave the owed week owed, to be paid a second time."""
+    db, fam, kid = ctx
+    acct = await _account(db, kid, "chore_proportional")
+    acct.allowance_cents = 30000
+    await db.commit()
+    older = LAST - timedelta(days=7)
+    await _week(db, fam, kid, older, early=5)           # 50 % -> no_pay, $0
+    await _week(db, fam, kid, LAST, early=0, late=10)   # 100 %, none early -> $300
+    weeks = {w["week_of"]: w for w in await BankService.list_outstanding_weeks(db, kid, fam.id)}
+    assert (weeks[older]["amount_cents"], weeks[older]["ladder_tier"]) == (0, "no_pay")
+    assert weeks[LAST]["amount_cents"] == 30000
+    prop = await propose(db, kid, fam.id, amount_cents=30000, concept="", receipt_date=None)
+    assert [a.week_of for a in prop.allocations] == [LAST]
+    assert prop.mismatch is False
+
+
+@pytest.mark.asyncio
+async def test_receipt_fallback_with_nothing_owed_keeps_the_oldest_unpaid_week(ctx):
+    """When no week owes money the fallback is unchanged: the oldest unpaid
+    week (here a no_pay one the parent may be paying on purpose)."""
+    db, fam, kid = ctx
+    acct = await _account(db, kid, "chore_proportional")
+    acct.allowance_cents = 30000
+    await db.commit()
+    await _week(db, fam, kid, LAST, early=5)  # no_pay, $0; the current week is empty
+    prop = await propose(db, kid, fam.id, amount_cents=30000, concept="", receipt_date=None)
+    assert [a.week_of for a in prop.allocations] == [LAST]

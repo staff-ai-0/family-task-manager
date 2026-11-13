@@ -98,11 +98,15 @@ async def propose(
 
     if not mondays:
         outstanding = await BankService.list_outstanding_weeks(db, kid, family_id)
-        unpaid = [w["week_of"] for w in outstanding if not w.get("already_released")]
+        unpaid = [w for w in outstanding if not w.get("already_released")]
+        # Weeks that owe nothing (a no_pay ladder week projects $0) are skipped
+        # while a week that owes money exists: proposing a transfer onto a $0
+        # week leaves the owed week owed, to be paid a second time later.
+        owed = [w["week_of"] for w in unpaid if int(w.get("amount_cents") or 0) > 0]
         acct = await BankService.ensure_account(db, kid)
         cap = int(acct.allowance_cents or 0)
         wanted = max(1, round(amount_cents / cap)) if cap > 0 else 1
-        mondays = unpaid[:wanted] or [this_monday]
+        mondays = owed[:wanted] or [w["week_of"] for w in unpaid][:wanted] or [this_monday]
     mondays = sorted(mondays)[:MAX_WEEKS]
 
     parts = split_amount(amount_cents, len(mondays))
