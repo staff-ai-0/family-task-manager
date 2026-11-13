@@ -102,6 +102,33 @@ def test_pending_review_counts_only_after_grace():
     assert EarlyBirdService._metrics_from_rows(c, rows, MON, late).completed == 1
 
 
+def test_unreviewed_work_keeps_the_week_provisional_until_grace():
+    """R5: completed work still awaiting the parent's review keeps a week
+    non-final past Sunday's cutoff — the ladder must not floor or bonus it on a
+    count that will move. Once the grace passes the week is final and the row
+    counts (existing grace rule)."""
+    rows = rows_for(9, 0) + [done(MON, 9, approval=AP.PENDING)]
+    c = cfg()
+    r = EarlyBirdService._metrics_from_rows(c, rows, MON, AFTER)
+    assert (r.final, r.completed, r.total) == (False, 9, 10)
+    # Last day of the grace (today == Sunday + 7) is still inside it.
+    r = EarlyBirdService._metrics_from_rows(c, rows, MON, at(SUN + timedelta(days=7), 23))
+    assert r.final is False
+    r = EarlyBirdService._metrics_from_rows(c, rows, MON, at(SUN + timedelta(days=8), 0, 1))
+    assert (r.final, r.completed, r.tier, r.bonus_pct) == (True, 10, "bonus", 15)
+
+
+def test_only_review_pending_blocks_final():
+    """An open (status PENDING) or rejected row is not 'awaiting review': the
+    week is final at the cutoff as before."""
+    c = cfg()
+    open_rows = rows_for(9, 0, n_open=1)
+    assert EarlyBirdService._metrics_from_rows(c, open_rows, MON, AFTER).final is True
+    rejected = rows_for(9, 0) + [done(MON, 9, approval=AP.REJECTED)]
+    assert EarlyBirdService._metrics_from_rows(c, rejected, MON, AFTER).final is True
+    assert EarlyBirdService._metrics_from_rows(c, rows_for(10, 0), MON, AFTER).final is True
+
+
 # ------------------------------------------------------------------ DB-backed
 
 async def _template(db, fam):

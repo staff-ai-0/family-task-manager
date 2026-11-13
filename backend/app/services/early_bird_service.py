@@ -23,7 +23,7 @@ from app.models.cash_transaction import CashTransactionType
 from app.models.early_bird_week import EarlyBirdWeek
 from app.models.family import Family
 from app.models.notification import NotificationType as NT
-from app.models.task_assignment import AssignmentStatus, TaskAssignment
+from app.models.task_assignment import ApprovalStatus, AssignmentStatus, TaskAssignment
 from app.models.task_template import TaskTemplate
 from app.models.user import User, UserRole
 from app.services.early_bird_rules import (
@@ -203,7 +203,11 @@ class EarlyBirdService:
     ) -> LadderResult:
         """week_metrics over already-fetched covered rows of that week. Open and
         TAKEN rows count in ``total`` but not as completed (the meter is "so
-        far"); ``final`` is True once Sunday's cutoff has passed."""
+        far"). ``final`` is True once Sunday's cutoff has passed AND no
+        completed row still awaits the parent's review inside the pending
+        grace (ruling R5): an unreviewed count can still move, so the pay
+        ladder must not floor or bonus it yet. After the grace the week is
+        final and those rows count via the grace rule."""
         if not cfg.enabled or not week_eligible(cfg, monday):
             return week_ladder(0, 0, 0)
         sunday = monday + timedelta(days=6)
@@ -211,7 +215,13 @@ class EarlyBirdService:
         completed = sum(1 for r in rows if completed_in_time(r, cfg, grace=grace))
         early = sum(1 for r in rows if done_early(r, cfg, grace=grace))
         result = week_ladder(completed, early, len(rows))
-        return replace(result, final=now >= day_times(cfg, sunday).cutoff)
+        unreviewed = not grace and any(
+            r.status == AssignmentStatus.COMPLETED and r.approval == ApprovalStatus.PENDING
+            for r in rows
+        )
+        return replace(
+            result, final=now >= day_times(cfg, sunday).cutoff and not unreviewed
+        )
 
     # The weekly paycheck bonus is NOT computed here: the flat +week_pct % was
     # retired by the chore-rules-v2 pay ladder, whose money lives only in

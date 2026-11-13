@@ -149,9 +149,11 @@ async def test_pending_review_no_bonus_until_grace(ctx):
     await _chore(db, fam, kid, last)
     await _chore(db, fam, kid, last + timedelta(days=1), approval=ApprovalStatus.PENDING)
     p = await BankService.chore_paycheck_preview(db, kid, fam.id, last)
-    # Review still pending: 1 of 2 covered chores completed (50 % < 60 %) →
-    # the ladder's floor, no base pay and no bonus until the parent reviews.
-    assert p["early_bird_bonus_cents"] == 0 and p["projected_cents"] == 0
+    # Review still pending (R5): the week stays provisional — 1 of 2 so far
+    # would be no_pay, but an unreviewed count can still move, so no floor and
+    # no bonus: the approved chore's plain per-task 1000.
+    assert p["early_bird_bonus_cents"] == 0 and p["projected_cents"] == 1000
+    assert (p["ladder_final"], p["ladder_tier"]) == (False, "no_pay")
     # Two weeks back is past the grace window: pending counts as completed and
     # early → 100 % / 100 % → +15 % of the one approved chore's 1000 (the
     # still-pending chore earns no per-task pay).

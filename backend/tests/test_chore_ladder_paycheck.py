@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.core.security import get_password_hash
 from app.models.cash_transaction import CashTransaction, CashTransactionType
@@ -82,8 +82,10 @@ async def _account(db, kid, mode):
     return acct
 
 
-async def _chore(db, family, kid, day, *, hh=None, grade=None, exempt=False):
-    """hh None = left open (PENDING); otherwise COMPLETED + APPROVED at hh:00."""
+async def _chore(db, family, kid, day, *, hh=None, grade=None, exempt=False,
+                 approval=ApprovalStatus.APPROVED):
+    """hh None = left open (PENDING); otherwise COMPLETED at hh:00 with
+    ``approval`` (APPROVED by default)."""
     t = TaskTemplate(id=uuid4(), title="Chore", points=POINTS, interval_days=1,
                      assignment_type=AssignmentType.AUTO, is_bonus=False, is_active=True,
                      early_bird_exempt=exempt, family_id=family.id)
@@ -94,7 +96,7 @@ async def _chore(db, family, kid, day, *, hh=None, grade=None, exempt=False):
         family_id=family.id, template_id=t.id, assigned_to=kid.id, assigned_date=day,
         week_of=day - timedelta(days=day.weekday()),
         status=AssignmentStatus.COMPLETED if done else AssignmentStatus.PENDING,
-        approval_status=ApprovalStatus.APPROVED if done else ApprovalStatus.NONE,
+        approval_status=approval if done else ApprovalStatus.NONE,
         completion_grade=grade,
         partial_credit_pct=50 if grade == "partial" else None,
         completed_at=_local(day, hh) if done else None,
@@ -102,11 +104,13 @@ async def _chore(db, family, kid, day, *, hh=None, grade=None, exempt=False):
     await db.commit()
 
 
-async def _week(db, family, kid, monday, *, early, late=0, partial=0):
+async def _week(db, family, kid, monday, *, early, late=0, partial=0, pending=0):
     """10 chores: `early` done 09:00 (before the 11:00 deadline), `late` done
     15:00 (after the deadline, before the 20:30 cutoff), `partial` done early
-    but graded partial, the rest left open."""
+    but graded partial, `pending` done early but still awaiting the parent's
+    review, the rest left open."""
     kinds = ["early"] * early + ["late"] * late + ["partial"] * partial
+    kinds += ["pending"] * pending
     kinds += ["open"] * (10 - len(kinds))
     for kind, offset in zip(kinds, DAYS):
         day = monday + timedelta(days=offset)
@@ -114,6 +118,8 @@ async def _week(db, family, kid, monday, *, early, late=0, partial=0):
             await _chore(db, family, kid, day)
         elif kind == "late":
             await _chore(db, family, kid, day, hh=15)
+        elif kind == "pending":
+            await _chore(db, family, kid, day, hh=9, approval=ApprovalStatus.PENDING)
         else:
             await _chore(db, family, kid, day, hh=9,
                          grade="partial" if kind == "partial" else None)
@@ -270,6 +276,31 @@ async def test_non_final_week_is_not_zeroed_and_has_no_bonus(ctx, mode):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("mode,unreviewed,reviewed", [
+    ("chore_proportional", 6172, 9876),   # 12345 * 5 // 10, then * 8 // 10
+    ("points_rate", 3955, 6328),          # 5 * 791, then 8 * 791
+])
+async def test_unreviewed_work_keeps_the_week_provisional(ctx, mode, unreviewed, reviewed):
+    """R5: 5 approved + 3 awaiting review, past Sunday's cutoff. Not floored
+    (5/10 would be no_pay) while the parent has not reviewed; once the three
+    are approved, 8/10 is final and pays per task."""
+    db, fam, kid = ctx
+    await _account(db, kid, mode)
+    await _week(db, fam, kid, LAST, early=5, pending=3)
+    p = await _project(db, kid, fam)
+    assert (p["ladder_final"], p["ladder_tier"], p["completed_pct"]) == (False, "no_pay", 50)
+    assert p["amount_cents"] == unreviewed and p["early_bird_bonus_cents"] == 0
+    await db.execute(update(TaskAssignment).where(
+        TaskAssignment.assigned_to == kid.id,
+        TaskAssignment.approval_status == ApprovalStatus.PENDING,
+    ).values(approval_status=ApprovalStatus.APPROVED))
+    await db.commit()
+    p = await _project(db, kid, fam)
+    assert (p["ladder_final"], p["ladder_tier"], p["completed_pct"]) == (True, "per_task", 80)
+    assert p["amount_cents"] == reviewed and p["early_bird_bonus_cents"] == 0
+
+
+@pytest.mark.asyncio
 async def test_non_final_full_week_has_no_bonus_yet(ctx):
     db, fam, kid = ctx
     await _account(db, kid, "chore_proportional")
@@ -351,6 +382,21 @@ async def test_release_no_pay_week_marks_it_handled(ctx):
     await BankService.release_chore_paycheck(db, kid, fam.id, LAST, entitled=False)
     weeks = await BankService.list_outstanding_weeks(db, kid, fam.id)
     assert LAST not in {w["week_of"] for w in weeks}
+
+
+@pytest.mark.asyncio
+async def test_no_pay_points_rate_release_converts_no_points(ctx):
+    """Nothing is paid, so nothing is converted: the teen keeps the points and
+    the release reports points_converted 0 (not the 35 it would have taken)."""
+    db, fam, kid = ctx
+    await _account(db, kid, "points_rate")
+    kid.points = 50
+    await db.commit()
+    await _week(db, fam, kid, LAST, early=5)
+    r = await BankService.release_chore_paycheck(db, kid, fam.id, LAST, entitled=False)
+    assert (r["amount_cents"], r["points_converted"]) == (0, 0)
+    await db.refresh(kid)
+    assert kid.points == 50
 
 
 @pytest.mark.asyncio

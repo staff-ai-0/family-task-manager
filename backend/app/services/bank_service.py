@@ -977,17 +977,17 @@ class BankService:
         p = await BankService._paycheck_projection(db, acct, family_id, week_monday)
         done, assigned = p["done_units"], p["assigned_units"]
         bonus, pct_label = p["early_bird_bonus_cents"], p["early_bird_week_pct"]
+        amount = max(0, p["amount_cents"] + int(adjustment_cents or 0))
         points_converted = 0
-        if acct.allowance_mode == "points_rate":
+        if acct.allowance_mode == "points_rate" and amount > 0:
             # The paid points were pending cash — deduct them so they aren't
             # spendable twice (floored at the available balance; ledger row
             # below keeps the history auditable). Deliberately floors rather
             # than using units_to_points: a debit against the kid must never
-            # round UP past what the cash actually paid for. Only applied when
-            # cash actually goes out (amount > 0 below): a no_pay week keeps
-            # its points.
+            # round UP past what the cash actually paid for. Only when cash
+            # actually goes out: a $0 (e.g. no_pay) week keeps its points and
+            # reports 0 converted.
             points_converted = min(done // 100, max(0, int(user.points or 0)))
-        amount = max(0, p["amount_cents"] + int(adjustment_cents or 0))
         # Always leaves a ledger row, even at $0 — a genuinely empty week
         # (kid did nothing, or a chore_gated week that missed the gate)
         # must still be markable as "handled" so it stops reappearing as
