@@ -1599,6 +1599,26 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         return list((await db.execute(query)).scalars().all())
 
     @staticmethod
+    async def _reject_if_expired(db, assignment, template, now=None) -> None:
+        """Chore rules v2: once the family's cutoff of the row's due day has
+        passed, its OWNER can no longer complete it (it is open to the family).
+        Only for covered chores (mandatory, non-exempt) on an Early Bird active
+        day; a taker's row (taken_from_id) is the family's and never expires.
+        The parent's retroactive mark_done_for_kid does not come through here."""
+        if template.is_bonus or template.early_bird_exempt or assignment.taken_from_id:
+            return
+        from app.core.exceptions import ChoreExpiredException
+        from app.services.early_bird_rules import chore_expired, day_times, is_active_day
+        from app.services.early_bird_service import EarlyBirdService
+
+        cfg = await EarlyBirdService.config(db, assignment.family_id)
+        if not cfg.enabled or not is_active_day(cfg, assignment.assigned_date):
+            return
+        now = now if now is not None else datetime.now(timezone.utc)
+        if chore_expired(now, day_times(cfg, assignment.assigned_date)):
+            raise ChoreExpiredException("chore_expired")
+
+    @staticmethod
     async def complete_assignment(
         db: AsyncSession,
         assignment_id: UUID,
@@ -1606,6 +1626,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         user_id: UUID,
         proof_text: Optional[str] = None,
         proof_image_url: Optional[str] = None,
+        now: Optional[datetime] = None,
     ) -> TaskAssignment:
         """
         Mark an assignment as completed.
@@ -1651,6 +1672,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
         template = assignment.template
         auto_approved = False
+
+        await TaskAssignmentService._reject_if_expired(db, assignment, template, now)
 
         # Competition gigs are first-CLAIM-wins: completing straight from
         # PENDING would bypass the claim race and let several kids get paid

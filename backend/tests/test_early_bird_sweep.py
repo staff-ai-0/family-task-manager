@@ -155,10 +155,10 @@ async def test_child_and_exempt_ignored(ctx):
     assert await _rows(db, teen, "deadline_soon") == []
 
 
-async def test_grabs_pushes_at_1100(ctx):
+async def test_grabs_pushes_at_cutoff(ctx):
     db, fam, teen, tpl, a, day = ctx
     sib = await _user(db, fam, "Sibling")
-    res = await EarlyBirdService.run_sweep(db, now=_at(day, 11, 0))
+    res = await EarlyBirdService.run_sweep(db, now=_at(day, 20, 30))
     assert res["grabs"] == 2
     owner_rows = await _rows(db, teen, "up_for_grabs")
     sib_rows = await _rows(db, sib, "up_for_grabs")
@@ -166,9 +166,9 @@ async def test_grabs_pushes_at_1100(ctx):
     assert len(sib_rows) == 1
     assert "libre" in sib_rows[0].title or "up for grabs" in sib_rows[0].title
     assert sib_rows[0].expires_at.astimezone(MX) == datetime.combine(day + timedelta(days=1), time.min, tzinfo=MX)
-    await _stamp(db, _at(day, 11, 0))
-    assert (await EarlyBirdService.run_sweep(db, now=_at(day, 11, 5)))["grabs"] == 0
-    assert (await EarlyBirdService.run_sweep(db, now=_at(day, 12, 5)))["grabs"] == 0
+    await _stamp(db, _at(day, 20, 30))
+    assert (await EarlyBirdService.run_sweep(db, now=_at(day, 20, 35)))["grabs"] == 0
+    assert (await EarlyBirdService.run_sweep(db, now=_at(day, 21, 5)))["grabs"] == 0
     assert len(await _rows(db, sib, "up_for_grabs")) == 1
 
 
@@ -178,7 +178,7 @@ async def test_grabs_respects_allowed_roles(db_session, test_family, test_teen_u
     tpl = await _tpl(db_session, test_family, allowed_roles=["teen"])
     await _assign(db_session, test_teen_user, tpl, day)
     kid = await _user(db_session, test_family, "Kiddo", UserRole.CHILD)
-    await EarlyBirdService.run_sweep(db_session, now=_at(day, 11, 0))
+    await EarlyBirdService.run_sweep(db_session, now=_at(day, 20, 30))
     assert await _rows(db_session, kid, "up_for_grabs") == []
     assert len(await _rows(db_session, test_teen_user, "up_for_grabs")) == 1
 

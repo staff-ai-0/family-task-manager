@@ -62,8 +62,9 @@ async def _chore(db, family, kid, day, title="Dishes", title_es=None):
 
 @pytest.fixture
 def after_deadline(monkeypatch):
-    """Freeze the service clock at 11:05 family-local today."""
-    fixed = _at(_today(), 11, 5)
+    """Freeze the service clock at 21:00 family-local today (inside the
+    20:30-22:30 grab window; was 11:05 before chore rules v2)."""
+    fixed = _at(_today(), 21, 0)
     monkeypatch.setattr(EarlyBirdService, "_now", staticmethod(lambda now=None: now or fixed))
     return fixed
 
@@ -163,15 +164,15 @@ async def test_take_own_chore_403(client, db_session, test_family, test_teen_use
     assert r.status_code == 403 and r.json()["message"] == "own_chore"
 
 
-async def test_take_before_deadline_400(client, db_session, test_family, test_teen_user,
+async def test_take_before_cutoff_409(client, db_session, test_family, test_teen_user,
                                         test_child_user, monkeypatch):
     await _enable(db_session, test_family)
     a = await _chore(db_session, test_family, test_teen_user, _today())
-    early = _at(_today(), 9, 0)
+    early = _at(_today(), 11, 5)
     monkeypatch.setattr(EarlyBirdService, "_now", staticmethod(lambda now=None: now or early))
     r = await client.post(f"/api/early-bird/grabs/{a.id}/take",
                           headers=await _login(client, "child@test.com"))
-    assert r.status_code == 400 and r.json()["message"] == "not_grabbable"
+    assert r.status_code == 409 and r.json()["message"] == "grab_window_closed"
 
 
 async def test_take_cross_family_404(client, db_session, test_family, test_child_user,
@@ -188,12 +189,15 @@ async def test_take_cross_family_404(client, db_session, test_family, test_child
     assert r.status_code == 404
 
 
-async def test_take_parent_403(client, db_session, test_family, test_parent_user, test_teen_user):
+async def test_take_parent_allowed(client, db_session, test_family, test_parent_user,
+                                   test_teen_user, after_deadline):
+    # was 403 (kids only); chore rules v2 lets any active member take
     await _enable(db_session, test_family)
     a = await _chore(db_session, test_family, test_teen_user, _today())
     r = await client.post(f"/api/early-bird/grabs/{a.id}/take",
                           headers=await _login(client, "parent@test.com"))
-    assert r.status_code == 403
+    assert r.status_code == 200, r.text
+    assert r.json()["assigned_to"] == str(test_parent_user.id)
 
 
 async def test_family_overview_parent_only(client, db_session, test_family, test_parent_user,

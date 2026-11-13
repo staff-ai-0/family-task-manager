@@ -38,6 +38,7 @@ from app.services.early_bird_rules import (
     day_result,
     day_times,
     done_early,
+    grab_window_open,
     early_bonus_points,
     next_run,
     is_active_day,
@@ -88,9 +89,12 @@ class EarlyBirdService:
 
     @staticmethod
     def _covered_stmt(
-        family_id: UUID, start: date, end: date, user_id: Optional[UUID] = None
+        family_id: UUID, start: date, end: date, user_id: Optional[UUID] = None,
+        *, any_role: bool = False,
     ) -> Select:
-        """THE "covered by the deadline" predicate (user_id None = whole family)."""
+        """THE "covered by the deadline" predicate (user_id None = whole family).
+        Teens only, as the weekly stats count them; ``any_role`` widens it to
+        every member's chores (the up-for-grabs list and the cutoff expiry)."""
         stmt = (
             select(TaskAssignment)
             .join(TaskTemplate, TaskTemplate.id == TaskAssignment.template_id)
@@ -103,10 +107,11 @@ class EarlyBirdService:
                 TaskAssignment.status != AssignmentStatus.CANCELLED,
                 TaskTemplate.is_bonus.is_(False),
                 TaskTemplate.early_bird_exempt.is_(False),
-                User.role == UserRole.TEEN,
             )
             .order_by(TaskAssignment.assigned_date)
         )
+        if not any_role:
+            stmt = stmt.where(User.role == UserRole.TEEN)
         if user_id is not None:
             stmt = stmt.where(TaskAssignment.assigned_to == user_id)
         return stmt
@@ -237,15 +242,17 @@ class EarlyBirdService:
     async def grabbable(
         db: AsyncSession, family_id: UUID, now: Optional[datetime] = None
     ) -> list[GrabRow]:
-        """Teens' still-open covered chores for family-local today, once the
-        deadline has passed."""
+        """Every member's still-open covered chores for family-local today,
+        while the grab window (cutoff <= now < grab_end) is open."""
         cfg = await EarlyBirdService.config(db, family_id)
         now = EarlyBirdService._now(now)
         today = now.astimezone(cfg.tz).date()
-        if not is_active_day(cfg, today) or now < day_times(cfg, today).deadline:
+        if not cfg.enabled or not is_active_day(cfg, today) or not grab_window_open(
+            now, day_times(cfg, today)
+        ):
             return []
         stmt = (
-            EarlyBirdService._covered_stmt(family_id, today, today)
+            EarlyBirdService._covered_stmt(family_id, today, today, any_role=True)
             .where(TaskAssignment.status.in_(
                 [AssignmentStatus.PENDING, AssignmentStatus.OVERDUE]))
             .options(selectinload(TaskAssignment.template),
@@ -265,49 +272,40 @@ class EarlyBirdService:
         ]
 
     @staticmethod
-    async def _not_kid(db: AsyncSession, taker: User) -> bool:
+    async def _not_eligible(db: AsyncSession, taker: User, family_id: UUID) -> bool:
+        """True when the taker is not an active, approved member of the family."""
         from app.services.task_assignment_service import TaskAssignmentService as TAS
 
-        if taker.role not in (UserRole.CHILD, UserRole.TEEN):
+        if taker.family_id != family_id:
             return True
         participates = (await db.execute(
             select(func.count()).select_from(User).where(
-                User.id == taker.id, TAS._participating_member_clause())
+                User.id == taker.id, User.family_id == family_id,
+                TAS._participating_member_clause())
         )).scalar_one()
         return not participates
-
-    @staticmethod
-    async def _has_own_open(db: AsyncSession, taker: User, today: Optional[date]) -> bool:
-        from app.services.task_assignment_service import TaskAssignmentService as TAS
-
-        if today is None:
-            today = await TAS._family_local_today(db, taker.family_id)
-        return await TAS.has_open_mandatory_through(db, taker.id, taker.family_id, today)
 
     @staticmethod
     async def can_take(
         db: AsyncSession, taker: User, template: TaskTemplate,
         today: Optional[date] = None,
     ) -> Optional[str]:
-        """Reason key the taker may not take this chore, or None."""
-        if await EarlyBirdService._not_kid(db, taker):
-            return "not_kid"
+        """Reason key the taker may not take this chore, or None. Any active,
+        approved member (parents included) whose role the template allows."""
+        if await EarlyBirdService._not_eligible(db, taker, template.family_id):
+            return "not_eligible"
         if not role_may_take(template.allowed_roles, taker.role.value):
             return "role_not_allowed"
-        if await EarlyBirdService._has_own_open(db, taker, today):
-            return "finish_yours_first"
         return None
 
     @staticmethod
     async def caller_block(
         db: AsyncSession, taker: User, today: Optional[date] = None
     ) -> Optional[str]:
-        """Why the taker can take NO grab at all (not_kid / finish_yours_first),
-        or None — the per-chore role rule is can_take's."""
-        if await EarlyBirdService._not_kid(db, taker):
-            return "not_kid"
-        if await EarlyBirdService._has_own_open(db, taker, today):
-            return "finish_yours_first"
+        """Why the taker can take NO grab at all (not_eligible), or None — the
+        per-chore role rule is can_take's."""
+        if await EarlyBirdService._not_eligible(db, taker, taker.family_id):
+            return "not_eligible"
         return None
 
     @staticmethod
@@ -318,7 +316,7 @@ class EarlyBirdService:
         assignment_id: UUID,
         now: Optional[datetime] = None,
     ) -> TaskAssignment:
-        """Take a teen's still-open chore after the deadline. Commits."""
+        """Take a member's still-open chore inside the grab window. Commits."""
         from app.services.notification_service import NotificationService
         from app.services.task_assignment_service import TaskAssignmentService as TAS
 
@@ -327,16 +325,15 @@ class EarlyBirdService:
             raise ConflictException("already_taken")
         if owner_row.assigned_to == taker.id:
             raise ForbiddenException("own_chore")
-        # Serialize one kid's takes: "finish yours first" below reads the
-        # taker's open chores, and two takes of different grabs at once would
-        # otherwise both see none. Locked after the owner row (fixed order).
+        # Serialize one member's takes (locked after the owner row, fixed
+        # order) so two takes by the same taker cannot interleave.
         await db.execute(select(User.id).where(User.id == taker.id).with_for_update())
 
         cfg = await EarlyBirdService.config(db, family_id)
         now = EarlyBirdService._now(now)
         today = now.astimezone(cfg.tz).date()
         covered = (await db.execute(
-            EarlyBirdService._covered_stmt(family_id, today, today)
+            EarlyBirdService._covered_stmt(family_id, today, today, any_role=True)
             .where(TaskAssignment.id == assignment_id)
         )).scalar_one_or_none()
         if (
@@ -344,9 +341,10 @@ class EarlyBirdService:
             or owner_row.assigned_date != today
             or owner_row.status not in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE)
             or not is_active_day(cfg, today)
-            or now < day_times(cfg, today).deadline
         ):
             raise ValidationException("not_grabbable")
+        if not grab_window_open(now, day_times(cfg, today)):
+            raise ConflictException("grab_window_closed")
 
         template = owner_row.template
         reason = await EarlyBirdService.can_take(db, taker, template, today)
@@ -595,7 +593,7 @@ class EarlyBirdService:
                     await db.rollback()
         elif stage == "grabs":
             out["grabs"] += await EarlyBirdService._push_grabs(
-                db, cfg, fam_id, now, times.deadline, today
+                db, cfg, fam_id, now, times.cutoff, today
             )
 
     # ------------------------------------------------------------- settlement
@@ -746,7 +744,7 @@ class EarlyBirdService:
         return 1
 
     @staticmethod
-    async def _push_grabs(db, cfg, fam_id, now, deadline, today) -> int:
+    async def _push_grabs(db, cfg, fam_id, now, since, today) -> int:
         from app.services.notification_service import NotificationService
         from app.services.ping_service import PingService
 
@@ -757,7 +755,7 @@ class EarlyBirdService:
         for g in grabs:
             owner_n[g.owner_id] = owner_n.get(g.owner_id, 0) + 1
         members = await EarlyBirdService._members(
-            db, fam_id, (UserRole.CHILD, UserRole.TEEN)
+            db, fam_id, (UserRole.PARENT, UserRole.CHILD, UserRole.TEEN)
         )
         midnight = datetime.combine(today + timedelta(days=1), time.min, tzinfo=cfg.tz)
         sent = 0
@@ -771,7 +769,7 @@ class EarlyBirdService:
                     if n < 1:
                         continue
                     key = "grabs_open_one" if n == 1 else "grabs_open"
-                if await PingService._has_ping_since(db, fam_id, uid, (NT.UP_FOR_GRABS,), deadline):
+                if await PingService._has_ping_since(db, fam_id, uid, (NT.UP_FOR_GRABS,), since):
                     continue
                 await NotificationService.create_localized(
                     db, fam_id, key, user_id=uid, params={"n": n},

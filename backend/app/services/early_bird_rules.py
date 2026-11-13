@@ -287,6 +287,16 @@ def reminder_stage(now: datetime, t: DayTimes) -> Optional[Literal["r1", "r2", "
         return "r1"
     if t.r2 <= now < t.deadline:
         return "r2"
-    if t.deadline <= now < t.deadline + GRABS_PUSH_WINDOW:
+    if t.cutoff <= now < min(t.grab_end, t.cutoff + GRABS_PUSH_WINDOW):
         return "grabs"
     return None
+
+
+def grab_window_open(now: datetime, t: DayTimes) -> bool:
+    """The up-for-grabs window: cutoff <= now < grab_end (family-local day)."""
+    return t.cutoff <= now < t.grab_end
+
+
+def chore_expired(now: datetime, t: DayTimes) -> bool:
+    """True once the day's cutoff has passed: the owner can no longer complete."""
+    return now >= t.cutoff

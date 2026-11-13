@@ -16,6 +16,12 @@ class ConflictException(FamilyAppException):
     pass
 
 
+class ChoreExpiredException(ConflictException):
+    """Owner tried to complete a chore after its cutoff (HTTP 409, code
+    ``chore_expired``): it is open to the family instead."""
+    pass
+
+
 class PermissionDeniedError(FamilyAppException):
     """Raised when user doesn't have permission for an operation"""
     pass

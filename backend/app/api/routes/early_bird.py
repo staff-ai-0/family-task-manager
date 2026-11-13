@@ -39,7 +39,8 @@ async def take_grab(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    _kid_only(current_user)
+    # Any active family member may take (parents included): eligibility is
+    # EarlyBirdService.can_take's call, not the route's.
     # Refusals are FamilyAppExceptions: the global handlers map them to
     # 404/409/403/400 with the reason key in "message".
     return await EarlyBirdService.take(

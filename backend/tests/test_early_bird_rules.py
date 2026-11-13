@@ -159,9 +159,12 @@ def test_reminder_stage():
     assert reminder_stage(t.r2 - timedelta(seconds=1), t) == "r1"
     assert reminder_stage(t.r2, t) == "r2"
     assert reminder_stage(t.deadline - timedelta(seconds=1), t) == "r2"
-    assert reminder_stage(t.deadline, t) == "grabs"
-    assert reminder_stage(t.deadline + GRABS_PUSH_WINDOW - timedelta(seconds=1), t) == "grabs"
-    assert reminder_stage(t.deadline + GRABS_PUSH_WINDOW, t) is None
+    # the grabs push fires at the cutoff (20:30), not at the 11:00 deadline
+    assert reminder_stage(t.deadline, t) is None
+    assert reminder_stage(t.cutoff - timedelta(seconds=1), t) is None
+    assert reminder_stage(t.cutoff, t) == "grabs"
+    assert reminder_stage(t.cutoff + GRABS_PUSH_WINDOW - timedelta(seconds=1), t) == "grabs"
+    assert reminder_stage(t.cutoff + GRABS_PUSH_WINDOW, t) is None
 
 
 def test_ladder_percentages_floor_like_the_ladder():
