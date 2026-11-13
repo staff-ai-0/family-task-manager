@@ -1,6 +1,6 @@
 # Chore rules v2 — expiry, weekly pay ladder, teen alarms (project 1 of 3)
 
-Status: DRAFT for approval · 2026-11-12 · builds on Early Bird (PRs #312–314,
+Status: IMPLEMENTED on branch feat/chore-rules-v2 (pending merge) · 2026-11-12 · builds on Early Bird (PRs #312–314,
 spec `2026-11-07-early-bird-deadline-design.md`).
 
 Program (agreed order, one design each):
@@ -127,3 +127,14 @@ exact mirror of the real family (4 members) per repo convention.
   ladder percentage (partial pays its scaled points under per-task).
 - `chore_gated` already gates payout; reconcile so the 60 % floor and its
   gate do not double-apply.
+
+## As built — deviations from this design
+
+- **11:00 is the one early time** (user ruling 2026-11-12): the family's early deadline defines "early" for the weekly ladder, the per-chore bonus and the streak week. Supersedes any R1 (deadline − 60 min) note above; R1 survives only as the first reminder's time.
+- **Week stays provisional while unreviewed work is inside the grace**: `week_metrics.final` is False while any covered row is completed + approval PENDING and the 7-day PENDING grace has not passed, so a review lag can never floor a teen to $0.
+- **`task_assignments.marked_done_by_parent`** column added (own migration; set by `mark_done_for_kid`, cleared on reopen/proof rejection). Exempts a parent's retroactive completion from the cutoff; never counts as early.
+- **Expired chores are resolved** (one shared "expired for owner" predicate): they stop blocking the bonus/gig gates and drop out of the kid Atrasadas list, kiosk overdue list and kid waiting count; parent oversight still counts them.
+- **`week_ladder` naming**: the ladder object on `/api/early-bird/me` and `/family` is `week_ladder` (`week` is already the 7-day list). `/me` also gains `cutoff_at` (evening), `deadline_at` (11:00), `grab_end_at`, `rules_version`, alarm times.
+- **Grab list for every role**: `GET /api/early-bird/grabs` (+`can_take`) serves any active member, parents included; push to parents stays.
+- **`early_bird_week_pct` retired** (column kept, unread); new-family streak default 38000 cents, existing rows untouched.
+- Open decisions: a non-final release locks per-task pay without floor/bonus; the receipt oldest-unpaid fallback may propose a $0 no_pay week; taker rows never expire.
