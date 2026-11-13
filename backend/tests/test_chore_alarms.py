@@ -29,13 +29,36 @@ def _local(h, m, s=0, day=datetime(2026, 11, 4)):
 
 
 def test_slot_windows():
+    """30 minutes from each alarm time, so a late or missed */5 tick still
+    sends that day's alarm (the send record dedupes inside the window)."""
     c = _cfg()
     assert alarm_slot(c, _local(15, 0, 0)) == "a1"
-    assert alarm_slot(c, _local(15, 4, 59)) == "a1"
-    assert alarm_slot(c, _local(15, 5, 0)) is None
+    assert alarm_slot(c, _local(15, 5, 0)) == "a1"
+    assert alarm_slot(c, _local(15, 29, 59)) == "a1"
+    assert alarm_slot(c, _local(15, 30, 0)) is None
     assert alarm_slot(c, _local(14, 59, 59)) is None
     assert alarm_slot(c, _local(19, 0, 0)) == "a2"
-    assert alarm_slot(c, _local(19, 4, 59)) == "a2"
+    assert alarm_slot(c, _local(19, 29, 59)) == "a2"
+    assert alarm_slot(c, _local(19, 30, 0)) is None
+
+
+def test_slot_window_never_runs_past_the_cutoff():
+    """An alarm 15 min before the cutoff must not fire after it: by then the
+    chores are no longer the teen's ("due by 20:30" would be false)."""
+    c = _cfg(alarm_2=time(20, 15))
+    assert alarm_slot(c, _local(20, 29, 59)) == "a2"
+    assert alarm_slot(c, _local(20, 30, 0)) is None
+    assert alarm_slot(c, _local(20, 40, 0)) is None
+
+
+def test_overlapping_windows_pick_the_later_alarm():
+    """Alarms 10 min apart: once the second has started it is the live slot,
+    so its own send record (since its start) decides — not the first's."""
+    c = _cfg(alarm_1=time(15, 0), alarm_2=time(15, 10))
+    assert alarm_slot(c, _local(15, 5)) == "a1"
+    assert alarm_slot(c, _local(15, 12)) == "a2"
+    assert alarm_slot(c, _local(15, 35)) == "a2"
+    assert alarm_slot(c, _local(15, 40)) is None
 
 
 def test_slot_uses_family_tz_from_utc():
@@ -137,3 +160,17 @@ async def test_copy_es_en_singular_plural():
         blob_en = (text["title"]["en"] + " " + (text["body"] or {}).get("en", ""))
         assert es in blob_es and en in blob_en
         assert "{cutoff}" in blob_es and "{cutoff}" in blob_en
+
+
+async def test_late_tick_still_sends_once_per_slot(ctx):
+    """The 15:00 tick was missed: 15:20 sends, 15:25 (same slot) and 15:31
+    (window over) send nothing, and the 19:00 slot is independent."""
+    from tests.test_early_bird_sweep import _stamp
+    db, fam, teen, tpl, day = ctx
+    assert (await EarlyBirdService.run_sweep(db, now=_at(day, 15, 20)))["alarms"] == 1
+    await _stamp(db, _at(day, 15, 20))
+    assert (await EarlyBirdService.run_sweep(db, now=_at(day, 15, 25)))["alarms"] == 0
+    assert (await EarlyBirdService.run_sweep(db, now=_at(day, 15, 31)))["alarms"] == 0
+    assert len(await _rows(db, teen, "chore_alarm")) == 1
+    assert (await EarlyBirdService.run_sweep(db, now=_at(day, 19, 0)))["alarms"] == 1
+    assert len(await _rows(db, teen, "chore_alarm")) == 2

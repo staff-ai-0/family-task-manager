@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, replace
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -603,13 +603,24 @@ class EarlyBirdService:
         for fam_id in fam_ids:
             try:
                 cfg = await EarlyBirdService.config(db, fam_id)
-                local_now = now.astimezone(cfg.tz)
-                today = local_now.date()
-                if is_active_day(cfg, today):
-                    await EarlyBirdService._sweep_reminders(db, cfg, fam_id, now, today, out)
-                await EarlyBirdService._sweep_settle(db, cfg, fam_id, now, out)
             except Exception:
                 log.exception("early bird sweep failed for family %s", fam_id)
+                await db.rollback()
+                continue
+            # Pushes and settlement fail separately: a persistent alarm or
+            # reminder failure must never keep finished weeks from settling
+            # (and paying). cfg is a plain dataclass, so it survives a rollback.
+            try:
+                today = now.astimezone(cfg.tz).date()
+                if is_active_day(cfg, today):
+                    await EarlyBirdService._sweep_reminders(db, cfg, fam_id, now, today, out)
+            except Exception:
+                log.exception("early bird reminders failed for family %s", fam_id)
+                await db.rollback()
+            try:
+                await EarlyBirdService._sweep_settle(db, cfg, fam_id, now, out)
+            except Exception:
+                log.exception("early bird settlement failed for family %s", fam_id)
                 await db.rollback()
         return out
 
@@ -838,7 +849,8 @@ class EarlyBirdService:
         members = await EarlyBirdService._members(
             db, fam_id, (UserRole.PARENT, UserRole.CHILD, UserRole.TEEN)
         )
-        midnight = datetime.combine(today + timedelta(days=1), time.min, tzinfo=cfg.tz)
+        # The push is about the grab window: it expires when the window closes.
+        expires = day_times(cfg, today).grab_end
         sent = 0
         for uid, _name, role in members:
             try:
@@ -854,7 +866,7 @@ class EarlyBirdService:
                     continue
                 await NotificationService.create_localized(
                     db, fam_id, key, user_id=uid, params={"n": n},
-                    link="/dashboard", expires_at=midnight, push_tag="ftm-early-bird",
+                    link="/dashboard", expires_at=expires, push_tag="ftm-early-bird",
                 )
                 sent += 1
             except Exception:

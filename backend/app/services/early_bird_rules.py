@@ -92,7 +92,10 @@ def day_times(cfg: EarlyBirdConfig, day: date) -> DayTimes:
     )
 
 
-ALARM_WINDOW = timedelta(minutes=5)  # one tick of the */5 sweep
+# Several ticks of the */5 sweep, so a late or missed tick still sends that
+# day's alarm. Single send per slot: the send record is checked since the
+# slot's START (PingService._has_ping_since), so later ticks send nothing.
+ALARM_WINDOW = timedelta(minutes=30)
 
 
 def alarm_slot_start(cfg: EarlyBirdConfig, day: date, slot: str) -> datetime:
@@ -101,15 +104,18 @@ def alarm_slot_start(cfg: EarlyBirdConfig, day: date, slot: str) -> datetime:
 
 
 def alarm_slot(cfg: EarlyBirdConfig, now: datetime) -> Optional[Literal["a1", "a2"]]:
-    """"a1"/"a2" during the 5 minutes starting at ``alarm_1``/``alarm_2``
-    family-local on an active day, else None (matches the */5 job)."""
+    """"a1"/"a2" during the ALARM_WINDOW starting at ``alarm_1``/``alarm_2``
+    family-local on an active day, else None. A window never runs past the
+    day's cutoff (the chores are no longer the teen's after it), and when two
+    windows overlap the later alarm is the live one."""
     local = now.astimezone(cfg.tz)
     day = local.date()
     if not is_active_day(cfg, day):
         return None
-    for slot in ("a1", "a2"):
+    cutoff = day_times(cfg, day).cutoff
+    for slot in ("a2", "a1"):
         start = alarm_slot_start(cfg, day, slot)
-        if start <= local < start + ALARM_WINDOW:
+        if start <= local < min(start + ALARM_WINDOW, cutoff):
             return slot
     return None
 

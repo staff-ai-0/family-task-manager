@@ -166,7 +166,9 @@ async def test_grabs_pushes_at_cutoff(ctx):
     assert "familia" in owner_rows[0].body or "family" in owner_rows[0].body
     assert len(sib_rows) == 1
     assert "libre" in sib_rows[0].title or "up for grabs" in sib_rows[0].title
-    assert sib_rows[0].expires_at.astimezone(MX) == datetime.combine(day + timedelta(days=1), time.min, tzinfo=MX)
+    # The push expires when the grab window closes (22:30), not at midnight.
+    for r in (owner_rows[0], sib_rows[0]):
+        assert r.expires_at.astimezone(MX) == datetime.combine(day, time(22, 30), tzinfo=MX)
     await _stamp(db, _at(day, 20, 30))
     assert (await EarlyBirdService.run_sweep(db, now=_at(day, 20, 35)))["grabs"] == 0
     assert (await EarlyBirdService.run_sweep(db, now=_at(day, 21, 5)))["grabs"] == 0
@@ -252,6 +254,24 @@ def test_owner_grabs_push_has_no_call_to_action():
             assert phrase not in es.lower(), (key, es)
         for phrase in ("before someone", "do it", "do them"):
             assert phrase not in en.lower(), (key, en)
+
+
+async def test_alarm_step_failure_still_settles_weeks(ctx):
+    """Streak settlement has its own try: a persistent failure in the
+    alarm/reminder step must not block paying weeks that are over."""
+    from app.models.early_bird_week import EarlyBirdWeek
+    db, fam, teen, tpl, a, day = ctx
+    teen_id = teen.id
+
+    def boom(*_a, **_k):
+        raise RuntimeError("alarm step down")
+
+    with patch("app.services.early_bird_service.alarm_slot", boom):
+        res = await EarlyBirdService.run_sweep(db, now=_at(day, 15, 0))
+    assert res["settled"] >= 1
+    weeks = (await db.execute(select(EarlyBirdWeek).where(
+        EarlyBirdWeek.user_id == teen_id))).scalars().all()
+    assert len(weeks) == res["settled"]
 
 
 def test_cron_registered():
