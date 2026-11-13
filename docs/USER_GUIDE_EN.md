@@ -462,19 +462,26 @@ graph TD
 
 ### Early bird
 
-A way to reward teens for getting their chores done in the morning. Turn it on in **Settings > Family > Early bird** (it is off by default).
+A way to reward teens for getting their chores done in the morning, and to give the chore day a clear end. Turn it on in **Settings > Family > Early bird** (it is off by default).
 
-- **Deadline and reminders**: you pick the deadline (default 11:00, between 07:00 and 22:00) and the days it applies (default every day). Your teens get a reminder 1 hour and 30 minutes before, as long as they still have chores open.
-- **Up for grabs**: once the deadline passes, a teen's chores still open that day go up for grabs, **for that same day only**. Another kid can take one, but only after finishing their own chores. The one who takes it earns its points; the teen who left it loses them (it shows as "Taken").
-- **Three rewards**, each adjustable (or set to 0 to turn off):
-  1. **More points per early chore**: +20% of the chore's points when it is done before the first reminder (1 hour before the deadline).
-  2. **Weekly paycheck**: +5% on the weekly chore paycheck for a week where every covered day was early. You see it on the payouts page as "incl. +5% early bird".
-  3. **Three weeks in a row**: every 3rd consecutive early week pays $500 MXN.
-- **Evening chores**: tick **"Evening chore - no deadline"** on a task template (like "dinner dishes") and it is left out of the deadline. Bonus tasks are never covered.
-- **Parent "mark done"**: if you mark a chore done for a teen before the cutoff, it counts as early.
-- Only partial or missed grades break an early day; a chore waiting for your review shows as pending until you grade it.
+- **One "early" time**: the **early deadline** you pick (default 11:00, between 07:00 and 22:00), on the days you choose (default every day). It is the only time that counts as early: for the extra points per chore, for the weekly bonus and for the 3-week prize. Your teens get a reminder 1 hour and 30 minutes before it, as long as they still have chores open.
+- **Evening cutoff**: a chore stays its owner's until the **evening cutoff** (default 8:30 pm). After that the owner can't finish it any more, and it does not count as done.
+- **Up for grabs**: from the cutoff until the end of **"up for grabs"** (default 10:30 pm), that day's chores still open are open to any family member, kids and parents alike. Whoever takes one earns its points; the one who left it loses them (it shows as "Taken"). When the window closes, a chore nobody took stays missed.
+- **Teen alarms**: two reminders a day (default 3 pm and 7 pm, always before the cutoff) to teens who still have chores pending that day.
+- **Weekly pay ladder** for teens (on the weekly chore paycheck, every mode except a flat allowance), counting the week's chores (Monday to Sunday) done by the cutoff:
+  - **Under 60%**: no base pay that week.
+  - **60-99%**: each completed task pays its own value.
+  - **100%**: every task pays, **plus** a bonus by how many were done before the early deadline: 80% or more early +5%, 90% or more +10%, 100% +15%. Under 80% early, no bonus.
 
-The same settings page lists each teen's status: today, days early this week and the current run toward the 3-week prize. The week you switch it on does not count toward the weekly rewards.
+  The payouts page says why a week paid what it did. A week stays provisional until it is over and you have graded the chores waiting for your review.
+- **Two more rewards**, each adjustable (or set to 0 to turn off):
+  1. **More points per early chore**: +20% of the chore's points when it is done before the early deadline.
+  2. **Three weeks in a row**: every 3rd consecutive early week (every covered day done before the early deadline) pays a prize, $380 MXN by default for new families.
+- **Evening chores**: tick **"Evening chore — no deadline"** on a task template (like "dinner dishes") and it is left out of the deadline, the cutoff and the ladder. Bonus tasks are never covered.
+- **Parent "mark done"**: a chore you mark done for a kid counts as done for the week (even after the cutoff), but never as early.
+- A partial or missed grade counts as not done for the ladder and breaks an early day; a chore waiting for your review shows as pending until you grade it.
+
+The same settings page lists each teen's status: today, days early this week and the current run toward the 3-week prize. Teens see this week's percentage, and what it pays, on their home card. The week you switch it on does not count toward the weekly rewards.
 
 ---
 
