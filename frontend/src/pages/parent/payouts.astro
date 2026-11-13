@@ -4,6 +4,7 @@ import { apiFetch } from "../../lib/api";
 import { fmtDate as fmtTzDate } from "../../lib/datetime";
 import { buttonClass } from "../../lib/buttonClasses";
 import { payoutTaskStatusLabel } from "../../lib/payoutTaskStatus";
+import { payoutWeekNotes } from "../../lib/earlyBird";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -231,6 +232,9 @@ const dayLabel = (iso: string): string =>
                                                     )}
                                                 </p>
                                                 <p class="text-xs text-brand-ink-soft">{w.done_points}/{w.assigned_points} pts · {w.pct}%</p>
+                                                {payoutWeekNotes(w, lang).map((note) => (
+                                                    <p class="text-xs font-semibold text-amber-800" data-ladder-note>{note}</p>
+                                                ))}
                                                 {Number(w.early_bird_bonus_cents) > 0 && (
                                                     <p class="text-xs font-semibold text-brand-mint-text" data-early-bird-line>
                                                         {lang === "es"
