@@ -51,13 +51,13 @@ const RULES_MSG = {
         deadline: "La hora madrugadora va de 07:00 a 22:00, en pasos de 5 minutos.",
         cutoff: "La hora de corte va de 17:00 a 23:00, en pasos de 5 minutos, y debe ser después de la hora madrugadora.",
         grabEnd: "El fin de \"para tomar\" debe ser después de la hora de corte y a más tardar 23:30, en pasos de 5 minutos.",
-        alarms: "Las alarmas van de 06:00 a la hora de corte, en pasos de 5 minutos, la primera antes que la segunda.",
+        alarms: "Las alarmas van de 06:00 hasta antes de la hora de corte, en pasos de 5 minutos, la primera antes que la segunda.",
     },
     en: {
         deadline: "The early deadline runs from 07:00 to 22:00 in 5-minute steps.",
         cutoff: "The cutoff runs from 17:00 to 23:00 in 5-minute steps and must be after the early deadline.",
         grabEnd: "The end of \"up for grabs\" must be after the cutoff and no later than 23:30, in 5-minute steps.",
-        alarms: "Alarms run from 06:00 to the cutoff in 5-minute steps, the first before the second.",
+        alarms: "Alarms run from 06:00 to just before the cutoff in 5-minute steps, the first before the second.",
     },
 } as const;
 
@@ -81,7 +81,7 @@ export function validateRulesForm(
     if (!step(grab) || grab! <= cutoff! || grab! > 23 * 60 + 30) return bad("grabEnd");
     const a1 = clockMinutes(v.alarm1);
     const a2 = clockMinutes(v.alarm2);
-    if (!step(a1) || !step(a2) || a1! < 6 * 60 || a2! > cutoff! || a1! >= a2!) return bad("alarms");
+    if (!step(a1) || !step(a2) || a1! < 6 * 60 || a2! >= cutoff! || a1! >= a2!) return bad("alarms");
     return null;
 }
 

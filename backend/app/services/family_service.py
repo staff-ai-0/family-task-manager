@@ -163,8 +163,10 @@ class FamilyService:
                 raise ValidationException("grab_window_end must be after chore_cutoff")
             if merged["teen_alarm_1"] >= merged["teen_alarm_2"]:
                 raise ValidationException("teen_alarm_1 must be before teen_alarm_2")
-            if merged["teen_alarm_2"] > merged["chore_cutoff"]:
-                raise ValidationException("teen alarms must not be after chore_cutoff")
+            # Strictly before: an alarm AT the cutoff would announce "due by
+            # 20:30" at the instant the chores stop being the teen's.
+            if merged["teen_alarm_2"] >= merged["chore_cutoff"]:
+                raise ValidationException("teen alarms must be before chore_cutoff")
         # Any real change to a rule-defining setting bumps rules_version in
         # the same transaction (unchanged values do not).
         if any(

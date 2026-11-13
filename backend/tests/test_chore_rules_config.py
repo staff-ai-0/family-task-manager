@@ -86,7 +86,10 @@ async def test_alarm_order(client, auth_headers):
     assert (await _patch(client, auth_headers, teen_alarm_1="15:00", teen_alarm_2="15:00")).status_code == 400
     assert (await _patch(client, auth_headers, teen_alarm_1="05:55")).status_code == 422
     assert (await _patch(client, auth_headers, teen_alarm_1="15:03")).status_code == 422
-    # alarm after the stored cutoff (20:30)
+    # alarm after, or AT, the stored cutoff (20:30): an alarm at the cutoff
+    # would say "due by 20:30" at the moment the chores stop being the teen's.
     assert (await _patch(client, auth_headers, teen_alarm_2="21:00")).status_code == 400
-    r = await _patch(client, auth_headers, teen_alarm_1="06:00", teen_alarm_2="20:30")
+    r = await _patch(client, auth_headers, teen_alarm_2="20:30")
+    assert r.status_code == 400 and "before chore_cutoff" in r.text
+    r = await _patch(client, auth_headers, teen_alarm_1="06:00", teen_alarm_2="20:25")
     assert r.status_code == 200

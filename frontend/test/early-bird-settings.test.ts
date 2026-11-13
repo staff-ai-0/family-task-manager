@@ -54,7 +54,14 @@ describe("validateRulesForm", () => {
         expect(validateRulesForm({ ...v, alarm1: "15:00", alarm2: "15:00" }, "en")).toMatchObject({ field: "alarms" });
         expect(validateRulesForm({ ...v, alarm1: "05:55" }, "en")).toMatchObject({ field: "alarms" });
         expect(validateRulesForm({ ...v, alarm2: "21:00" }, "en")).toMatchObject({ field: "alarms" });
+        // At the cutoff is too late: alarms must be strictly before it.
+        expect(validateRulesForm({ ...v, alarm2: "20:30" }, "en")).toMatchObject({ field: "alarms" });
+        expect(validateRulesForm({ ...v, alarm2: "20:25" }, "en")).toBeNull();
         expect(validateRulesForm({ ...v, alarm2: "19:02" }, "en")).toMatchObject({ field: "alarms" });
+    });
+    it("the alarm message says before the cutoff, in both languages", () => {
+        expect(validateRulesForm({ ...v, alarm2: "20:30" }, "es")?.message).toContain("antes de la hora de corte");
+        expect(validateRulesForm({ ...v, alarm2: "20:30" }, "en")?.message).toContain("before the cutoff");
     });
     it("messages exist in both languages and differ", () => {
         const es = validateRulesForm({ ...v, cutoff: "10:00" }, "es")!.message;
