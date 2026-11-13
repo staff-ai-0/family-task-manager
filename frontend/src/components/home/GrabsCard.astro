@@ -1,0 +1,80 @@
+---
+/**
+ * Parent hub: chores the kids left past the evening cutoff, open to the whole
+ * family until the grab window closes. Rows come from GET /api/early-bird/grabs
+ * (empty outside the window or when Early Bird is off, which hides the card).
+ * The server re-checks every rule; a failed take only reports its reason.
+ */
+import { buttonClass } from "../../lib/buttonClasses";
+import { earlyBirdCopy, grabItems } from "../../lib/earlyBird";
+
+interface Props {
+    rows: any[];
+    lang: "es" | "en";
+}
+const { rows, lang } = Astro.props;
+const c = earlyBirdCopy(lang);
+const items = grabItems(rows, lang);
+---
+
+<section data-parent-grabs data-lang={lang} hidden={items.length === 0} class="max-w-md mx-auto w-full mb-6" aria-labelledby="parent-grabs-heading">
+    <h2 id="parent-grabs-heading" class="text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft mb-1 px-1">{c.grabsTitle}</h2>
+    <p class="mb-2 px-1 text-xs text-brand-ink-soft">{c.grabsHintParent}</p>
+    <ul class="space-y-2">
+        {items.map((g) => (
+            <li class="flex items-center gap-3 rounded-2xl border border-brand-ink/10 bg-white p-3 shadow-[var(--shadow-card)]">
+                <div class="min-w-0 flex-1">
+                    <p class="truncate font-bold text-brand-ink">{g.title}</p>
+                    <p class="text-xs text-brand-ink-soft">{c.from(g.ownerName)} · +{g.points}</p>
+                </div>
+                <button type="button" data-grab-take={g.id} disabled={!g.canTake} class={`${buttonClass("primary", "sm")} disabled:cursor-not-allowed disabled:opacity-50`}>{c.take}</button>
+            </li>
+        ))}
+    </ul>
+</section>
+
+<script>
+    import { queueToast } from "../../lib/dialogs";
+    import { showToast } from "../../lib/toast";
+    import { earlyBirdCopy, takeErrorMessage, takeErrorReason } from "../../lib/earlyBird";
+
+    function initParentGrabs() {
+        const root = document.querySelector<HTMLElement>("[data-parent-grabs]");
+        if (!root || root.dataset.bound === "1") return;
+        root.dataset.bound = "1";
+        const lang = root.dataset.lang === "en" ? "en" : "es";
+        root.querySelectorAll<HTMLButtonElement>("[data-grab-take]").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                if (btn.disabled) return;
+                btn.disabled = true; // synchronous: no double submit
+                let failed = true;
+                try {
+                    const res = await fetch(`/api/early-bird/grabs/${encodeURIComponent(btn.dataset.grabTake ?? "")}/take`, {
+                        method: "POST",
+                        credentials: "same-origin",
+                    });
+                    if (res.ok) {
+                        // Reload re-reads /grabs (and the review queue the take feeds).
+                        queueToast(earlyBirdCopy(lang).taken, "success");
+                        window.location.reload();
+                        return;
+                    }
+                    let reason = "";
+                    try {
+                        reason = takeErrorReason(await res.json());
+                    } catch {
+                        /* non-JSON error body */
+                    }
+                    showToast(takeErrorMessage(reason, lang), "error");
+                    failed = reason !== "already_taken" && reason !== "grab_window_closed";
+                } catch {
+                    showToast(earlyBirdCopy(lang).takeFailed, "error");
+                }
+                // A row that can never succeed again stays disabled.
+                if (failed) btn.disabled = false;
+            });
+        });
+    }
+    document.addEventListener("astro:page-load", initParentGrabs);
+    if (document.readyState !== "loading") initParentGrabs();
+</script>
