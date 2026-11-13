@@ -1536,6 +1536,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         user_id: UUID,
         family_id: UUID,
         through_date: date,
+        now: Optional[datetime] = None,
     ) -> bool:
         """
         True if any mandatory (non-bonus) assignment with assigned_date
@@ -1546,8 +1547,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         Future-dated mandatory rows are intentionally ignored.
         """
         q = (
-            select(func.count())
-            .select_from(TaskAssignment)
+            select(TaskAssignment)
+            .options(selectinload(TaskAssignment.template))
             .join(TaskTemplate, TaskAssignment.template_id == TaskTemplate.id)
             .where(
                 and_(
@@ -1561,7 +1562,10 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 )
             )
         )
-        return (await db.execute(q)).scalar_one() > 0
+        open_rows = list((await db.execute(q)).scalars().all())
+        # Rows expired for their owner (Early Bird cutoff passed) are the
+        # family's now, not blockers (chore rules v2, R6).
+        return bool(await TaskAssignmentService.drop_expired(db, family_id, open_rows, now))
 
     @staticmethod
     async def list_open_mandatory_before(
@@ -1569,6 +1573,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         user_id: UUID,
         family_id: UUID,
         before_date: date,
+        now: Optional[datetime] = None,
     ) -> List[TaskAssignment]:
         """Open (PENDING/OVERDUE) mandatory assignments dated strictly BEFORE
         ``before_date`` — i.e. the prior-day blockers that the sweep flipped to
@@ -1596,26 +1601,52 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             )
             .order_by(TaskAssignment.assigned_date.asc())
         )
-        return list((await db.execute(query)).scalars().all())
+        rows = list((await db.execute(query)).scalars().all())
+        # Expired-for-owner rows are not "Atrasadas" any more (R6).
+        return await TaskAssignmentService.drop_expired(db, family_id, rows, now)
 
     @staticmethod
-    async def _reject_if_expired(db, assignment, template, now=None) -> None:
-        """Chore rules v2: once the family's cutoff of the row's due day has
-        passed, its OWNER can no longer complete it (it is open to the family).
-        Only for covered chores (mandatory, non-exempt) on an Early Bird active
-        day; a taker's row (taken_from_id) is the family's and never expires.
-        The parent's retroactive mark_done_for_kid does not come through here."""
-        if template.is_bonus or template.early_bird_exempt or assignment.taken_from_id:
-            return
-        from app.core.exceptions import ChoreExpiredException
+    def expired_for_owner(cfg, assignment, template, now: datetime) -> bool:
+        """Chore rules v2 (R6): THE predicate "expired for its owner". A covered
+        chore (mandatory, non-bonus, not early_bird_exempt), not a taker's row,
+        in a family with Early Bird on, on an active day, once the cutoff of its
+        due day has passed. Such a row is the family's: the owner can no longer
+        complete it and it no longer counts as open for them."""
         from app.services.early_bird_rules import chore_expired, day_times, is_active_day
+
+        if template.is_bonus or template.early_bird_exempt or assignment.taken_from_id:
+            return False
+        if not cfg.enabled or not is_active_day(cfg, assignment.assigned_date):
+            return False
+        return chore_expired(now, day_times(cfg, assignment.assigned_date))
+
+    @staticmethod
+    async def drop_expired(db, family_id, rows, now=None) -> list:
+        """``rows`` (assignments with .template loaded) minus the ones expired for
+        their owner. Config loaded once; no per-row queries. Early Bird off =
+        rows unchanged."""
+        if not rows:
+            return list(rows)
+        from app.services.early_bird_service import EarlyBirdService
+
+        cfg = await EarlyBirdService.config(db, family_id)
+        if not cfg.enabled:
+            return list(rows)
+        now = now if now is not None else datetime.now(timezone.utc)
+        return [
+            r for r in rows
+            if not TaskAssignmentService.expired_for_owner(cfg, r, r.template, now)
+        ]
+
+    @staticmethod
+    async def _reject_if_expired(db, assignment, template, now) -> None:
+        """The owner's kid-complete path: 409 chore_expired once the row is
+        expired for its owner. mark_done_for_kid never comes through here."""
+        from app.core.exceptions import ChoreExpiredException
         from app.services.early_bird_service import EarlyBirdService
 
         cfg = await EarlyBirdService.config(db, assignment.family_id)
-        if not cfg.enabled or not is_active_day(cfg, assignment.assigned_date):
-            return
-        now = now if now is not None else datetime.now(timezone.utc)
-        if chore_expired(now, day_times(cfg, assignment.assigned_date)):
+        if TaskAssignmentService.expired_for_owner(cfg, assignment, template, now):
             raise ChoreExpiredException("chore_expired")
 
     @staticmethod
@@ -1641,6 +1672,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         # approval queue. Normalised to None when blank so the "this task
         # requires a photo" branches below still give their own message.
         proof_image_url = clean_proof_url(proof_image_url)
+        # ONE instant for the expiry check and every completed_at stamp below,
+        # so a row cannot pass the cutoff test and be stamped after it.
+        now = now if now is not None else datetime.now(timezone.utc)
         # Row-lock the assignment: the mandatory path now awards points, so a
         # concurrent double-submit (kid double-tapping "complete") must not pass
         # the can_complete check twice and double-award.
@@ -1691,7 +1725,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         if template.is_bonus:
             # Gig path
             has_open_mandatory = await TaskAssignmentService.has_open_mandatory_through(
-                db, user_id, family_id, assignment.assigned_date
+                db, user_id, family_id, assignment.assigned_date, now
             )
             if has_open_mandatory:
                 raise ForbiddenException(
@@ -1708,7 +1742,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 )
 
             assignment.status = AssignmentStatus.COMPLETED
-            assignment.completed_at = datetime.now(timezone.utc)
+            assignment.completed_at = now
             assignment.proof_text = proof_text.strip()
             if proof_image_url:
                 assignment.proof_image_url = proof_image_url
@@ -1811,7 +1845,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     "This task requires a photo of the finished work"
                 )
             assignment.status = AssignmentStatus.COMPLETED
-            assignment.completed_at = datetime.now(timezone.utc)
+            assignment.completed_at = now
             assignment.proof_text = (proof_text or "").strip() or None
             assignment.proof_image_url = proof_image_url
             # Resubmitted after a send-back: drop the previous photo's AI verdict.
@@ -1822,7 +1856,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             # Mandatory path — silent completion, awards privilege points
             # (no approval). Cash is reserved for gigs; chores credit points.
             assignment.status = AssignmentStatus.COMPLETED
-            assignment.completed_at = datetime.now(timezone.utc)
+            assignment.completed_at = now
             from app.services.points_service import PointsService
             await PointsService.award_assignment_completion(
                 db, user_id, family_id, assignment.id, template.effective_points
@@ -2877,7 +2911,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         # prior-day blockers this is the full unlock gate.
         same_day_open = any(
             a.status in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE)
-            for a in required_assignments
+            for a in await TaskAssignmentService.drop_expired(
+                db, family_id, required_assignments
+            )
         )
         has_open_mandatory = bool(overdue_assignments) or same_day_open
         bonus_unlocked = not has_open_mandatory

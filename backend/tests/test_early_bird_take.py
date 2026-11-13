@@ -351,7 +351,7 @@ async def test_takers_completed_row_can_still_be_reopened(ctx):
     assert out.status == AssignmentStatus.PENDING
 
 
-async def test_two_takes_at_once_leave_the_kid_with_one(ctx, test_engine):
+async def test_two_takes_at_once_both_succeed_serialized(ctx, test_engine):
     """A double tap on two grabs by one member serializes on the per-member
     lock; with "finish yours first" dropped (chore rules v2) both succeed."""
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker

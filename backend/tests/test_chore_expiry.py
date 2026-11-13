@@ -227,6 +227,9 @@ async def test_owner_completion_before_cutoff_ok(ctx):
 
 async def test_mark_done_for_kid_after_cutoff_ok(ctx, test_parent_user):
     db, fam, owner, tpl, a, day = ctx
+    # Yesterday's row is past its cutoff whatever the wall clock says.
+    a = await _assign(db, owner, await _tpl(db, fam, title="Old"), day - timedelta(days=1),
+                      status=AssignmentStatus.OVERDUE)
     await TaskAssignmentService.mark_done_for_kid(
         db, assignment_id=a.id, family_id=fam.id, parent_id=test_parent_user.id,
         note="she did it")
@@ -286,3 +289,169 @@ async def test_push_fires_at_cutoff_once_per_day(ctx):
     await db.commit()
     assert (await EarlyBirdService.run_sweep(db, now=_at(day, 20, 35)))["grabs"] == 0
     assert len(await _grab_rows(db, sib)) == 1
+
+
+# ------------------------------------------- R6: expired rows are not blockers
+
+async def _bonus_done(db, fam, owner, day, now):
+    b = await _assign(db, owner, await _tpl(db, fam, bonus=True, title="Gig"), day)
+    return await TaskAssignmentService.complete_assignment(
+        db, b.id, fam.id, owner.id, proof_text="did it", now=now)
+
+
+async def test_yesterdays_untaken_chore_does_not_block_bonus(ctx):
+    db, fam, owner, tpl, a, day = ctx
+    a.assigned_date = day - timedelta(days=1)
+    a.status = AssignmentStatus.OVERDUE
+    await db.commit()
+    done = await _bonus_done(db, fam, owner, day, _at(day, 9, 0))
+    assert done.status == AssignmentStatus.COMPLETED
+
+
+async def test_todays_untaken_chore_after_cutoff_does_not_block_bonus(ctx):
+    db, fam, owner, tpl, a, day = ctx
+    done = await _bonus_done(db, fam, owner, day, _at(day, 21, 0))
+    assert done.status == AssignmentStatus.COMPLETED
+
+
+async def test_before_cutoff_open_chore_still_blocks_bonus(ctx):
+    db, fam, owner, tpl, a, day = ctx
+    with pytest.raises(ForbiddenException, match="open mandatory"):
+        await _bonus_done(db, fam, owner, day, _at(day, 20, 29))
+
+
+async def test_early_bird_off_expired_chore_still_blocks_bonus(ctx):
+    db, fam, owner, tpl, a, day = ctx
+    fam.early_bird_enabled = False
+    await db.commit()
+    with pytest.raises(ForbiddenException, match="open mandatory"):
+        await _bonus_done(db, fam, owner, day, _at(day, 21, 0))
+
+
+async def test_expired_chore_does_not_block_claim_gig(ctx):
+    db, fam, owner, tpl, a, day = ctx
+    a.assigned_date = day - timedelta(days=1)  # expired by the real clock
+    a.status = AssignmentStatus.OVERDUE
+    await db.commit()
+    g = await _assign(db, owner, await _tpl(db, fam, bonus=True, title="Gig"), day)
+    out = await TaskAssignmentService.claim_gig(db, g.id, fam.id, owner.id)
+    assert out.status == AssignmentStatus.CLAIMED
+
+
+async def test_early_bird_off_chore_still_blocks_claim_gig(ctx):
+    db, fam, owner, tpl, a, day = ctx
+    fam.early_bird_enabled = False
+    a.assigned_date = day - timedelta(days=1)
+    a.status = AssignmentStatus.OVERDUE
+    await db.commit()
+    g = await _assign(db, owner, await _tpl(db, fam, bonus=True, title="Gig"), day)
+    with pytest.raises(ForbiddenException):
+        await TaskAssignmentService.claim_gig(db, g.id, fam.id, owner.id)
+
+
+async def test_atrasadas_excludes_expired_keeps_exempt(ctx):
+    db, fam, owner, tpl, a, day = ctx
+    y = day - timedelta(days=1)
+    a.assigned_date = y
+    a.status = AssignmentStatus.OVERDUE
+    ex = await _assign(db, owner, await _tpl(db, fam, exempt=True, title="Evening"), y,
+                       status=AssignmentStatus.OVERDUE)
+    await db.commit()
+    rows = await TaskAssignmentService.list_open_mandatory_before(
+        db, owner.id, fam.id, day, now=_at(day, 9, 0))
+    assert [r.id for r in rows] == [ex.id]
+
+
+async def test_atrasadas_early_bird_off_keeps_all(ctx):
+    db, fam, owner, tpl, a, day = ctx
+    fam.early_bird_enabled = False
+    a.assigned_date = day - timedelta(days=1)
+    a.status = AssignmentStatus.OVERDUE
+    await db.commit()
+    rows = await TaskAssignmentService.list_open_mandatory_before(db, owner.id, fam.id, day)
+    assert [r.id for r in rows] == [a.id]
+
+
+async def test_waiting_count_excludes_expired_keeps_exempt(ctx):
+    from app.services.ping_service import PingService
+    db, fam, owner, tpl, a, day = ctx
+    y = day - timedelta(days=1)
+    a.assigned_date = y
+    a.status = AssignmentStatus.OVERDUE
+    await _assign(db, owner, await _tpl(db, fam, exempt=True, title="Evening"), y,
+                  status=AssignmentStatus.OVERDUE)
+    await db.commit()
+    assert await PingService.waiting_count(db, owner) == 1
+
+
+async def test_kiosk_overdue_list_excludes_expired(client, ctx):
+    from app.models.kiosk_device import KioskDevice
+    db, fam, owner, tpl, a, day = ctx
+    kid = await _user(db, fam, "Kiosky", UserRole.CHILD)
+    y = day - timedelta(days=1)
+    await _assign(db, kid, await _tpl(db, fam, title="Gone"), y, status=AssignmentStatus.OVERDUE)
+    await _assign(db, kid, await _tpl(db, fam, exempt=True, title="Evening"), y,
+                  status=AssignmentStatus.OVERDUE)
+    dev = KioskDevice(family_id=fam.id, name="Hall", token="kiosktesttoken" * 4)
+    db.add(dev)
+    await db.commit()
+    parent = await _user(db, fam, "Par", UserRole.PARENT)
+    r = await client.post("/api/auth/login", json={"email": parent.email, "password": "password123"})
+    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    r = await client.put(f"/api/kiosk/member-prefs/{kid.id}", json={"pin": "4321"}, headers=h)
+    assert r.status_code == 200, r.text
+    r = await client.post("/api/kiosk/pin-view", json={
+        "token": dev.token, "user_id": str(kid.id), "pin": "4321"})
+    assert r.status_code == 200, r.text
+    assert [c["title"] for c in r.json()["overdue_chores"]] == ["Evening"]
+
+
+# ------------------------------------------------------------ mutation killers
+
+async def test_bonus_task_never_409_after_cutoff(db_session, test_family, test_teen_user):
+    await _enable(db_session, test_family)
+    day = _today()
+    done = await _bonus_done(db_session, test_family, test_teen_user, day, _at(day, 23, 0))
+    assert done.status == AssignmentStatus.COMPLETED
+
+
+async def test_inactive_day_never_409(ctx):
+    db, fam, owner, tpl, a, day = ctx
+    fam.early_bird_days = [(day.weekday() + 1) % 7]  # today is not an active day
+    await db.commit()
+    done = await TaskAssignmentService.complete_assignment(
+        db, a.id, fam.id, owner.id, now=_at(day, 23, 0))
+    assert done.status == AssignmentStatus.COMPLETED
+
+
+async def test_single_now_checks_and_stamps_same_instant(ctx):
+    db, fam, owner, tpl, a, day = ctx
+    instant = _at(day, 20, 29, 59).replace(microsecond=999000)
+    done = await TaskAssignmentService.complete_assignment(
+        db, a.id, fam.id, owner.id, now=instant)
+    assert done.completed_at == instant
+
+
+async def test_push_recipients_exact_and_since_is_cutoff(ctx, test_parent_user, test_child_user):
+    db, fam, owner, tpl, a, day = ctx
+    other = Family(name="Other")
+    db.add(other)
+    await db.commit()
+    await _enable(db, other)
+    foreign = await _user(db, other, "Foreign")
+    await _assign(db, foreign, await _tpl(db, other), day)
+    # A grab push stamped between the 11:00 deadline and the cutoff must not
+    # dedup the cutoff push (the dedup window starts at the cutoff).
+    db.add(Notification(family_id=fam.id, user_id=test_child_user.id, type="up_for_grabs",
+                        title="old", created_at=_at(day, 15, 0)))
+    await db.commit()
+    await EarlyBirdService.run_sweep(db, now=_at(day, 20, 35))
+    got = {n.user_id for n in (await db.execute(select(Notification).where(
+        Notification.family_id == fam.id,
+        Notification.type == "up_for_grabs", Notification.title != "old"))).scalars().all()}
+    assert got == {owner.id, test_parent_user.id, test_child_user.id}
+    # The other family is swept on its own: its kid is pushed, ours never see
+    # its chores, and nothing of ours reached it.
+    foreign_rows = (await db.execute(select(Notification).where(
+        Notification.type == "up_for_grabs", Notification.user_id == foreign.id))).scalars().all()
+    assert [n.family_id for n in foreign_rows] == [other.id]
