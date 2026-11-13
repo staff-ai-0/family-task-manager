@@ -162,8 +162,8 @@ class EarlyBirdService:
         sunday = monday + timedelta(days=6)
         today = now.astimezone(cfg.tz).date()
         # Controller ruling: a week is "over" for early-bird purposes at
-        # Sunday's R1 (the early cutoff) — nothing earlier can still change.
-        week_over = now >= day_times(cfg, sunday).r1
+        # Sunday's deadline (the early cutoff) — nothing earlier can still change.
+        week_over = now >= day_times(cfg, sunday).deadline
         grace = today > sunday + timedelta(days=PENDING_GRACE_DAYS)
         by_day: dict[date, list[str]] = {}
         for r in rows:
@@ -419,7 +419,7 @@ class EarlyBirdService:
         today = now.astimezone(cfg.tz).date()
         if is_active_day(cfg, today):
             t = day_times(cfg, today)
-            out["cutoff_at"], out["deadline_at"] = t.r1, t.deadline
+            out["cutoff_at"], out["deadline_at"] = t.deadline, t.deadline
         if user.role == UserRole.TEEN:
             out["applies"] = True
             out.update(await EarlyBirdService._teen_view(db, cfg, user.family_id, user.id, now))
@@ -493,7 +493,7 @@ class EarlyBirdService:
             return 0
         if not is_active_day(cfg, assignment.assigned_date):
             return 0
-        if not assignment.completed_at < day_times(cfg, assignment.assigned_date).r1:
+        if not assignment.completed_at < day_times(cfg, assignment.assigned_date).deadline:
             return 0
         pts = early_bonus_points(template.effective_points, cfg.bonus_pct)
         if pts <= 0:

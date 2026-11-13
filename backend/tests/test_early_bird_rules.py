@@ -68,13 +68,13 @@ def test_is_active_day():
     assert is_active_day(cfg(days=frozenset({5})), SAT)
     assert not is_active_day(cfg(enabled=False), MON)
     assert not is_active_day(cfg(enabled_at=None), MON)
-    assert not is_active_day(cfg(enabled_at=at(10)), MON)       # r1 == enabled_at
-    assert is_active_day(cfg(enabled_at=at(9, 59)), MON)
+    assert not is_active_day(cfg(enabled_at=at(11)), MON)       # deadline == enabled_at
+    assert is_active_day(cfg(enabled_at=at(10, 59)), MON)
 
 
 def test_week_eligible():
     assert week_eligible(cfg(), MON)
-    assert not week_eligible(cfg(enabled_at=at(10, 0, 1)), MON)
+    assert not week_eligible(cfg(enabled_at=at(11, 0, 1)), MON)
     assert not week_eligible(cfg(enabled=False), MON)
     assert not week_eligible(cfg(enabled_at=None), MON)
 
@@ -82,10 +82,10 @@ def test_week_eligible():
 def test_chore_state_boundary():
     c = cfg()
     now = at(12)
-    assert chore_state(row(completed_at=at(9, 59, 59)), c, now) == "early"
-    assert chore_state(row(completed_at=at(10)), c, now) == "missed"
-    # aware datetime in another zone compares correctly: 15:59:59 UTC == 09:59:59 MX
-    utc = datetime(2026, 11, 2, 15, 59, 59, tzinfo=timezone.utc)
+    assert chore_state(row(completed_at=at(10, 59, 59)), c, now) == "early"
+    assert chore_state(row(completed_at=at(11)), c, now) == "missed"
+    # aware datetime in another zone compares correctly: 16:59:59 UTC == 10:59:59 MX
+    utc = datetime(2026, 11, 2, 16, 59, 59, tzinfo=timezone.utc)
     assert chore_state(row(completed_at=utc), c, now) == "early"
 
 
@@ -103,15 +103,15 @@ def test_chore_state_variants():
     p = row(approval=AP.PENDING, completed_at=e)
     assert chore_state(p, c, now) == "pending"
     assert chore_state(p, c, now, grace=True) == "early"
-    assert chore_state(row(approval=AP.PENDING, completed_at=at(10, 5)), c, now, grace=True) == "missed"
+    assert chore_state(row(approval=AP.PENDING, completed_at=at(11, 5)), c, now, grace=True) == "missed"
 
 
 def test_chore_state_open():
     c = cfg()
     for st in (AS.PENDING, AS.OVERDUE, AS.CLAIMED):
-        assert chore_state(row(status=st), c, at(9)) == "open"
-        assert chore_state(row(status=st), c, at(10)) == "missed"
-    assert chore_state(row(status=AS.PENDING), c, at(9, 59, 59)) == "open"
+        assert chore_state(row(status=st), c, at(10)) == "open"
+        assert chore_state(row(status=st), c, at(11)) == "missed"
+    assert chore_state(row(status=AS.PENDING), c, at(10, 59, 59)) == "open"
 
 
 def test_day_result():

@@ -95,7 +95,7 @@ async def test_complete_before_cutoff_awards_bonus(ctx):
 async def test_complete_at_cutoff_no_bonus(ctx):
     db, fam, kid, day = ctx
     a = await _assign(db, kid, await _template(db, fam), day)
-    await _complete(db, a, kid, _local(day, 10, 0))
+    await _complete(db, a, kid, _local(day, 11, 0))
     await db.refresh(kid)
     assert a.early_bonus_points is None
     assert await _bonus_rows(db, kid) == []

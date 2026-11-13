@@ -12,6 +12,8 @@ from app.models.task_assignment import ApprovalStatus, AssignmentStatus
 from app.core.time_utils import safe_zoneinfo
 
 STREAK_WEEKS = 3
+# R1/R2 are reminder offsets only (first / second teen push); the early
+# cutoff everywhere is the deadline itself.
 R1_BEFORE = timedelta(minutes=60)
 R2_BEFORE = timedelta(minutes=30)
 GRABS_PUSH_WINDOW = timedelta(minutes=60)
@@ -117,15 +119,15 @@ def close_period(past: Optional[list], start: datetime, end: datetime) -> list:
 def is_active_day(cfg: EarlyBirdConfig, day: date) -> bool:
     if cfg.days is not None and day.weekday() not in cfg.days:
         return False
-    r1 = day_times(cfg, day).r1
-    return _on_throughout(cfg, r1, r1)
+    deadline = day_times(cfg, day).deadline
+    return _on_throughout(cfg, deadline, deadline)
 
 
 def week_eligible(cfg: EarlyBirdConfig, monday: date) -> bool:
-    """On from before Monday's R1 through Sunday's R1 (when the week is over)
+    """On from before Monday's deadline through Sunday's deadline (when the week is over)
     without a switch-off: the week you switch it on never counts."""
     return _on_throughout(
-        cfg, day_times(cfg, monday).r1, day_times(cfg, monday + timedelta(days=6)).r1
+        cfg, day_times(cfg, monday).deadline, day_times(cfg, monday + timedelta(days=6)).deadline
     )
 
 
@@ -146,9 +148,9 @@ ChoreState = Literal["early", "pending", "open", "missed"]
 
 
 def chore_state(row: CoveredRow, cfg: EarlyBirdConfig, now: datetime, *, grace: bool = False) -> ChoreState:
-    r1 = day_times(cfg, row.assigned_date).r1
+    deadline = day_times(cfg, row.assigned_date).deadline
     if row.status == AssignmentStatus.COMPLETED:
-        if row.completed_at is None or row.completed_at >= r1:
+        if row.completed_at is None or row.completed_at >= deadline:
             return "missed"
         if row.grade in ("missed", "partial"):
             return "missed"
@@ -158,7 +160,7 @@ def chore_state(row: CoveredRow, cfg: EarlyBirdConfig, now: datetime, *, grace: 
             return "early" if grace else "pending"
         return "missed"
     if row.status in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE, AssignmentStatus.CLAIMED):
-        return "open" if now < r1 else "missed"
+        return "open" if now < deadline else "missed"
     return "missed"
 
 
@@ -180,7 +182,8 @@ def completed_in_time(row: CoveredRow, cfg: EarlyBirdConfig, *, grace: bool = Fa
 def done_early(row: CoveredRow, cfg: EarlyBirdConfig, *, grace: bool = False) -> bool:
     """Completed in time AND before the deadline (11:00, not R1)."""
     return (
-        completed_in_time(row, cfg, grace=grace)
+        not row.parent_marked
+        and completed_in_time(row, cfg, grace=grace)
         and row.completed_at < day_times(cfg, row.assigned_date).deadline
     )
 

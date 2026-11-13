@@ -176,16 +176,16 @@ async def test_ineligible_enable_week_no_bonus(ctx):
 
 
 @pytest.mark.asyncio
-async def test_current_week_bonus_counts_from_sunday_r1(ctx):
-    """I6: the week is over for early-bird purposes at Sunday's R1 (10:00)."""
+async def test_current_week_bonus_counts_from_sunday_deadline(ctx):
+    """I6: the week is over for early-bird purposes at Sunday's deadline (11:00)."""
     from app.services.early_bird_service import EarlyBirdService
 
     db, fam, kid, _ = ctx
     monday = _this_monday()
     await _four_early(db, fam, kid, monday)
     sunday = monday + timedelta(days=6)
-    before = datetime.combine(sunday, time(9, 30), tzinfo=MX)
-    after = datetime.combine(sunday, time(10, 30), tzinfo=MX)
+    before = datetime.combine(sunday, time(10, 30), tzinfo=MX)
+    after = datetime.combine(sunday, time(11, 30), tzinfo=MX)
     assert await EarlyBirdService.week_bonus_cents(db, fam.id, kid.id, monday, 4000, before) == 0
     assert await EarlyBirdService.week_bonus_cents(db, fam.id, kid.id, monday, 4000, after) == 200
 
