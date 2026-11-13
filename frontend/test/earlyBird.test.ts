@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { countdownLabel, earlyBirdCopy, earlyBirdView, grabItems, ladderMessage, payoutWeekNotes, runProgress, takeBlockHint, takeErrorMessage, takeErrorReason, paycheckBonusLine } from "../src/lib/earlyBird";
 
@@ -116,7 +118,8 @@ describe("earlyBirdView", () => {
 });
 
 describe("takeErrorMessage", () => {
-    const keys = ["grab_window_closed", "not_eligible", "own_chore", "already_taken"];
+    // Every reason key EarlyBirdService.take / can_take still raises.
+    const keys = ["grab_window_closed", "not_eligible", "own_chore", "already_taken", "role_not_allowed", "not_grabbable"];
     it("every new reason key has distinct non-empty copy in ES and EN", () => {
         for (const lang of ["es", "en"] as const) {
             const msgs = keys.map((k) => takeErrorMessage(k, lang));
@@ -124,6 +127,12 @@ describe("takeErrorMessage", () => {
             const generic = takeErrorMessage("zzz", lang);
             msgs.forEach((m) => { expect(m.length).toBeGreaterThan(0); expect(m).not.toBe(generic); });
         }
+    });
+    it("words the role and not-grabbable refusals", () => {
+        expect(takeErrorMessage("role_not_allowed", "es")).toBe("Tu perfil no puede tomar esta tarea");
+        expect(takeErrorMessage("role_not_allowed", "en")).toBe("Your profile can't take this chore");
+        expect(takeErrorMessage("not_grabbable", "es")).toBe("Esta tarea ya no se puede tomar");
+        expect(takeErrorMessage("not_grabbable", "en")).toBe("This chore can't be taken anymore");
     });
     it("dead reasons fall back to the generic message", () => {
         for (const k of ["not_kid", "finish_yours_first"]) expect(takeErrorMessage(k, "en")).toBe(takeErrorMessage("zzz", "en"));
@@ -185,6 +194,10 @@ describe("payoutWeekNotes", () => {
     });
     it("flags a past week that is not final as provisional", () => {
         expect(payoutWeekNotes({ ladder_tier: "per_task", ladder_final: false, is_current_week: false }, "es")).toEqual(["Pendiente de revisión — semana provisional"]);
+    });
+    it("never calls a neutral week provisional (Early Bird off, or a CHILD the ladder does not cover)", () => {
+        expect(payoutWeekNotes({ ladder_tier: "neutral", ladder_final: false, is_current_week: false }, "es")).toEqual([]);
+        expect(payoutWeekNotes({ ladder_tier: "neutral", ladder_final: false, is_current_week: false }, "en")).toEqual([]);
     });
     it("says nothing for the current week, final weeks, bonus weeks or old payloads", () => {
         expect(payoutWeekNotes({ ladder_tier: "bonus", ladder_final: false, is_current_week: true }, "es")).toEqual([]);
@@ -254,5 +267,22 @@ describe("ladderMessage", () => {
     it("empty for a week with no chores or no data", () => {
         expect(ladderMessage(L(0, 0, "neutral", 0), "es")).toBe("");
         expect(ladderMessage(undefined, "es")).toBe("");
+    });
+});
+
+describe("GrabsCard take confirmation", () => {
+    const src = readFileSync(fileURLToPath(new URL("../src/components/home/GrabsCard.astro", import.meta.url)), "utf8");
+    it("asks through confirmSheet before the take request (a take is irreversible)", () => {
+        expect(src).toMatch(/import \{[^}]*\bconfirmSheet\b[^}]*\} from "\.\.\/\.\.\/lib\/dialogs"/);
+        const ask = src.indexOf("await confirmSheet(");
+        const post = src.indexOf("fetch(`/api/early-bird/grabs/");
+        expect(ask).toBeGreaterThan(-1);
+        expect(post).toBeGreaterThan(ask);
+    });
+    it("has the confirm copy in both languages", () => {
+        expect(earlyBirdCopy("es").takeConfirmTitle).toBe("¿Tomar esta tarea?");
+        expect(earlyBirdCopy("es").takeConfirmBody).toBe("Quedará a tu nombre y no se puede deshacer.");
+        expect(earlyBirdCopy("en").takeConfirmTitle).toBe("Take this chore?");
+        expect(earlyBirdCopy("en").takeConfirmBody).toBe("It will be yours and it can't be undone.");
     });
 });

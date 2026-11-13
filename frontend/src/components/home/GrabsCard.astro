@@ -4,6 +4,8 @@
  * family until the grab window closes. Rows come from GET /api/early-bird/grabs
  * (empty outside the window or when Early Bird is off, which hides the card).
  * The server re-checks every rule; a failed take only reports its reason.
+ * A take is irreversible (both rows lock) and can push the owner's week under
+ * the 60 % pay floor, so it goes behind a confirmSheet.
  */
 import { buttonClass } from "../../lib/buttonClasses";
 import { earlyBirdCopy, grabItems } from "../../lib/earlyBird";
@@ -34,7 +36,7 @@ const items = grabItems(rows, lang);
 </section>
 
 <script>
-    import { queueToast } from "../../lib/dialogs";
+    import { confirmSheet, queueToast } from "../../lib/dialogs";
     import { showToast } from "../../lib/toast";
     import { earlyBirdCopy, takeErrorMessage, takeErrorReason } from "../../lib/earlyBird";
 
@@ -46,7 +48,17 @@ const items = grabItems(rows, lang);
         root.querySelectorAll<HTMLButtonElement>("[data-grab-take]").forEach((btn) => {
             btn.addEventListener("click", async () => {
                 if (btn.disabled) return;
-                btn.disabled = true; // synchronous: no double submit
+                btn.disabled = true; // synchronous: no double submit / second sheet
+                const c = earlyBirdCopy(lang);
+                const ok = await confirmSheet({
+                    title: c.takeConfirmTitle,
+                    body: c.takeConfirmBody,
+                    confirmLabel: c.take,
+                });
+                if (!ok) {
+                    btn.disabled = false;
+                    return;
+                }
                 let failed = true;
                 try {
                     const res = await fetch(`/api/early-bird/grabs/${encodeURIComponent(btn.dataset.grabTake ?? "")}/take`, {

@@ -75,6 +75,8 @@ const COPY = {
         from: (name: string) => `de ${name}`,
         taken: "¡Tarea tomada!",
         takeFailed: "No se pudo tomar la tarea",
+        takeConfirmTitle: "¿Tomar esta tarea?",
+        takeConfirmBody: "Quedará a tu nombre y no se puede deshacer.",
         dayGlyph: { early: "✓", pending: "…", open: "○", missed: "✗", neutral: "–", future: "·" },
         dayLabel: { early: "Madrugaste", pending: "En revisión", open: "Hoy", missed: "Sin madrugar", neutral: "Sin tareas", future: "Pendiente" },
         paycheck: (pct: number) => `incl. +${pct}% madrugador`,
@@ -83,6 +85,8 @@ const COPY = {
             grab_window_closed: "Ya no es horario para tomar tareas",
             not_eligible: "Ahora no puedes tomar esta tarea",
             own_chore: "Esta tarea ya es tuya",
+            role_not_allowed: "Tu perfil no puede tomar esta tarea",
+            not_grabbable: "Esta tarea ya no se puede tomar",
         } as Record<string, string>,
     },
     en: {
@@ -103,6 +107,8 @@ const COPY = {
         from: (name: string) => `from ${name}`,
         taken: "Chore taken!",
         takeFailed: "Couldn't take the chore",
+        takeConfirmTitle: "Take this chore?",
+        takeConfirmBody: "It will be yours and it can't be undone.",
         dayGlyph: { early: "✓", pending: "…", open: "○", missed: "✗", neutral: "–", future: "·" },
         dayLabel: { early: "Early", pending: "In review", open: "Today", missed: "Missed", neutral: "No chores", future: "Upcoming" },
         paycheck: (pct: number) => `incl. +${pct}% early bird`,
@@ -111,6 +117,8 @@ const COPY = {
             grab_window_closed: "It's not time to take chores right now",
             not_eligible: "You can't take this chore right now",
             own_chore: "This chore is already yours",
+            role_not_allowed: "Your profile can't take this chore",
+            not_grabbable: "This chore can't be taken anymore",
         } as Record<string, string>,
     },
 } as const;
@@ -183,7 +191,9 @@ export function payoutWeekNotes(w: any, lang: Lang): string[] {
     if (w?.ladder_tier === "no_pay") {
         notes.push(es ? "Menos de 60 % completado — sin pago base" : "Under 60% completed — no base pay");
     }
-    if (w?.ladder_final === false && w?.is_current_week === false) {
+    // A neutral week (Early Bird off, or a kid the ladder does not cover) is
+    // never final by construction, but nothing about it is pending either.
+    if (w?.ladder_final === false && w?.is_current_week === false && w?.ladder_tier !== "neutral") {
         notes.push(es ? "Pendiente de revisión — semana provisional" : "Pending review — provisional week");
     }
     return notes;
