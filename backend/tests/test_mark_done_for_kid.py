@@ -83,6 +83,7 @@ async def test_marks_overdue_into_the_review_queue_without_awarding(
     assert a.status == AssignmentStatus.COMPLETED
     assert a.approval_status == ApprovalStatus.PENDING
     assert a.completed_at is not None
+    assert a.marked_done_by_parent is True
     # The whole point: this step credits nothing. Grading does.
     await db_session.refresh(test_child_user)
     assert test_child_user.points == points_before

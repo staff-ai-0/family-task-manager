@@ -138,3 +138,22 @@ def test_chore_rules_v2_round_trip(scratch_dsn):
     assert not (new & _cols(dsn, "families"))
     _alembic(dsn, "upgrade", "head")
     assert new <= _cols(dsn, "families")
+
+
+def test_marked_done_by_parent_round_trip(scratch_dsn):
+    dsn = scratch_dsn
+    _alembic(dsn, "upgrade", "chore_rules_v2")
+    fam, usr, tpl = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    _insert(dsn, "families", id=fam, name="F")
+    _insert(dsn, "users", id=usr, email=f"{usr}@x.com", family_id=fam, role="TEEN")
+    _insert(dsn, "task_templates", id=tpl, family_id=fam, assignment_type="auto")
+    _insert(dsn, "task_assignments", id=uuid.uuid4(), template_id=tpl, assigned_to=usr,
+            family_id=fam, status="pending", approval_status="none",
+            assigned_date=date(2026, 11, 2), week_of=date(2026, 11, 2))
+    assert "marked_done_by_parent" not in _cols(dsn, "task_assignments")
+    _alembic(dsn, "upgrade", "head")
+    assert _sql(dsn, "SELECT marked_done_by_parent AS m FROM task_assignments")[0]["m"] is False
+    _alembic(dsn, "downgrade", "chore_rules_v2")
+    assert "marked_done_by_parent" not in _cols(dsn, "task_assignments")
+    _alembic(dsn, "upgrade", "head")
+    assert "marked_done_by_parent" in _cols(dsn, "task_assignments")

@@ -36,6 +36,8 @@ class EarlyBirdConfig:
     week_pct: int
     streak_cents: int
     tz: ZoneInfo
+    cutoff: time  # chores must be done before this to count as completed
+    grab_end: time  # end of the up-for-grabs window
     # Earlier on-periods, closed by a switch-off: ((start, end), ...). The
     # current period is (enabled_at, open). Kept so an off->on toggle does not
     # retroactively make the weeks that already ran under the feature ineligible.
@@ -53,6 +55,8 @@ class EarlyBirdConfig:
             week_pct=fam.early_bird_week_pct,
             streak_cents=fam.early_bird_streak_cents,
             tz=safe_zoneinfo(fam.timezone),
+            cutoff=fam.chore_cutoff,
+            grab_end=fam.grab_window_end,
             past_periods=tuple(
                 (datetime.fromisoformat(start), datetime.fromisoformat(end))
                 for start, end in (getattr(fam, "early_bird_past_periods", None) or ())
@@ -65,11 +69,19 @@ class DayTimes:
     r1: datetime
     r2: datetime
     deadline: datetime
+    cutoff: datetime
+    grab_end: datetime
 
 
 def day_times(cfg: EarlyBirdConfig, day: date) -> DayTimes:
     deadline = datetime.combine(day, cfg.deadline, tzinfo=cfg.tz)
-    return DayTimes(r1=deadline - R1_BEFORE, r2=deadline - R2_BEFORE, deadline=deadline)
+    return DayTimes(
+        r1=deadline - R1_BEFORE,
+        r2=deadline - R2_BEFORE,
+        deadline=deadline,
+        cutoff=datetime.combine(day, cfg.cutoff, tzinfo=cfg.tz),
+        grab_end=datetime.combine(day, cfg.grab_end, tzinfo=cfg.tz),
+    )
 
 
 def _on_periods(cfg: EarlyBirdConfig) -> list[tuple[datetime, Optional[datetime]]]:
@@ -125,6 +137,9 @@ class CoveredRow:
     approval: ApprovalStatus
     grade: Optional[str]
     completed_at: Optional[datetime]
+    # Set by the parent's retroactive "mark done" (explicit action): counts as
+    # completed whatever completed_at says.
+    parent_marked: bool = False
 
 
 ChoreState = Literal["early", "pending", "open", "missed"]
@@ -145,6 +160,59 @@ def chore_state(row: CoveredRow, cfg: EarlyBirdConfig, now: datetime, *, grace: 
     if row.status in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE, AssignmentStatus.CLAIMED):
         return "open" if now < r1 else "missed"
     return "missed"
+
+
+def completed_in_time(row: CoveredRow, cfg: EarlyBirdConfig, *, grace: bool = False) -> bool:
+    """Counts as completed for the weekly ladder: done before the day's cutoff
+    (a parent-marked row is exempt from the time test), not graded
+    missed/partial, and approved (or pending review when ``grace``)."""
+    if row.status != AssignmentStatus.COMPLETED or row.completed_at is None:
+        return False
+    if not row.parent_marked and row.completed_at >= day_times(cfg, row.assigned_date).cutoff:
+        return False
+    if row.grade in ("missed", "partial"):
+        return False
+    if row.approval in (ApprovalStatus.NONE, ApprovalStatus.APPROVED):
+        return True
+    return row.approval == ApprovalStatus.PENDING and grace
+
+
+def done_early(row: CoveredRow, cfg: EarlyBirdConfig, *, grace: bool = False) -> bool:
+    """Completed in time AND before the deadline (11:00, not R1)."""
+    return (
+        completed_in_time(row, cfg, grace=grace)
+        and row.completed_at < day_times(cfg, row.assigned_date).deadline
+    )
+
+
+@dataclass(frozen=True)
+class LadderResult:
+    tier: Literal["neutral", "no_pay", "per_task", "bonus"]
+    bonus_pct: int
+    completed: int
+    early: int
+    total: int
+
+
+def week_ladder(completed: int, early: int, total: int) -> LadderResult:
+    """Weekly pay tier from counts. Integer cross-multiplication only; every
+    boundary is inclusive."""
+    def result(tier, pct=0):
+        return LadderResult(tier, pct, completed, early, total)
+
+    if total <= 0:
+        return result("neutral")
+    if completed * 100 < 60 * total:
+        return result("no_pay")
+    if completed != total:
+        return result("per_task")
+    if early * 100 >= 100 * total:
+        return result("bonus", 15)
+    if early * 100 >= 90 * total:
+        return result("bonus", 10)
+    if early * 100 >= 80 * total:
+        return result("bonus", 5)
+    return result("bonus", 0)
 
 
 def day_result(states: list[str]) -> Literal["early", "missed", "pending", "open", "neutral"]:

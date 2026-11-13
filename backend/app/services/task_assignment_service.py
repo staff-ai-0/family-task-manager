@@ -2340,6 +2340,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         assignment.status = AssignmentStatus.COMPLETED
         assignment.completed_at = datetime.now(timezone.utc)
         assignment.approval_status = ApprovalStatus.PENDING
+        assignment.marked_done_by_parent = True
         # Recorded as the kid-facing proof line: they will see why a task they
         # did not submit suddenly shows up as done.
         parent_note = note.strip()

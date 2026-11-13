@@ -128,6 +128,7 @@ class EarlyBirdService:
                 approval=a.approval_status,
                 grade=a.completion_grade,
                 completed_at=a.completed_at,
+                parent_marked=bool(a.marked_done_by_parent),
             )
             for a in rows
             if is_active_day(cfg, a.assigned_date)
