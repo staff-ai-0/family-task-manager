@@ -6,13 +6,26 @@
 export type Lang = "es" | "en";
 
 export type DayState = "early" | "pending" | "open" | "missed" | "neutral" | "future";
-export type CardState = "early" | "on_track" | "before_deadline" | "late" | "missed" | "idle";
+/** on_track = before the early deadline (11:00); before_cutoff = past it but the
+ * chore is still the kid's until the evening cutoff; late = past the cutoff. */
+export type CardState = "early" | "on_track" | "before_cutoff" | "late" | "missed" | "idle";
+
+export type LadderTier = "neutral" | "no_pay" | "per_task" | "bonus";
+export interface WeekLadder {
+    completed_pct: number;
+    early_pct: number;
+    tier: LadderTier | string;
+    bonus_pct: number;
+    final: boolean;
+}
 
 export interface GrabItem {
     id: string;
     title: string;
     points: number;
     ownerName: string;
+    /** False when the caller cannot take it (parents' list; kids' /me rows are always takeable). */
+    canTake: boolean;
 }
 
 export interface DotView {
@@ -33,8 +46,11 @@ export interface EarlyBirdView {
     runText: string;
     runLabel: string;
     bonusLabel: string;
-    weekPct: number;
-    /** ISO instant the countdown runs to (cutoff, then deadline); "" when none. */
+    /** Weekly ladder sentence (see ladderMessage); "" when the week has no chores. */
+    ladderText: string;
+    /** Paycheck bonus % already earned this week (0 / 5 / 10 / 15). */
+    paycheckBonusPct: number;
+    /** ISO instant the countdown runs to (deadline, then cutoff); "" when none. */
     targetAt: string;
     grabs: GrabItem[];
     takeBlock: string | null;
@@ -43,18 +59,18 @@ export interface EarlyBirdView {
 const COPY = {
     es: {
         title: "Madrugador",
-        headlineOnTrack: "Termina a tiempo y gana extra",
-        headlineBeforeDeadline: (d: string) => `Termina antes de las ${d} o tus tareas quedan libres`,
+        headlineOnTrack: (d: string) => `Termina antes de las ${d} y gana extra`,
+        headlineBeforeCutoff: "Tus tareas siguen siendo tuyas hasta la hora de corte; después quedan libres para la familia",
         headlineEarly: "¡Hoy fuiste madrugador!",
-        headlineLate: "Hoy ya pasó la hora madrugadora",
+        headlineLate: "Tus tareas abiertas ya quedaron libres para la familia",
         headlineMissed: "Hoy no se pudo madrugar",
         headlineIdle: "Sin tareas madrugadoras hoy",
         left: (c: string) => `Faltan ${c}`,
         run: "Racha de madrugador",
         bonus: (cents: string) => `${cents} de bono`,
-        weekPct: (pct: number) => `+${pct}% en tu pago`,
         grabsTitle: "Para tomar",
         grabsHint: "Tareas de otros que puedes tomar",
+        grabsHintParent: "Tareas que quedaron libres para la familia. Quien las toma gana los puntos",
         take: "Tomar",
         from: (name: string) => `de ${name}`,
         taken: "¡Tarea tomada!",
@@ -64,27 +80,25 @@ const COPY = {
         paycheck: (pct: number) => `incl. +${pct}% madrugador`,
         errors: {
             already_taken: "Otra persona ya tomó esta tarea",
-            finish_yours_first: "Termina primero tus tareas",
-            role_not_allowed: "Tu perfil no puede tomar esta tarea",
+            grab_window_closed: "Ya no es horario para tomar tareas",
+            not_eligible: "Ahora no puedes tomar esta tarea",
             own_chore: "Esta tarea ya es tuya",
-            not_grabbable: "Esta tarea ya no se puede tomar",
-            not_kid: "Solo los hijos pueden tomar tareas",
         } as Record<string, string>,
     },
     en: {
         title: "Early bird",
-        headlineOnTrack: "Finish on time and earn extra",
-        headlineBeforeDeadline: (d: string) => `Finish before ${d} or your chores go up for grabs`,
+        headlineOnTrack: (d: string) => `Finish before ${d} and earn extra`,
+        headlineBeforeCutoff: "Your chores stay yours until the evening cutoff, then they open to the family",
         headlineEarly: "You were an early bird today!",
-        headlineLate: "Today's early window has passed",
+        headlineLate: "Your open chores are open to the family now",
         headlineMissed: "No early bird today",
         headlineIdle: "No early chores today",
         left: (c: string) => `${c} left`,
         run: "Early bird run",
         bonus: (cents: string) => `${cents} bonus`,
-        weekPct: (pct: number) => `+${pct}% on your pay`,
         grabsTitle: "Up for grabs",
         grabsHint: "Other people's chores you can take",
+        grabsHintParent: "Chores that are open to the family. Whoever takes one earns the points",
         take: "Take",
         from: (name: string) => `from ${name}`,
         taken: "Chore taken!",
@@ -94,11 +108,9 @@ const COPY = {
         paycheck: (pct: number) => `incl. +${pct}% early bird`,
         errors: {
             already_taken: "Someone else already took this chore",
-            finish_yours_first: "Finish your own chores first",
-            role_not_allowed: "Your profile can't take this chore",
+            grab_window_closed: "It's not time to take chores right now",
+            not_eligible: "You can't take this chore right now",
             own_chore: "This chore is already yours",
-            not_grabbable: "This chore can't be taken anymore",
-            not_kid: "Only kids can take chores",
         } as Record<string, string>,
     },
 } as const;
@@ -151,6 +163,75 @@ export function paycheckBonusLine(bonusCents: unknown, pct: unknown, lang: Lang)
     return earlyBirdCopy(lang).paycheck(p);
 }
 
+/** Rows of /api/early-bird/grabs (or the `grabs` of /me) as list items. */
+export function grabItems(rows: unknown, lang: Lang): GrabItem[] {
+    if (!Array.isArray(rows)) return [];
+    return rows.map((g: any) => ({
+        id: String(g.assignment_id),
+        title: String((lang === "es" && g.title_es) || g.title || ""),
+        points: Math.max(0, Math.trunc(Number(g.points) || 0)),
+        ownerName: String(g.owner_name ?? ""),
+        canTake: g.can_take !== false,
+    }));
+}
+
+/** Reason lines under an outstanding-week row on /parent/payouts, from the
+ * week dict's ladder fields. Only what the dict carries. */
+export function payoutWeekNotes(w: any, lang: Lang): string[] {
+    const es = lang !== "en";
+    const notes: string[] = [];
+    if (w?.ladder_tier === "no_pay") {
+        notes.push(es ? "Menos de 60 % completado — sin pago base" : "Under 60% completed — no base pay");
+    }
+    if (w?.ladder_final === false && w?.is_current_week === false) {
+        notes.push(es ? "Pendiente de revisión — semana provisional" : "Pending review — provisional week");
+    }
+    return notes;
+}
+
+const LADDER = {
+    es: {
+        noPay: (p: number) => `Llevas ${p} %: necesitas 60 % para cobrar`,
+        perTask: (p: number) => `Llevas ${p} %: cada tarea que termines paga. Con 100 % te ganas el bono madrugador`,
+        bonus: (earned: number, next: number | null, nextAt: number) =>
+            (earned > 0 ? `Vas con +${earned} % de madrugador` : "Semana completa al 100 %") +
+            (next ? `. +${next} % si ${nextAt} % antes de las 11:00` : ""),
+        closed: (p: number, tail: string) => `Semana cerrada: ${p} % — ${tail}`,
+        closedNoPay: "sin pago base",
+        closedPerTask: "cada tarea pagó",
+        closedBonus: (b: number) => (b > 0 ? `+${b} % de madrugador` : "sin bono madrugador"),
+    },
+    en: {
+        noPay: (p: number) => `You're at ${p}%: you need 60% to get paid`,
+        perTask: (p: number) => `You're at ${p}%: every task you finish pays. Hit 100% to unlock the early bird bonus`,
+        bonus: (earned: number, next: number | null, nextAt: number) =>
+            (earned > 0 ? `You're on +${earned}% early bird` : "Week complete at 100%") +
+            (next ? `. +${next}% if ${nextAt}% before 11:00` : ""),
+        closed: (p: number, tail: string) => `Week closed: ${p}% — ${tail}`,
+        closedNoPay: "no base pay",
+        closedPerTask: "each task paid",
+        closedBonus: (b: number) => (b > 0 ? `+${b}% early bird` : "no early bird bonus"),
+    },
+} as const;
+
+/** The kid's weekly paycheck status in one sentence, from `week_ladder`. */
+export function ladderMessage(ladder: Partial<WeekLadder> | null | undefined, lang: Lang): string {
+    if (!ladder || ladder.tier === "neutral" || !ladder.tier) return "";
+    const t = LADDER[lang === "en" ? "en" : "es"];
+    const pct = Math.max(0, Math.min(100, Math.trunc(Number(ladder.completed_pct) || 0)));
+    const earned = Math.max(0, Math.trunc(Number(ladder.bonus_pct) || 0));
+    if (ladder.final) {
+        if (ladder.tier === "no_pay") return t.closed(pct, t.closedNoPay);
+        if (ladder.tier === "per_task") return t.closed(pct, t.closedPerTask);
+        return t.closed(pct, t.closedBonus(earned));
+    }
+    if (ladder.tier === "no_pay") return t.noPay(pct);
+    if (ladder.tier === "per_task") return t.perTask(pct);
+    // bonus tier: 80 % early -> +5, 90 % -> +10, 100 % -> +15
+    const next = earned < 5 ? [5, 80] : earned < 10 ? [10, 90] : earned < 15 ? [15, 100] : null;
+    return t.bonus(earned, next ? next[0] : null, next ? next[1] : 0);
+}
+
 const parse = (iso: unknown): Date | null => {
     if (typeof iso !== "string" || !iso) return null;
     const d = new Date(iso);
@@ -176,8 +257,8 @@ export function earlyBirdView(me: any, lang: Lang, now: Date): EarlyBirdView | n
     else if (today === "open" || today === "missed") {
         const openCount = Math.max(0, Math.trunc(Number(me?.open_today) || 0));
         if (openCount > 0) {
-            if (cutoff && now.getTime() < cutoff.getTime()) state = "on_track";
-            else if (deadline && now.getTime() < deadline.getTime()) state = "before_deadline";
+            if (deadline && now.getTime() < deadline.getTime()) state = "on_track";
+            else if (cutoff && now.getTime() < cutoff.getTime()) state = "before_cutoff";
             else state = "late";
         }
         // Nothing left open: a "missed" day just was not early (state stays "missed").
@@ -185,14 +266,14 @@ export function earlyBirdView(me: any, lang: Lang, now: Date): EarlyBirdView | n
 
     const headline = {
         early: c.headlineEarly,
-        on_track: c.headlineOnTrack,
-        before_deadline: c.headlineBeforeDeadline(String(me?.deadline ?? "")),
+        on_track: c.headlineOnTrack(String(me?.deadline ?? "11:00")),
+        before_cutoff: c.headlineBeforeCutoff,
         late: c.headlineLate,
         missed: c.headlineMissed,
         idle: c.headlineIdle,
     }[state];
 
-    const target = state === "on_track" ? cutoff : state === "before_deadline" ? deadline : null;
+    const target = state === "on_track" ? deadline : state === "before_cutoff" ? cutoff : null;
     const countdown = target ? countdownLabel(target, now) : "";
 
     const dots: DotView[] = (Array.isArray(me?.week) ? me.week : []).map((w: any) => {
@@ -214,14 +295,10 @@ export function earlyBirdView(me: any, lang: Lang, now: Date): EarlyBirdView | n
         runText: run.target ? `${run.done}/${run.target}` : "",
         runLabel: c.run,
         bonusLabel: streakCents > 0 ? c.bonus(money(streakCents, lang)) : "",
-        weekPct: Math.max(0, Math.round(Number(me?.week_pct) || 0)),
+        ladderText: ladderMessage(me?.week_ladder, lang),
+        paycheckBonusPct: Math.max(0, Math.trunc(Number(me?.week_ladder?.bonus_pct) || 0)),
         targetAt: target ? target.toISOString() : "",
-        grabs: grabsRaw.map((g) => ({
-            id: String(g.assignment_id),
-            title: String(g.title ?? ""),
-            points: Math.max(0, Math.trunc(Number(g.points) || 0)),
-            ownerName: String(g.owner_name ?? ""),
-        })),
+        grabs: grabItems(grabsRaw, lang),
         takeBlock: me?.take_block ? String(me.take_block) : null,
     };
 }

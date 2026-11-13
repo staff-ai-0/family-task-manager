@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildPayload, centsToPesos, daysFromFamily, daysToPayload, pesosToCents, teenTodayLabel } from "../src/lib/earlyBirdSettings";
+import { buildPayload, validateRulesForm, centsToPesos, daysFromFamily, daysToPayload, pesosToCents, teenTodayLabel } from "../src/lib/earlyBirdSettings";
 
-const base = { enabled: true, deadline: "11:00", days: [0, 1, 2, 3, 4, 5, 6], bonusPct: 20, weekPct: 5, streakPesos: 500 };
+const base = { enabled: true, deadline: "11:00", days: [0, 1, 2, 3, 4, 5, 6], bonusPct: 20, streakPesos: 380, cutoff: "20:30", grabEnd: "22:30", alarm1: "15:00", alarm2: "19:00" };
 
 describe("early bird settings", () => {
     it("all seven days sends null, a subset sends the sorted list", () => {
@@ -17,16 +17,50 @@ describe("early bird settings", () => {
     });
     it("builds the payload", () => {
         const r = buildPayload(base);
-        expect(r).toEqual({ ok: true, body: { early_bird_enabled: true, early_bird_deadline: "11:00", early_bird_days: null, early_bird_bonus_pct: 20, early_bird_week_pct: 5, early_bird_streak_cents: 50000 } });
+        expect(r).toEqual({ ok: true, body: { early_bird_enabled: true, early_bird_deadline: "11:00", early_bird_days: null, early_bird_bonus_pct: 20, early_bird_streak_cents: 38000, chore_cutoff: "20:30", grab_window_end: "22:30", teen_alarm_1: "15:00", teen_alarm_2: "19:00" } });
     });
     it("rejects invalid fields", () => {
-        expect(buildPayload({ ...base, deadline: "06:55" })).toEqual({ ok: false, field: "deadline" });
-        expect(buildPayload({ ...base, deadline: "11:03" })).toEqual({ ok: false, field: "deadline" });
-        expect(buildPayload({ ...base, deadline: "" })).toEqual({ ok: false, field: "deadline" });
-        expect(buildPayload({ ...base, days: [] })).toEqual({ ok: false, field: "days" });
-        expect(buildPayload({ ...base, bonusPct: 101 })).toEqual({ ok: false, field: "bonus" });
-        expect(buildPayload({ ...base, weekPct: 51 })).toEqual({ ok: false, field: "week" });
-        expect(buildPayload({ ...base, streakPesos: 10001 })).toEqual({ ok: false, field: "streak" });
+        expect(buildPayload({ ...base, deadline: "06:55" })).toMatchObject({ ok: false, field: "deadline" });
+        expect(buildPayload({ ...base, deadline: "11:03" })).toMatchObject({ ok: false, field: "deadline" });
+        expect(buildPayload({ ...base, deadline: "" })).toMatchObject({ ok: false, field: "deadline" });
+        expect(buildPayload({ ...base, days: [] })).toMatchObject({ ok: false, field: "days" });
+        expect(buildPayload({ ...base, bonusPct: 101 })).toMatchObject({ ok: false, field: "bonus" });
+        expect(buildPayload({ ...base, streakPesos: 10001 })).toMatchObject({ ok: false, field: "streak" });
+    });
+});
+
+describe("validateRulesForm", () => {
+    const v = { deadline: "11:00", cutoff: "20:30", grabEnd: "22:30", alarm1: "15:00", alarm2: "19:00" };
+    it("accepts the defaults", () => {
+        expect(validateRulesForm(v, "es")).toBeNull();
+    });
+    it("rejects a cutoff at or before the deadline", () => {
+        expect(validateRulesForm({ ...v, deadline: "18:00", cutoff: "18:00" }, "en")).toMatchObject({ field: "cutoff" });
+        expect(validateRulesForm({ ...v, deadline: "19:00", cutoff: "17:30", alarm1: "15:00", alarm2: "17:00" }, "es")).toMatchObject({ field: "cutoff" });
+    });
+    it("rejects a cutoff outside 17:00-23:00 or off the 5-minute step", () => {
+        expect(validateRulesForm({ ...v, cutoff: "16:55" }, "en")).toMatchObject({ field: "cutoff" });
+        expect(validateRulesForm({ ...v, cutoff: "23:05", grabEnd: "23:30" }, "en")).toMatchObject({ field: "cutoff" });
+        expect(validateRulesForm({ ...v, cutoff: "20:32" }, "en")).toMatchObject({ field: "cutoff" });
+        expect(validateRulesForm({ ...v, cutoff: "" }, "en")).toMatchObject({ field: "cutoff" });
+    });
+    it("rejects a grab end at/before the cutoff or after 23:30", () => {
+        expect(validateRulesForm({ ...v, grabEnd: "20:30" }, "en")).toMatchObject({ field: "grabEnd" });
+        expect(validateRulesForm({ ...v, grabEnd: "23:35" }, "en")).toMatchObject({ field: "grabEnd" });
+        expect(validateRulesForm({ ...v, grabEnd: "23:30" }, "en")).toBeNull();
+    });
+    it("rejects unordered or out-of-range alarms", () => {
+        expect(validateRulesForm({ ...v, alarm1: "19:00", alarm2: "15:00" }, "en")).toMatchObject({ field: "alarms" });
+        expect(validateRulesForm({ ...v, alarm1: "15:00", alarm2: "15:00" }, "en")).toMatchObject({ field: "alarms" });
+        expect(validateRulesForm({ ...v, alarm1: "05:55" }, "en")).toMatchObject({ field: "alarms" });
+        expect(validateRulesForm({ ...v, alarm2: "21:00" }, "en")).toMatchObject({ field: "alarms" });
+        expect(validateRulesForm({ ...v, alarm2: "19:02" }, "en")).toMatchObject({ field: "alarms" });
+    });
+    it("messages exist in both languages and differ", () => {
+        const es = validateRulesForm({ ...v, cutoff: "10:00" }, "es")!.message;
+        const en = validateRulesForm({ ...v, cutoff: "10:00" }, "en")!.message;
+        expect(es).not.toBe(en);
+        expect(es.length).toBeGreaterThan(0);
     });
 });
 

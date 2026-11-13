@@ -64,7 +64,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         if (!response.ok) {
             const error = await response.json().catch(() => ({}) as any);
             const detail = typeof error?.detail === "string" ? error.detail : "";
-            const msg = completeErrorMessage(response.status, detail, es);
+            const code = typeof error?.code === "string" ? error.code : "";
+            const msg = completeErrorMessage(response.status, detail, es, code);
             if (wantsJson) return json(response.status, { ok: false, message: msg });
             const headers = new Headers({ Location: returnTo });
             headers.append("Set-Cookie", `flash_error=${encodeURIComponent(msg)}; Path=/`);

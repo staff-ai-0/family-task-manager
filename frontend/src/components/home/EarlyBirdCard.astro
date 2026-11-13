@@ -1,6 +1,6 @@
 ---
 /**
- * Early Bird card on the teen home: today's countdown to the early cutoff,
+ * Early Bird card on the teen home: today's countdown (to the 11:00 early deadline, then to the evening cutoff),
  * the Mon–Sun dots, and the 3-week run toward the bonus. All copy and state
  * come from lib/earlyBird.ts; the countdown label is server-rendered and
  * refreshed every 30 s by a tiny script.
@@ -43,8 +43,8 @@ const dotCls: Record<string, string> = {
     <p class="mt-3 flex items-center justify-between gap-2 text-xs font-bold text-brand-ink-soft">
         <span>{view.runLabel} <span class="font-extrabold tabular-nums text-brand-ink">{view.runText}</span></span>
         {view.bonusLabel && <span class="text-brand-mint-text">{view.bonusLabel}</span>}
-        {view.weekPct > 0 && <span class="text-brand-sun-text">{c.weekPct(view.weekPct)}</span>}
     </p>
+    {view.ladderText && <p data-early-bird-ladder class="mt-1 text-xs font-bold text-brand-ink">{view.ladderText}</p>}
 </section>
 
 <script>

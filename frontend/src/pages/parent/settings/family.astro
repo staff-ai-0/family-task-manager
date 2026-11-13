@@ -2,7 +2,7 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../lib/api";
 import { buttonClass } from "../../../lib/buttonClasses";
-import { centsToPesos, daysFromFamily, teenTodayLabel } from "../../../lib/earlyBirdSettings";
+import { centsToPesos, daysFromFamily, ladderExplainer, teenTodayLabel } from "../../../lib/earlyBirdSettings";
 import { runProgress } from "../../../lib/earlyBird";
 
 const token = Astro.cookies.get("access_token")?.value;
@@ -225,25 +225,25 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
         </div>
     </section>
 
-    <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-4" id="early-bird-section"
+    <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-4" id="early-bird-section" data-lang={lang}
              data-saved={lang === "es" ? "Guardado." : "Saved."}
-             data-error={lang === "es" ? "No se pudo guardar. Intenta de nuevo." : "Could not save. Try again."}
-             data-invalid={JSON.stringify(lang === "es"
-                 ? { deadline: "La hora límite va de 07:00 a 22:00, en pasos de 5 minutos.", days: "Elige al menos un día.", bonus: "El bono por tarea va de 0 a 100.", week: "El bono semanal va de 0 a 50.", streak: "El premio va de 0 a 10,000 pesos." }
-                 : { deadline: "The deadline runs from 07:00 to 22:00 in 5-minute steps.", days: "Pick at least one day.", bonus: "The per-chore bonus is 0 to 100.", week: "The weekly bonus is 0 to 50.", streak: "The prize is 0 to 10,000 pesos." })}>
+             data-error={lang === "es" ? "No se pudo guardar. Intenta de nuevo." : "Could not save. Try again."}>
         <h2 class="text-sm font-bold text-brand-ink">🐦 {lang === "es" ? "Madrugador" : "Early bird"}</h2>
         <p class="text-xs text-brand-ink-soft">
             {lang === "es"
-                ? "Los adolescentes ganan extra por terminar sus tareas antes de la hora límite. Les avisamos 1 h y 30 min antes. Después de la hora, sus tareas abiertas pasan a \"para tomar\" ese mismo día: otro niño puede tomarlas (si ya terminó las suyas), gana los puntos y quien las dejó los pierde. Tres premios: más puntos por tarea temprana, un % extra en el cheque semanal de tareas, y un premio en pesos cada 3ª semana seguida a tiempo. Las tareas marcadas como \"tarea de la tarde\" no cuentan."
-                : "Teens earn extra for finishing their chores before the deadline. We remind them 1 h and 30 min before. After the deadline their open chores go up for grabs that same day: another kid can take them (once their own are done), earns the points, and the one who left them loses them. Three rewards: more points per early chore, a % extra on the weekly chore paycheck, and a peso prize every 3rd week in a row on time. Chores marked \"evening chore\" are exempt."}
+                ? "\"Madrugador\" significa una sola hora: la hora madrugadora (por defecto 11:00). Terminar antes de esa hora da puntos extra y cuenta para el bono semanal. Las tareas siguen siendo del hijo hasta la hora de corte de la tarde (por defecto 20:30); después quedan libres para toda la familia (también para los padres) hasta el fin de \"para tomar\", y quien las toma gana los puntos. Las tareas marcadas como \"tarea de la tarde\" no cuentan."
+                : "\"Early\" means exactly one time: the early deadline (11:00 by default). Finishing before it earns extra points and counts toward the weekly bonus. Chores stay the kid's until the evening cutoff (20:30 by default); after that they're open to the whole family (parents too) until the end of \"up for grabs\", and whoever takes one earns its points. Chores marked \"evening chore\" are exempt."}
         </p>
+        <ol class="list-decimal space-y-0.5 pl-5 text-xs text-brand-ink-soft" data-eb-ladder>
+            {ladderExplainer(family?.early_bird_deadline ?? "11:00", lang).map((line) => <li>{line}</li>)}
+        </ol>
         <label class="flex items-start gap-3 cursor-pointer">
             <input type="checkbox" id="eb-enabled" class="mt-1 h-5 w-5 rounded border-brand-ink/30" checked={family?.early_bird_enabled === true} />
             <span class="text-sm font-semibold text-brand-ink">{lang === "es" ? "Activar madrugador" : "Turn on early bird"}</span>
         </label>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-                <label for="eb-deadline" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Hora límite" : "Deadline"}</label>
+                <label for="eb-deadline" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Hora madrugadora" : "Early deadline"}</label>
                 <input type="time" id="eb-deadline" step="300" min="07:00" max="22:00" value={family?.early_bird_deadline ?? "11:00"}
                        class="w-32 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
             </div>
@@ -264,14 +264,29 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
                        class="w-24 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
             </div>
             <div>
-                <label for="eb-week" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Extra en el cheque semanal (%)" : "Extra on the weekly paycheck (%)"}</label>
-                <input type="number" id="eb-week" inputmode="numeric" min="0" max="50" step="1" value={family?.early_bird_week_pct ?? 5}
-                       class="w-24 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
+                <label for="eb-streak" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Premio cada 3ª semana seguida (pesos)" : "Prize every 3rd week in a row (pesos)"}</label>
+                <input type="number" id="eb-streak" inputmode="numeric" min="0" max="10000" step="1" value={centsToPesos(family?.early_bird_streak_cents ?? 38000)}
+                       class="w-28 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
             </div>
             <div>
-                <label for="eb-streak" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Premio cada 3ª semana seguida (pesos)" : "Prize every 3rd week in a row (pesos)"}</label>
-                <input type="number" id="eb-streak" inputmode="numeric" min="0" max="10000" step="1" value={centsToPesos(family?.early_bird_streak_cents ?? 50000)}
-                       class="w-28 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
+                <label for="eb-cutoff" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Hora de corte de la tarde" : "Evening cutoff"}</label>
+                <input type="time" id="eb-cutoff" step="300" min="17:00" max="23:00" value={family?.chore_cutoff ?? "20:30"}
+                       class="w-32 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
+            </div>
+            <div>
+                <label for="eb-grab-end" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Fin de \"para tomar\"" : "End of \"up for grabs\""}</label>
+                <input type="time" id="eb-grab-end" step="300" min="17:05" max="23:30" value={family?.grab_window_end ?? "22:30"}
+                       class="w-32 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
+            </div>
+            <div>
+                <label for="eb-alarm1" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Alarma 1 (adolescentes)" : "Teen alarm 1"}</label>
+                <input type="time" id="eb-alarm1" step="300" min="06:00" max="23:00" value={family?.teen_alarm_1 ?? "15:00"}
+                       class="w-32 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
+            </div>
+            <div>
+                <label for="eb-alarm2" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Alarma 2 (adolescentes)" : "Teen alarm 2"}</label>
+                <input type="time" id="eb-alarm2" step="300" min="06:05" max="23:00" value={family?.teen_alarm_2 ?? "19:00"}
+                       class="w-32 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
             </div>
         </div>
         <div class="flex items-center gap-3">
@@ -798,7 +813,7 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
 </script>
 
 <script>
-    import { buildPayload, type EarlyBirdField } from "../../../lib/earlyBirdSettings";
+    import { buildPayload } from "../../../lib/earlyBirdSettings";
 
     const section = document.getElementById("early-bird-section");
     const save = document.getElementById("eb-save") as HTMLButtonElement | null;
@@ -816,12 +831,14 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
             deadline: val("eb-deadline"),
             days: chips.filter((c) => c.getAttribute("aria-pressed") === "true").map((c) => Number(c.dataset.day)),
             bonusPct: val("eb-bonus") === "" ? NaN : Number(val("eb-bonus")),
-            weekPct: val("eb-week") === "" ? NaN : Number(val("eb-week")),
             streakPesos: val("eb-streak") === "" ? NaN : Number(val("eb-streak")),
-        });
+            cutoff: val("eb-cutoff"),
+            grabEnd: val("eb-grab-end"),
+            alarm1: val("eb-alarm1"),
+            alarm2: val("eb-alarm2"),
+        }, section.dataset.lang === "en" ? "en" : "es");
         if (!built.ok) {
-            const msgs = JSON.parse(section.dataset.invalid ?? "{}") as Record<EarlyBirdField, string>;
-            status.textContent = msgs[built.field] ?? "";
+            status.textContent = built.message;
             status.className = "text-sm text-red-700";
             return;
         }
