@@ -163,6 +163,7 @@ async def test_grabs_pushes_at_cutoff(ctx):
     owner_rows = await _rows(db, teen, "up_for_grabs")
     sib_rows = await _rows(db, sib, "up_for_grabs")
     assert len(owner_rows) == 1 and ("Se acabó" in owner_rows[0].title or "Time's up" in owner_rows[0].title)
+    assert "familia" in owner_rows[0].body or "family" in owner_rows[0].body
     assert len(sib_rows) == 1
     assert "libre" in sib_rows[0].title or "up for grabs" in sib_rows[0].title
     assert sib_rows[0].expires_at.astimezone(MX) == datetime.combine(day + timedelta(days=1), time.min, tzinfo=MX)
@@ -221,6 +222,36 @@ async def test_one_family_failure_isolated(ctx):
     assert res["reminders"] == 1
     total = len(await _rows(db, teen_id, "deadline_soon")) + len(await _rows(db, teen2_id, "deadline_soon"))
     assert total == 1
+
+
+_GRAB_WORDS = ("libre", "hermanos", "grabs", "tom")
+
+
+def test_deadline_reminders_promise_the_bonus_not_grabs():
+    """R1/R2 fire before the 11:00 early deadline, but chores only open to the
+    family at the EVENING cutoff — so the reminder is about the early bonus and
+    must not threaten a grab at {deadline}."""
+    from app.services.notification_service import _COPY as C
+    for key in ("deadline_r1", "deadline_r1_one", "deadline_r2", "deadline_r2_one"):
+        for lang, bonus in (("es", "bono madrugador"), ("en", "early bird bonus")):
+            body = C[key]["body"][lang]
+            assert "{deadline}" in body and bonus in body, (key, lang, body)
+            assert not any(w in body.lower() for w in _GRAB_WORDS), (key, lang, body)
+            assert ("{n}" in body) == (not key.endswith("_one")), (key, lang, body)
+
+
+def test_owner_grabs_push_has_no_call_to_action():
+    """At the cutoff the owner can no longer complete (409 chore_expired), so
+    the push states the fact and never says "do it before someone takes it"."""
+    from app.services.notification_service import _COPY as C
+    for key in ("grabs_owner", "grabs_owner_one"):
+        es, en = C[key]["body"]["es"], C[key]["body"]["en"]
+        assert "familia" in es and "family" in en, key
+        assert ("{n}" in es and "{n}" in en) == (key == "grabs_owner"), key
+        for phrase in ("antes de que", "hazla", "hazlas"):
+            assert phrase not in es.lower(), (key, es)
+        for phrase in ("before someone", "do it", "do them"):
+            assert phrase not in en.lower(), (key, en)
 
 
 def test_cron_registered():

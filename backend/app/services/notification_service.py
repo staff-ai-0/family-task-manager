@@ -118,32 +118,32 @@ _COPY = {
     "deadline_r1": {
         "type": NT.DEADLINE_SOON,
         "title": {"es": "⏰ Falta 1 hora", "en": "⏰ 1 hour left"},
-        "body": {"es": "Termina tus {n} tareas antes de las {deadline} o quedan libres para tus hermanos.", "en": "Finish your {n} chores before {deadline} or they go up for grabs."},
+        "body": {"es": "Termina tus {n} tareas antes de las {deadline} y gana el bono madrugador.", "en": "Finish your {n} chores before {deadline} to earn the early bird bonus."},
     },
     "deadline_r1_one": {
         "type": NT.DEADLINE_SOON,
         "title": {"es": "⏰ Falta 1 hora", "en": "⏰ 1 hour left"},
-        "body": {"es": "Termina tu tarea antes de las {deadline} o queda libre para tus hermanos.", "en": "Finish your chore before {deadline} or it goes up for grabs."},
+        "body": {"es": "Termina tu tarea antes de las {deadline} y gana el bono madrugador.", "en": "Finish your chore before {deadline} to earn the early bird bonus."},
     },
     "deadline_r2": {
         "type": NT.DEADLINE_SOON,
         "title": {"es": "⚠️ Faltan 30 minutos", "en": "⚠️ 30 minutes left"},
-        "body": {"es": "A las {deadline} tus {n} tareas quedan libres para tus hermanos.", "en": "At {deadline} your {n} chores are up for grabs."},
+        "body": {"es": "Aún llegas al bono madrugador: termina tus {n} tareas antes de las {deadline}.", "en": "There's still time for the early bird bonus: finish your {n} chores before {deadline}."},
     },
     "deadline_r2_one": {
         "type": NT.DEADLINE_SOON,
         "title": {"es": "⚠️ Faltan 30 minutos", "en": "⚠️ 30 minutes left"},
-        "body": {"es": "A las {deadline} tu tarea queda libre para tus hermanos.", "en": "At {deadline} your chore is up for grabs."},
+        "body": {"es": "Aún llegas al bono madrugador: termina tu tarea antes de las {deadline}.", "en": "There's still time for the early bird bonus: finish your chore before {deadline}."},
     },
     "grabs_owner": {
         "type": NT.UP_FOR_GRABS,
         "title": {"es": "⏰ Se acabó el tiempo", "en": "⏰ Time's up"},
-        "body": {"es": "{n} de tus tareas quedaron libres. Hazlas antes de que alguien las tome.", "en": "{n} of your chores are up for grabs. Do them before someone takes them."},
+        "body": {"es": "{n} de tus tareas ya quedaron libres para la familia.", "en": "{n} of your chores are open to the family now."},
     },
     "grabs_owner_one": {
         "type": NT.UP_FOR_GRABS,
         "title": {"es": "⏰ Se acabó el tiempo", "en": "⏰ Time's up"},
-        "body": {"es": "Tu tarea quedó libre. Hazla antes de que alguien la tome.", "en": "Your chore is up for grabs. Do it before someone takes it."},
+        "body": {"es": "Tu tarea ya quedó libre para la familia.", "en": "Your chore is open to the family now."},
     },
     "grabs_open": {
         "type": NT.UP_FOR_GRABS,
