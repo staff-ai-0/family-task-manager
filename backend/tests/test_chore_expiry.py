@@ -455,3 +455,101 @@ async def test_push_recipients_exact_and_since_is_cutoff(ctx, test_parent_user, 
     foreign_rows = (await db.execute(select(Notification).where(
         Notification.type == "up_for_grabs", Notification.user_id == foreign.id))).scalars().all()
     assert [n.family_id for n in foreign_rows] == [other.id]
+
+
+# --------------------------------------- R9: a parent send-back stays redoable
+
+PHOTO = "/uploads/gig-proofs/" + "ab" * 16 + ".jpg"
+
+
+async def _sent_back(db, fam, owner, parent, day):
+    """A proof chore the teen submitted at 20:00 that the parent sent back at
+    21:00: reopened as PENDING + approval REJECTED (approve_gig reject path)."""
+    from app.models.task_assignment import ApprovalStatus
+    tpl = await _tpl(db, fam, title="Room")
+    tpl.requires_proof = True
+    await db.commit()
+    row = await _assign(db, owner, tpl, day)
+    await TaskAssignmentService.complete_assignment(
+        db, row.id, fam.id, owner.id, proof_image_url=PHOTO, now=_at(day, 20, 0))
+    await TaskAssignmentService.approve_gig(
+        db, row.id, fam.id, parent.id, approve=False, notes="redo it")
+    await db.refresh(row)
+    assert (row.status, row.approval_status) == (
+        AssignmentStatus.PENDING, ApprovalStatus.REJECTED)
+    return row
+
+
+async def test_sent_back_proof_chore_redo_after_cutoff_ok(ctx, test_parent_user):
+    """Rejected at 21:00, redone at 21:05: the send-back notice told the kid to
+    redo it, so a 409 there would be a dead end."""
+    from app.models.task_assignment import ApprovalStatus
+    db, fam, owner, tpl, a, day = ctx
+    row = await _sent_back(db, fam, owner, test_parent_user, day)
+    done = await TaskAssignmentService.complete_assignment(
+        db, row.id, fam.id, owner.id, proof_image_url=PHOTO, now=_at(day, 21, 5))
+    assert (done.status, done.approval_status) == (
+        AssignmentStatus.COMPLETED, ApprovalStatus.PENDING)
+
+
+async def test_untaken_pending_row_still_409_at_2105(ctx, test_parent_user):
+    db, fam, owner, tpl, a, day = ctx
+    await _sent_back(db, fam, owner, test_parent_user, day)
+    with pytest.raises(ChoreExpiredException):
+        await TaskAssignmentService.complete_assignment(
+            db, a.id, fam.id, owner.id, now=_at(day, 21, 5))
+
+
+async def test_sent_back_row_blocks_bonus_until_redone(ctx, test_parent_user):
+    """Not "resolved" like an expired row: it still gates bonus tasks (the
+    untaken ``a`` is expired by 21:05 and no longer does)."""
+    db, fam, owner, tpl, a, day = ctx
+    row = await _sent_back(db, fam, owner, test_parent_user, day)
+    assert await TaskAssignmentService.has_open_mandatory_through(
+        db, owner.id, fam.id, day, now=_at(day, 21, 5))
+    with pytest.raises(ForbiddenException, match="open mandatory"):
+        await _bonus_done(db, fam, owner, day, _at(day, 21, 5))
+    await TaskAssignmentService.complete_assignment(
+        db, row.id, fam.id, owner.id, proof_image_url=PHOTO, now=_at(day, 21, 10))
+    assert not await TaskAssignmentService.has_open_mandatory_through(
+        db, owner.id, fam.id, day, now=_at(day, 21, 15))
+
+
+async def test_sent_back_row_stays_in_atrasadas(ctx, test_parent_user):
+    """Yesterday's send-back is still the kid's to redo, so it is listed."""
+    db, fam, owner, tpl, a, day = ctx
+    a.status = AssignmentStatus.COMPLETED  # only the send-back is open
+    await db.commit()
+    row = await _sent_back(db, fam, owner, test_parent_user, day)
+    row.assigned_date = day - timedelta(days=1)
+    await db.commit()
+    rows = await TaskAssignmentService.list_open_mandatory_before(
+        db, owner.id, fam.id, day, now=_at(day, 9, 0))
+    assert [r.id for r in rows] == [row.id]
+
+
+async def test_sent_back_row_is_not_up_for_grabs(ctx, test_parent_user):
+    """Still the owner's (not expired for them), so the family cannot take it."""
+    db, fam, owner, tpl, a, day = ctx
+    row = await _sent_back(db, fam, owner, test_parent_user, day)
+    listed = [g.assignment_id for g in await EarlyBirdService.grabbable(
+        db, fam.id, now=_at(day, 21, 5))]
+    assert listed == [a.id]
+    sib = await _user(db, fam, "Sib")
+    with pytest.raises(ValidationException, match="not_grabbable"):
+        await EarlyBirdService.take(db, fam.id, sib, row.id, now=_at(day, 21, 5))
+
+
+async def test_late_redo_counts_late_for_the_ladder(ctx, test_parent_user):
+    """The redo after the cutoff is done, but not "completed in time"."""
+    from app.services.early_bird_rules import completed_in_time
+    db, fam, owner, tpl, a, day = ctx
+    row = await _sent_back(db, fam, owner, test_parent_user, day)
+    await TaskAssignmentService.complete_assignment(
+        db, row.id, fam.id, owner.id, proof_image_url=PHOTO, now=_at(day, 21, 5))
+    await TaskAssignmentService.approve_gig(db, row.id, fam.id, test_parent_user.id, approve=True)
+    cfg = await EarlyBirdService.config(db, fam.id)
+    covered = {r.assignment_id: r for r in await EarlyBirdService.covered_rows(
+        db, cfg, fam.id, owner.id, day, day)}
+    assert covered[row.id].status == AssignmentStatus.COMPLETED
+    assert completed_in_time(covered[row.id], cfg, grace=True) is False

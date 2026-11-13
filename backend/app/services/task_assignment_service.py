@@ -1611,10 +1611,18 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         chore (mandatory, non-bonus, not early_bird_exempt), not a taker's row,
         in a family with Early Bird on, on an active day, once the cutoff of its
         due day has passed. Such a row is the family's: the owner can no longer
-        complete it and it no longer counts as open for them."""
+        complete it and it no longer counts as open for them.
+
+        A parent send-back (proof rejected → reopened as PENDING + approval
+        REJECTED) never expires (ruling R9): the rejection notice tells the kid
+        to redo it, so it stays theirs to finish — still open in the gates and
+        lists, and never up for grabs. The redo still counts late for the
+        ladder (completed_in_time compares completed_at with the cutoff)."""
         from app.services.early_bird_rules import chore_expired, day_times, is_active_day
 
         if template.is_bonus or template.early_bird_exempt or assignment.taken_from_id:
+            return False
+        if assignment.approval_status == ApprovalStatus.REJECTED:
             return False
         if not cfg.enabled or not is_active_day(cfg, assignment.assigned_date):
             return False

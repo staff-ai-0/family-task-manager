@@ -245,7 +245,9 @@ class EarlyBirdService:
         db: AsyncSession, family_id: UUID, now: Optional[datetime] = None
     ) -> list[GrabRow]:
         """Every member's still-open covered chores for family-local today,
-        while the grab window (cutoff <= now < grab_end) is open."""
+        while the grab window (cutoff <= now < grab_end) is open. A parent
+        send-back (approval REJECTED) is excluded: it is still its owner's to
+        redo (R9, ``TaskAssignmentService.expired_for_owner``)."""
         cfg = await EarlyBirdService.config(db, family_id)
         now = EarlyBirdService._now(now)
         today = now.astimezone(cfg.tz).date()
@@ -257,6 +259,7 @@ class EarlyBirdService:
             EarlyBirdService._covered_stmt(family_id, today, today, any_role=True)
             .where(TaskAssignment.status.in_(
                 [AssignmentStatus.PENDING, AssignmentStatus.OVERDUE]))
+            .where(TaskAssignment.approval_status != ApprovalStatus.REJECTED)
             .options(selectinload(TaskAssignment.template),
                      selectinload(TaskAssignment.assigned_user))
         )
@@ -342,6 +345,7 @@ class EarlyBirdService:
             covered is None
             or owner_row.assigned_date != today
             or owner_row.status not in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE)
+            or owner_row.approval_status == ApprovalStatus.REJECTED  # send-back: owner's (R9)
             or not is_active_day(cfg, today)
         ):
             raise ValidationException("not_grabbable")
