@@ -195,6 +195,9 @@ class LadderResult:
     completed: int
     early: int
     total: int
+    # True once the week can no longer change (Sunday's cutoff has passed);
+    # filled by the service, never by week_ladder.
+    final: bool = False
 
 
 def week_ladder(completed: int, early: int, total: int) -> LadderResult:

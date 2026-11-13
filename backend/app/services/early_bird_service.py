@@ -4,7 +4,7 @@ See the 2026-11-07 early-bird spec."""
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 from uuid import UUID
@@ -32,9 +32,12 @@ from app.services.early_bird_rules import (
     SETTLE_LOOKBACK_WEEKS,
     STREAK_WEEKS,
     EarlyBirdConfig,
+    LadderResult,
     chore_state,
+    completed_in_time,
     day_result,
     day_times,
+    done_early,
     early_bonus_points,
     next_run,
     is_active_day,
@@ -43,6 +46,7 @@ from app.services.early_bird_rules import (
     role_may_take,
     week_bonus,
     week_eligible,
+    week_ladder,
     week_result,
 )
 
@@ -175,6 +179,40 @@ class EarlyBirdService:
             list(days.values()), eligible=week_eligible(cfg, monday), week_over=week_over
         )
         return result, days
+
+    @staticmethod
+    async def week_metrics(
+        db: AsyncSession,
+        cfg: EarlyBirdConfig,
+        family_id: UUID,
+        user_id: UUID,
+        monday: date,
+        now: datetime,
+    ) -> LadderResult:
+        """THE single source of a week's percentages: the ladder tier + counts
+        for a teen's Mon..Sun. One query (covered_rows, family-scoped)."""
+        if not cfg.enabled or not week_eligible(cfg, monday):
+            return week_ladder(0, 0, 0)
+        rows = await EarlyBirdService.covered_rows(
+            db, cfg, family_id, user_id, monday, monday + timedelta(days=6)
+        )
+        return EarlyBirdService._metrics_from_rows(cfg, rows, monday, now)
+
+    @staticmethod
+    def _metrics_from_rows(
+        cfg: EarlyBirdConfig, rows: list[CoveredRow], monday: date, now: datetime
+    ) -> LadderResult:
+        """week_metrics over already-fetched covered rows of that week. Open and
+        TAKEN rows count in ``total`` but not as completed (the meter is "so
+        far"); ``final`` is True once Sunday's cutoff has passed."""
+        if not cfg.enabled or not week_eligible(cfg, monday):
+            return week_ladder(0, 0, 0)
+        sunday = monday + timedelta(days=6)
+        grace = now.astimezone(cfg.tz).date() > sunday + timedelta(days=PENDING_GRACE_DAYS)
+        completed = sum(1 for r in rows if completed_in_time(r, cfg, grace=grace))
+        early = sum(1 for r in rows if done_early(r, cfg, grace=grace))
+        result = week_ladder(completed, early, len(rows))
+        return replace(result, final=now >= day_times(cfg, sunday).cutoff)
 
     @staticmethod
     async def week_bonus_cents(
