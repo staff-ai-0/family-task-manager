@@ -42,6 +42,7 @@ from app.services.cash_service import (
     _get_user_locked,
     _jar_balance,
 )
+from app.services.early_bird_rules import LadderResult, week_ladder
 from app.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
@@ -584,32 +585,74 @@ class BankService:
         return datetime.now(safe_zoneinfo(tz_name)).date()
 
     @staticmethod
-    async def _early_bird_bonus(
-        db: AsyncSession, family_id: UUID, user_id: UUID, week_monday: date, base: int,
-        cfg=None,
-    ) -> tuple[int, int]:
-        """(bonus_cents, week_pct) — the Early Bird weekly bonus on a chore
-        paycheck base (0 when off / not earned) and the % it applied. Shared by
-        the projection and the release so they cannot drift. Pass ``cfg`` (an
+    def _ladder_adjust(amount: int, metrics: LadderResult) -> tuple[int, int, int]:
+        """(base_cents, bonus_cents, bonus_pct): a FINAL week's per-task
+        ``amount`` under the chore-rules-v2 pay ladder — the one place the
+        ladder turns into money. no_pay (< 60 % of covered chores completed)
+        → nothing; per_task / neutral → the amount untouched; bonus (100 %) →
+        the amount plus amount × 5/10/15 % (floored) by early share, 0 % under
+        80 % early. Pure and integer-only; whether the week is final is the
+        caller's call (_ladder_terms)."""
+        amount = max(0, int(amount))
+        if metrics.tier == "no_pay":
+            return 0, 0, 0
+        if metrics.tier == "bonus" and metrics.bonus_pct > 0:
+            return amount, amount * metrics.bonus_pct // 100, metrics.bonus_pct
+        return amount, 0, 0
+
+    @staticmethod
+    async def _ladder_terms(
+        db: AsyncSession, family_id: UUID, user_id: UUID, week_monday: date,
+        amount: int, cfg=None, now: Optional[datetime] = None,
+    ) -> tuple[int, int, int, LadderResult]:
+        """(base_cents, bonus_cents, bonus_pct, metrics) — a week's per-task
+        ``amount`` run through the pay ladder, metrics from
+        EarlyBirdService.week_metrics (THE source of the week's percentages).
+        The ladder only bites once the week is final (Sunday's cutoff): before
+        that the amount stands, no bonus, and ``metrics`` is the in-progress
+        meter (lets the UI say "at risk"). Early Bird off / week of enabling /
+        no covered chores → neutral → the amount untouched. Pass ``cfg`` (an
         EarlyBirdConfig) when scanning many weeks of one family."""
         from app.services.early_bird_service import EarlyBirdService
 
         if cfg is None:
             cfg = await EarlyBirdService.config(db, family_id)
-        bonus = await EarlyBirdService.week_bonus_cents(
-            db, family_id, user_id, week_monday, base, cfg=cfg
+        metrics = await EarlyBirdService.week_metrics(
+            db, cfg, family_id, user_id, week_monday,
+            now if now is not None else datetime.now(timezone.utc),
         )
-        return bonus, (int(cfg.week_pct) if bonus > 0 else 0)
+        if not metrics.final:
+            return amount, 0, 0, metrics
+        base, bonus, pct = BankService._ladder_adjust(amount, metrics)
+        return base, bonus, pct, metrics
+
+    @staticmethod
+    async def _early_bird_bonus(
+        db: AsyncSession, family_id: UUID, user_id: UUID, week_monday: date, base: int,
+        cfg=None, now: Optional[datetime] = None,
+    ) -> tuple[int, int]:
+        """(bonus_cents, bonus_pct) — the ladder's early-share bonus on a chore
+        paycheck ``base`` (0 / 0 when not earned or the week is not final).
+        A view of _ladder_terms; the paycheck itself (projection, release,
+        receipt confirm) reads _paycheck_projection, which also applies the
+        no_pay floor this pair cannot express."""
+        _, bonus, pct, _ = await BankService._ladder_terms(
+            db, family_id, user_id, week_monday, base, cfg=cfg, now=now
+        )
+        return bonus, (pct if bonus > 0 else 0)
 
     @staticmethod
     async def _paycheck_projection(
         db: AsyncSession, acct: KidBankAccount, family_id: UUID, week_monday: date,
-        eb_cfg=None,
+        eb_cfg=None, now: Optional[datetime] = None,
     ) -> dict:
-        """Pure per-week paycheck math shared by chore_paycheck_preview (single,
-        current-week-biased) and list_outstanding_weeks (multi-week scan).
-        Includes assigned_units (pre-scale) so callers can decide whether a
-        week is worth surfacing without re-deriving it."""
+        """THE per-week paycheck math: chore_paycheck_preview (single week),
+        list_outstanding_weeks (multi-week scan) and release_chore_paycheck
+        (and through it the payout-receipt confirm) all read it, so what the
+        parent is shown is what goes out. Per-task amount by mode over
+        _chore_units, then the pay ladder (_ladder_terms) for the
+        parent-released modes. Includes assigned_units / done_units (pre-scale)
+        so callers never re-derive them."""
         done_u, assigned_u, lost_u = await BankService._chore_units(
             db, family_id, acct.user_id, week_monday
         )
@@ -625,22 +668,30 @@ class BankService:
             )
         else:
             amount = 0
-        bonus = bonus_pct = 0
+        base, bonus, bonus_pct, metrics = amount, 0, 0, week_ladder(0, 0, 0)
         if mode in CHORE_PAYCHECK_MODES:
-            bonus, bonus_pct = await BankService._early_bird_bonus(
-                db, family_id, acct.user_id, week_monday, amount, cfg=eb_cfg
+            base, bonus, bonus_pct, metrics = await BankService._ladder_terms(
+                db, family_id, acct.user_id, week_monday, amount, cfg=eb_cfg, now=now
             )
         return {
             "week_of": week_monday,
             "cap_cents": cap,
-            "amount_cents": amount + bonus,
+            "amount_cents": base + bonus,
             "early_bird_bonus_cents": bonus,
-            "early_bird_week_pct": bonus_pct,
+            # The ladder's bonus % behind early_bird_bonus_cents (0 without one).
+            "early_bird_week_pct": bonus_pct if bonus > 0 else 0,
             "done_points": units_to_points(done_u),
             "assigned_points": units_to_points(assigned_u),
             "pct": round(100 * done_u / assigned_u) if assigned_u else 0,
             "discounted_pct": round(100 * lost_u / assigned_u) if assigned_u else 0,
             "assigned_units": assigned_u,
+            "done_units": done_u,
+            # Pay-ladder meter (covered chores, Early Bird): provisional while
+            # ladder_final is False — nothing above is zeroed or bonused yet.
+            "ladder_tier": metrics.tier,
+            "completed_pct": int(metrics.completed_pct),
+            "early_pct": int(metrics.early_pct),
+            "ladder_final": bool(metrics.final),
         }
 
     @staticmethod
@@ -666,6 +717,11 @@ class BankService:
             "discounted_pct": p["discounted_pct"],
             "projected_cents": p["amount_cents"],
             "early_bird_bonus_cents": p["early_bird_bonus_cents"],
+            "early_bird_week_pct": p["early_bird_week_pct"],
+            "ladder_tier": p["ladder_tier"],
+            "completed_pct": p["completed_pct"],
+            "early_pct": p["early_pct"],
+            "ladder_final": p["ladder_final"],
             "already_released": acct.last_chore_paycheck_week == week_monday,
         }
 
@@ -860,9 +916,11 @@ class BankService:
         released_by: Optional[UUID] = None, top_up: bool = False,
         reference: Optional[str] = None,
     ) -> dict:
-        """Parent releases a teen's weekly chore paycheck: allowance_cents scaled
-        by completed-&-approved chore points (plus an optional signed parent
-        adjustment — a bonus or dock), credited split into jars. Idempotent per
+        """Parent releases a teen's weekly chore paycheck: the week's
+        _paycheck_projection (allowance_cents scaled by completed-&-approved
+        chore points, then the Early Bird pay ladder — 0 under 60 %, early
+        bonus at 100 % — on a final week), plus an optional signed parent
+        adjustment — a bonus or dock — credited split into jars. Idempotent per
         (kid, week) via a CashTransaction(ALLOWANCE, week_of=that week) existence
         check — not last_chore_paycheck_week, which only remembers the most
         recent release and can't represent an out-of-order past one. Route
@@ -913,28 +971,23 @@ class BankService:
                 status_code=409,
                 detail="chore paycheck already released for this week",
             )
-        done, assigned, _ = await BankService._chore_units(
-            db, family_id, user.id, week_monday
-        )
+        # The SAME projection the preview, the outstanding list and the
+        # receipt confirm read (per-task amount + pay ladder) — never a second
+        # inline computation, so what the parent saw is what is paid.
+        p = await BankService._paycheck_projection(db, acct, family_id, week_monday)
+        done, assigned = p["done_units"], p["assigned_units"]
+        bonus, pct_label = p["early_bird_bonus_cents"], p["early_bird_week_pct"]
         points_converted = 0
-        if acct.allowance_mode == "chore_gated":
-            base = BankService._chore_paycheck_gated(acct.allowance_cents, done, assigned)
-        elif acct.allowance_mode == "points_rate":
-            base = BankService._points_rate_cents(
-                done, await BankService._family_point_value_cents(db, family_id)
-            )
+        if acct.allowance_mode == "points_rate":
             # The paid points were pending cash — deduct them so they aren't
             # spendable twice (floored at the available balance; ledger row
             # below keeps the history auditable). Deliberately floors rather
             # than using units_to_points: a debit against the kid must never
-            # round UP past what the cash actually paid for.
+            # round UP past what the cash actually paid for. Only applied when
+            # cash actually goes out (amount > 0 below): a no_pay week keeps
+            # its points.
             points_converted = min(done // 100, max(0, int(user.points or 0)))
-        else:
-            base = BankService._chore_paycheck_cents(acct.allowance_cents, done, assigned)
-        bonus, pct_label = await BankService._early_bird_bonus(
-            db, family_id, user.id, week_monday, base
-        )
-        amount = max(0, base + bonus + int(adjustment_cents or 0))
+        amount = max(0, p["amount_cents"] + int(adjustment_cents or 0))
         # Always leaves a ledger row, even at $0 — a genuinely empty week
         # (kid did nothing, or a chore_gated week that missed the gate)
         # must still be markable as "handled" so it stops reappearing as

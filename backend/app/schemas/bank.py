@@ -77,6 +77,15 @@ class ChorePaycheckPreview(BaseModel):
     discounted_pct: int
     projected_cents: int
     early_bird_bonus_cents: int = 0
+    # The pay-ladder bonus % behind early_bird_bonus_cents (0 without one).
+    early_bird_week_pct: int = 0
+    # Pay-ladder meter (Early Bird covered chores): neutral | no_pay |
+    # per_task | bonus. Provisional while ladder_final is False — the week can
+    # still change and projected_cents is not floored/bonused yet ("at risk").
+    ladder_tier: str = "neutral"
+    completed_pct: int = 0
+    early_pct: int = 0
+    ladder_final: bool = False
     already_released: bool
 
 

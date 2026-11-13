@@ -9,7 +9,7 @@ from app.services.early_bird_rules import (
     GRABS_PUSH_WINDOW, PENDING_GRACE_DAYS, R1_BEFORE, R2_BEFORE, SETTLE_LOOKBACK_WEEKS,
     STREAK_WEEKS, CoveredRow, EarlyBirdConfig, chore_state, day_result, day_times,
     early_bonus_points, is_active_day, next_run, pays_streak, reminder_stage,
-    week_bonus, week_eligible, week_result,
+    week_eligible, week_ladder, week_result,
 )
 
 MX = ZoneInfo("America/Mexico_City")
@@ -164,11 +164,19 @@ def test_reminder_stage():
     assert reminder_stage(t.deadline + GRABS_PUSH_WINDOW, t) is None
 
 
-def test_week_bonus():
-    assert week_bonus(80000, 5, "early") == 4000
-    assert week_bonus(80000, 5, "pending") == 0
-    assert week_bonus(0, 5, "early") == 0
-    assert week_bonus(80000, 0, "early") == 0
+def test_ladder_percentages_floor_like_the_ladder():
+    """The flat weekly bonus (week_bonus) is retired: the pay ladder's money
+    lives in BankService._ladder_adjust (test_chore_ladder_paycheck.py). What
+    the rules still own is the meter: floored percentages, so the shown % never
+    claims a rung week_ladder did not grant."""
+    r = week_ladder(119, 159, 200)       # 59.5 % completed, 79.5 % early
+    assert (r.tier, r.completed_pct, r.early_pct) == ("no_pay", 59, 79)
+    r = week_ladder(120, 120, 200)
+    assert (r.tier, r.completed_pct) == ("per_task", 60)
+    r = week_ladder(200, 160, 200)
+    assert (r.tier, r.bonus_pct, r.completed_pct, r.early_pct) == ("bonus", 5, 100, 80)
+    r = week_ladder(0, 0, 0)
+    assert (r.tier, r.completed_pct, r.early_pct) == ("neutral", 0, 0)
 
 
 def test_off_on_toggle_keeps_weeks_that_ran_under_the_earlier_period():

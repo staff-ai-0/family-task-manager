@@ -44,7 +44,6 @@ from app.services.early_bird_rules import (
     pays_streak,
     reminder_stage,
     role_may_take,
-    week_bonus,
     week_eligible,
     week_ladder,
     week_result,
@@ -214,26 +213,9 @@ class EarlyBirdService:
         result = week_ladder(completed, early, len(rows))
         return replace(result, final=now >= day_times(cfg, sunday).cutoff)
 
-    @staticmethod
-    async def week_bonus_cents(
-        db: AsyncSession,
-        family_id: UUID,
-        user_id: UUID,
-        monday: date,
-        base_cents: int,
-        now: Optional[datetime] = None,
-        cfg: Optional[EarlyBirdConfig] = None,
-    ) -> int:
-        """The +week_pct % on a chore paycheck of ``base_cents`` (0 unless the
-        week is a clean early week). Pass ``cfg`` when scanning many weeks."""
-        if cfg is None:
-            cfg = await EarlyBirdService.config(db, family_id)
-        if not cfg.enabled or cfg.week_pct <= 0 or base_cents <= 0:
-            return 0
-        result, _ = await EarlyBirdService.week_status(
-            db, cfg, family_id, user_id, monday, EarlyBirdService._now(now)
-        )
-        return week_bonus(base_cents, cfg.week_pct, result)
+    # The weekly paycheck bonus is NOT computed here: the flat +week_pct % was
+    # retired by the chore-rules-v2 pay ladder, whose money lives only in
+    # BankService._ladder_adjust (fed by week_metrics above).
 
     # ------------------------------------------------------------ up for grabs
 

@@ -199,6 +199,16 @@ class LadderResult:
     # filled by the service, never by week_ladder.
     final: bool = False
 
+    # Floored on purpose: a rounded 59.5 % would read "60 %" on a week the
+    # ladder (cross-multiplied, exact) puts in no_pay.
+    @property
+    def completed_pct(self) -> int:
+        return self.completed * 100 // self.total if self.total > 0 else 0
+
+    @property
+    def early_pct(self) -> int:
+        return self.early * 100 // self.total if self.total > 0 else 0
+
 
 def week_ladder(completed: int, early: int, total: int) -> LadderResult:
     """Weekly pay tier from counts. Integer cross-multiplication only; every
@@ -280,9 +290,3 @@ def reminder_stage(now: datetime, t: DayTimes) -> Optional[Literal["r1", "r2", "
     if t.deadline <= now < t.deadline + GRABS_PUSH_WINDOW:
         return "grabs"
     return None
-
-
-def week_bonus(base_cents: int, pct: int, result: str) -> int:
-    if result == "early" and base_cents > 0 and pct > 0:
-        return base_cents * pct // 100
-    return 0
