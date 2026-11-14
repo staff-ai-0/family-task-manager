@@ -22,7 +22,7 @@ from app.models.push_subscription import PushSubscription
 from app.models.reward import RedemptionStatus, RewardRedemption
 from app.models.task_assignment import ApprovalStatus, AssignmentStatus, TaskAssignment
 from app.models.task_template import TaskTemplate
-from app.models.user import User, UserRole
+from app.models.user import APPROVAL_APPROVED, User, UserRole
 from app.core.time_utils import safe_zoneinfo
 from app.services.notification_service import NotificationService
 from app.services.progress_service import KID_ROLES, ProgressService, compute_streak
@@ -41,6 +41,10 @@ STREAK_PING_MIN_DAYS = 3
 PING_TAG = "ftm-smart"
 PING_TYPES = (NT.STREAK_AT_RISK, NT.QUEST_NUDGE)
 _OPEN = (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE)
+
+
+# Family-local hour from which the monthly show-and-tell nudge may go out.
+SHOW_AND_TELL_FIRST_HOUR = 10
 
 
 def in_ping_window(local_now: datetime) -> bool:
@@ -293,4 +297,69 @@ class PingService:
                 "Smart reminder sweep: %d family(ies) in window, %d kid(s) checked, %d sent",
                 in_window, checked, sent,
             )
+        return sent
+
+    @staticmethod
+    async def run_monthly_show_and_tell(db: AsyncSession, now: Optional[datetime] = None) -> int:
+        """Hourly, across ALL families: once per family-local calendar month,
+        nudge each active, approved PARENT to photograph how a chore is done
+        right, when at least one proof chore has no fresh baseline.
+
+        The AI review is the only consumer of baselines, so a family without
+        the AI-processing consent or a paid ``ai_features`` plan is skipped.
+        The ``show_and_tell`` notification row is the ONLY send record: any
+        such row for the family inside the current local month means done.
+        Returns the number of notifications sent."""
+        from app.core.premium import family_tier_allows
+        from app.services.baseline_service import BaselineService
+        from app.services.family_service import FamilyService
+
+        now = now or datetime.now(timezone.utc)
+        families = (await db.execute(
+            select(Family.id, Family.timezone).where(Family.deleted_at.is_(None))
+        )).all()
+        sent = 0
+        for fam in families:
+            try:
+                tz = safe_zoneinfo(fam.timezone)
+                local_now = now.astimezone(tz)
+                if local_now.hour < SHOW_AND_TELL_FIRST_HOUR:
+                    continue
+                month_start = datetime.combine(local_now.date().replace(day=1), time.min, tzinfo=tz)
+                next_month = datetime.combine(
+                    (month_start + timedelta(days=32)).date().replace(day=1), time.min, tzinfo=tz,
+                )
+                already = (await db.execute(
+                    select(Notification.id).where(
+                        Notification.family_id == fam.id,
+                        Notification.type == NT.SHOW_AND_TELL,
+                        Notification.created_at >= month_start,
+                        Notification.created_at < next_month,
+                    ).limit(1)
+                )).first()
+                if already is not None:
+                    continue
+                if not await FamilyService.has_ai_processing_consent(db, fam.id):
+                    continue
+                if not await family_tier_allows(db, fam.id, "ai_features"):
+                    continue
+                if not any(r["due"] for r in await BaselineService.status(db, fam.id, now)):
+                    continue
+                parents = (await db.execute(
+                    select(User.id).where(
+                        User.family_id == fam.id,
+                        User.role == UserRole.PARENT,
+                        User.is_active.is_(True),
+                        User.approval_status == APPROVAL_APPROVED,
+                    )
+                )).scalars().all()
+                for uid in parents:
+                    await NotificationService.create_localized(
+                        db, fam.id, "show_and_tell", user_id=uid, link="/parent",
+                        expires_at=next_month, push_tag="ftm-show-and-tell",
+                    )
+                    sent += 1
+            except Exception:
+                log.exception("show-and-tell nudge failed for family %s", fam.id)
+                await db.rollback()
         return sent

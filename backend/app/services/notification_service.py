@@ -28,6 +28,7 @@ from app.models.notification import Notification, NotificationType as NT
 SUPERSEDING_TYPES = frozenset({
     NT.TASK_DUE, NT.TASK_ASSIGNED, NT.PARENT_NUDGE, NT.STREAK_AT_RISK, NT.QUEST_NUDGE,
     NT.DEADLINE_SOON, NT.UP_FOR_GRABS, NT.CHORE_ALARM, NT.RULES_UPDATE,
+    NT.SHOW_AND_TELL,
 })
 
 # The unread badge only counts the last N days. Older unread rows stay in the
@@ -109,6 +110,17 @@ _COPY = {
         "type": NT.RULES_UPDATE,
         "title": {"es": "Nuevas reglas de tareas", "en": "New chore rules"},
         "body": {"es": "Léelas y acepta para que quede registro.", "en": "Read them and accept so it's on record."},
+    },
+    "show_and_tell": {
+        "type": NT.SHOW_AND_TELL,
+        "title": {
+            "es": "Hora de mostrar y contar: toma fotos de cómo se hace una tarea bien",
+            "en": "Show and tell time: take photos of how a chore is done right",
+        },
+        "body": {
+            "es": "Con fotos de referencia, la revisión con IA compara mejor las fotos de tus hijos.",
+            "en": "With reference photos, the AI review judges your kids' photos more accurately.",
+        },
     },
     "chore_alarm": {
         "type": NT.CHORE_ALARM,

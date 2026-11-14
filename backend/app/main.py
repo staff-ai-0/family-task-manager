@@ -183,6 +183,15 @@ def _register_cron_jobs(scheduler: AsyncIOScheduler) -> None:
                     logger.info("Smart reminder sweep sent %d reminder(s)", n)
             except Exception:
                 logger.exception("Smart reminder sweep failed")
+            # Own block: a failure here never blocks the evening sweep above,
+            # nor the other way round. Idempotent per family per local month.
+            try:
+                from app.services.ping_service import PingService
+                n = await PingService.run_monthly_show_and_tell(session)
+                if n:
+                    logger.info("Show-and-tell nudge sent %d notification(s)", n)
+            except Exception:
+                logger.exception("Show-and-tell nudge failed")
 
     async def _early_bird_sweep():
         # Early Bird: deadline reminders (-60/-30 min) and up-for-grabs pushes.
