@@ -28,6 +28,16 @@ class StaleRulesVersionException(ConflictException):
     pass
 
 
+class EarlyBirdOffException(ConflictException):
+    """Rules announced while Early Bird is off (HTTP 409, code ``early_bird_off``)."""
+    pass
+
+
+class AnnounceTooSoonException(FamilyAppException):
+    """Rules announced again within the hour (HTTP 429, code ``announce_too_soon``)."""
+    pass
+
+
 class PermissionDeniedError(FamilyAppException):
     """Raised when user doesn't have permission for an operation"""
     pass

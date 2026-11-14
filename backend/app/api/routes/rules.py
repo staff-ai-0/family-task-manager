@@ -38,3 +38,11 @@ async def list_acceptances(
     db: AsyncSession = Depends(get_db),
 ) -> list:
     return await RulesService.acceptances(db, current_user.family_id)
+
+
+@router.post("/announce")
+async def announce_rules(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    return {"sent": await RulesService.announce(db, current_user.family_id)}

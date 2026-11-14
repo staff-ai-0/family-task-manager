@@ -1,13 +1,19 @@
 """Rules acceptance: what each member has agreed to. Logic only; routes are HTTP."""
-from datetime import time
+from datetime import datetime, time, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundException, StaleRulesVersionException
+from app.core.exceptions import (
+    AnnounceTooSoonException,
+    EarlyBirdOffException,
+    NotFoundException,
+    StaleRulesVersionException,
+)
 from app.models.family import Family
+from app.models.notification import Notification, NotificationType
 from app.models.rules_acceptance import RulesAcceptance
 from app.models.user import APPROVAL_APPROVED, User
 from app.services.early_bird_rules import LADDER_BONUS_TIERS, LADDER_FLOOR_PCT
@@ -116,3 +122,39 @@ class RulesService:
             }
             for u in users
         ]
+
+    @staticmethod
+    async def announce(db: AsyncSession, family_id, *, force: bool = False) -> int:
+        """Tell every active, approved member the rules need their acceptance.
+        The notification rows double as the send record, so the hourly cap
+        needs no column. Returns how many members were notified."""
+        # Local import: notification_service pulls in push machinery.
+        from app.services.notification_service import NotificationService
+
+        fam = await RulesService._family(db, family_id)
+        if not fam.early_bird_enabled:
+            raise EarlyBirdOffException("early_bird_off")
+        if not force:
+            since = datetime.now(timezone.utc) - timedelta(hours=1)
+            recent = (await db.execute(
+                select(Notification.id).where(
+                    Notification.family_id == family_id,
+                    Notification.type == NotificationType.RULES_UPDATE,
+                    Notification.created_at > since,
+                ).limit(1)
+            )).first()
+            if recent is not None:
+                raise AnnounceTooSoonException("announce_too_soon")
+        members = (await db.execute(
+            select(User.id).where(
+                User.family_id == family_id,
+                User.is_active.is_(True),
+                User.approval_status == APPROVAL_APPROVED,
+            )
+        )).scalars().all()
+        for uid in members:
+            await NotificationService.create_localized(
+                db, family_id, "rules_update",
+                user_id=uid, link="/dashboard?rules=1", push_tag="ftm-rules-update",
+            )
+        return len(members)

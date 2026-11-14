@@ -12,6 +12,8 @@ from typing import Dict, Any, Optional
 from app.core.exceptions import (
     ChoreExpiredException,
     StaleRulesVersionException,
+    EarlyBirdOffException,
+    AnnounceTooSoonException,
     ConflictException,
     NotFoundException,
     ValidationException,
@@ -87,6 +89,34 @@ async def stale_rules_version_handler(
             "code": "stale_version",
             "message": str(exc) or "stale_version",
             "status_code": status.HTTP_409_CONFLICT,
+        },
+    )
+
+
+async def early_bird_off_handler(
+    request: Request, exc: EarlyBirdOffException
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "error": "conflict",
+            "code": "early_bird_off",
+            "message": str(exc) or "early_bird_off",
+            "status_code": status.HTTP_409_CONFLICT,
+        },
+    )
+
+
+async def announce_too_soon_handler(
+    request: Request, exc: AnnounceTooSoonException
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={
+            "error": "too_many_requests",
+            "code": "announce_too_soon",
+            "message": str(exc) or "announce_too_soon",
+            "status_code": status.HTTP_429_TOO_MANY_REQUESTS,
         },
     )
 
@@ -210,6 +240,8 @@ def register_exception_handlers(app):
     app.add_exception_handler(ConflictException, conflict_handler)
     app.add_exception_handler(ChoreExpiredException, chore_expired_handler)
     app.add_exception_handler(StaleRulesVersionException, stale_rules_version_handler)
+    app.add_exception_handler(EarlyBirdOffException, early_bird_off_handler)
+    app.add_exception_handler(AnnounceTooSoonException, announce_too_soon_handler)
     app.add_exception_handler(UnauthorizedException, unauthorized_handler)
     app.add_exception_handler(InsufficientPointsError, insufficient_points_handler)
     app.add_exception_handler(ConsequenceActiveError, consequence_active_handler)

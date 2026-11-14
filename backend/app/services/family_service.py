@@ -5,6 +5,7 @@ Business logic for family group management.
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
+import logging
 from typing import List, Optional
 from datetime import datetime, timezone
 from uuid import UUID
@@ -14,6 +15,8 @@ from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.family import generate_join_code
 from app.schemas.family import FamilyCreate, FamilyUpdate
 from app.core.exceptions import NotFoundException, ValidationException
+
+logger = logging.getLogger(__name__)
 
 
 class FamilyService:
@@ -167,6 +170,7 @@ class FamilyService:
             # 20:30" at the instant the chores stop being the teen's.
             if merged["teen_alarm_2"] >= merged["chore_cutoff"]:
                 raise ValidationException("teen alarms must be before chore_cutoff")
+        rules_changed = False
         # Any real change to a rule-defining setting bumps rules_version in
         # the same transaction (unchanged values do not).
         if any(
@@ -177,6 +181,7 @@ class FamilyService:
             )
         ):
             family.rules_version = (family.rules_version or 1) + 1
+            rules_changed = True
         turning_on = (
             update_fields.get("early_bird_enabled") is True
             and not family.early_bird_enabled
@@ -216,6 +221,17 @@ class FamilyService:
         family.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(family)
+        # Tell the members once the save is safely stored. Best effort: a
+        # push/notification failure must never fail or undo the settings save.
+        if (rules_changed or turning_on) and family.early_bird_enabled:
+            try:
+                from app.services.rules_service import RulesService
+
+                await RulesService.announce(db, family_id, force=True)
+            except Exception:
+                logger.exception("rules auto-announce failed for family %s", family_id)
+                await db.rollback()
+                await db.refresh(family)
         return family
 
     @staticmethod
