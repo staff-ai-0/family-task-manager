@@ -22,6 +22,12 @@ class ChoreExpiredException(ConflictException):
     pass
 
 
+class StaleRulesVersionException(ConflictException):
+    """Accepting a rules version that is no longer current (HTTP 409, code
+    ``stale_version``): the client reloads the rules and asks again."""
+    pass
+
+
 class PermissionDeniedError(FamilyAppException):
     """Raised when user doesn't have permission for an operation"""
     pass

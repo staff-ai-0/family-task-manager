@@ -157,3 +157,22 @@ def test_marked_done_by_parent_round_trip(scratch_dsn):
     assert "marked_done_by_parent" not in _cols(dsn, "task_assignments")
     _alembic(dsn, "upgrade", "head")
     assert "marked_done_by_parent" in _cols(dsn, "task_assignments")
+
+
+def test_rules_acceptances_round_trip(scratch_dsn):
+    dsn = scratch_dsn
+    _alembic(dsn, "upgrade", "marked_done_by_parent")
+    assert not _cols(dsn, "rules_acceptances")
+    _alembic(dsn, "upgrade", "head")
+    assert {"id", "family_id", "user_id", "rules_version", "snapshot", "accepted_at"} <= _cols(
+        dsn, "rules_acceptances")
+    fam, usr = uuid.uuid4(), uuid.uuid4()
+    _insert(dsn, "families", id=fam, name="F")
+    _insert(dsn, "users", id=usr, email=f"{usr}@x.com", family_id=fam, role="TEEN")
+    _insert(dsn, "rules_acceptances", id=uuid.uuid4(), family_id=fam, user_id=usr, rules_version=1)
+    with pytest.raises(Exception):
+        _insert(dsn, "rules_acceptances", id=uuid.uuid4(), family_id=fam, user_id=usr, rules_version=1)
+    _alembic(dsn, "downgrade", "marked_done_by_parent")
+    assert not _cols(dsn, "rules_acceptances")
+    _alembic(dsn, "upgrade", "head")
+    assert _cols(dsn, "rules_acceptances")

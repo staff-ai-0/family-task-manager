@@ -12,6 +12,11 @@ from app.models.task_assignment import ApprovalStatus, AssignmentStatus
 from app.core.time_utils import safe_zoneinfo
 
 STREAK_WEEKS = 3
+# Weekly ladder: below the floor nothing pays; a fully completed week earns the
+# bonus of the highest tier whose early share it reaches. RulesService.snapshot
+# shows these same constants, so the displayed rules cannot drift from the pay.
+LADDER_FLOOR_PCT = 60
+LADDER_BONUS_TIERS = ((80, 5), (90, 10), (100, 15))  # (early_pct, bonus_pct) ascending
 # R1/R2 are reminder offsets only (first / second teen push); the early
 # cutoff everywhere is the deadline itself.
 R1_BEFORE = timedelta(minutes=60)
@@ -257,16 +262,13 @@ def week_ladder(completed: int, early: int, total: int) -> LadderResult:
 
     if total <= 0:
         return result("neutral")
-    if completed * 100 < 60 * total:
+    if completed * 100 < LADDER_FLOOR_PCT * total:
         return result("no_pay")
     if completed != total:
         return result("per_task")
-    if early * 100 >= 100 * total:
-        return result("bonus", 15)
-    if early * 100 >= 90 * total:
-        return result("bonus", 10)
-    if early * 100 >= 80 * total:
-        return result("bonus", 5)
+    for early_pct, bonus_pct in reversed(LADDER_BONUS_TIERS):
+        if early * 100 >= early_pct * total:
+            return result("bonus", bonus_pct)
     return result("bonus", 0)
 
 

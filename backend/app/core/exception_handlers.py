@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional
 
 from app.core.exceptions import (
     ChoreExpiredException,
+    StaleRulesVersionException,
     ConflictException,
     NotFoundException,
     ValidationException,
@@ -71,6 +72,20 @@ async def chore_expired_handler(
             "error": "conflict",
             "code": "chore_expired",
             "message": str(exc) or "chore_expired",
+            "status_code": status.HTTP_409_CONFLICT,
+        },
+    )
+
+
+async def stale_rules_version_handler(
+    request: Request, exc: StaleRulesVersionException
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "error": "conflict",
+            "code": "stale_version",
+            "message": str(exc) or "stale_version",
             "status_code": status.HTTP_409_CONFLICT,
         },
     )
@@ -194,6 +209,7 @@ def register_exception_handlers(app):
     app.add_exception_handler(ForbiddenException, forbidden_handler)
     app.add_exception_handler(ConflictException, conflict_handler)
     app.add_exception_handler(ChoreExpiredException, chore_expired_handler)
+    app.add_exception_handler(StaleRulesVersionException, stale_rules_version_handler)
     app.add_exception_handler(UnauthorizedException, unauthorized_handler)
     app.add_exception_handler(InsufficientPointsError, insufficient_points_handler)
     app.add_exception_handler(ConsequenceActiveError, consequence_active_handler)
