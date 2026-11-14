@@ -67,6 +67,7 @@ from app.models.mystery import MysteryBox, MysterySurprise
 from app.models.payout_receipt import PayoutReceipt
 from app.models.early_bird_week import EarlyBirdWeek
 from app.models.rules_acceptance import RulesAcceptance
+from app.models.chore_baseline import ChoreBaseline
 from app.models.operator_audit import OperatorAuditLog  # noqa: F401
 
 __all__ = [
@@ -160,6 +161,7 @@ __all__ = [
     "PayoutReceipt",
     "EarlyBirdWeek",
     "RulesAcceptance",
+    "ChoreBaseline",
     "MysterySurprise",
     # Enums
     "UserRole",

@@ -14,6 +14,7 @@ from app.core.exceptions import (
     StaleRulesVersionException,
     RulesNotRecordedException,
     EarlyBirdOffException,
+    BaselineLimitException,
     AnnounceTooSoonException,
     ConflictException,
     NotFoundException,
@@ -117,6 +118,20 @@ async def early_bird_off_handler(
             "error": "conflict",
             "code": "early_bird_off",
             "message": str(exc) or "early_bird_off",
+            "status_code": status.HTTP_409_CONFLICT,
+        },
+    )
+
+
+async def baseline_limit_handler(
+    request: Request, exc: BaselineLimitException
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "error": "conflict",
+            "code": "baseline_limit",
+            "message": str(exc) or "baseline_limit",
             "status_code": status.HTTP_409_CONFLICT,
         },
     )
@@ -257,6 +272,7 @@ def register_exception_handlers(app):
     app.add_exception_handler(StaleRulesVersionException, stale_rules_version_handler)
     app.add_exception_handler(RulesNotRecordedException, rules_not_recorded_handler)
     app.add_exception_handler(EarlyBirdOffException, early_bird_off_handler)
+    app.add_exception_handler(BaselineLimitException, baseline_limit_handler)
     app.add_exception_handler(AnnounceTooSoonException, announce_too_soon_handler)
     app.add_exception_handler(UnauthorizedException, unauthorized_handler)
     app.add_exception_handler(InsufficientPointsError, insufficient_points_handler)

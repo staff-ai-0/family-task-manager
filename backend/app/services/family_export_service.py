@@ -85,6 +85,7 @@ from app.models.mystery import MysteryBox, MysterySurprise
 from app.models.payout_receipt import PayoutReceipt
 from app.models.early_bird_week import EarlyBirdWeek
 from app.models.rules_acceptance import RulesAcceptance
+from app.models.chore_baseline import ChoreBaseline
 from app.models.budget import (
     BudgetAccount,
     BudgetAllocation,
@@ -184,6 +185,8 @@ EXPORTED_FAMILY_TABLES: frozenset[str] = frozenset(
         EarlyBirdWeek,
         # Per-member acceptance of the family's chore rules (with snapshot).
         RulesAcceptance,
+        # Parent reference photos per chore (metadata; image files not exported).
+        ChoreBaseline,
         Routine,
         Reward,
         RewardRedemption,
@@ -371,6 +374,7 @@ class FamilyExportService:
         payout_receipts = await _rows(db, fam(PayoutReceipt))
         early_bird_weeks = await _rows(db, fam(EarlyBirdWeek))
         rules_acceptances = await _rows(db, fam(RulesAcceptance))
+        chore_baselines = await _rows(db, fam(ChoreBaseline))
         routines = await _rows(db, fam(Routine))
         _routine_ids = [r.id for r in routines]
         routine_steps = (
@@ -537,6 +541,7 @@ class FamilyExportService:
             "bank/payout_receipts.json": _dump(payout_receipts),
             "progress/early_bird_weeks.json": _dump(early_bird_weeks),
             "progress/rules_acceptances.json": _dump(rules_acceptances),
+            "tasks/chore_baselines.json": _dump(chore_baselines),
             "routines/routines.json": _dump(routines),
             "routines/steps.json": _dump(routine_steps),
             "routines/progress.json": _dump(routine_progress),

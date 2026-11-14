@@ -181,3 +181,23 @@ def test_rules_acceptances_round_trip(scratch_dsn):
     assert not _cols(dsn, "rules_acceptances")
     _alembic(dsn, "upgrade", "head")
     assert _cols(dsn, "rules_acceptances")
+
+
+def test_chore_baselines_round_trip(scratch_dsn):
+    dsn = scratch_dsn
+    _alembic(dsn, "upgrade", "rules_acceptances")
+    assert not _cols(dsn, "chore_baselines")
+    _alembic(dsn, "upgrade", "head")
+    assert {"id", "family_id", "template_id", "image_url", "caption", "position",
+            "created_by", "created_at"} <= _cols(dsn, "chore_baselines")
+    fam, tpl = uuid.uuid4(), uuid.uuid4()
+    _insert(dsn, "families", id=fam, name="F")
+    _insert(dsn, "task_templates", id=tpl, family_id=fam, title="T")
+    _insert(dsn, "chore_baselines", id=uuid.uuid4(), family_id=fam, template_id=tpl,
+            image_url="/uploads/chore-baselines/a.jpg", position=0)
+    _sql(dsn, "DELETE FROM task_templates WHERE id = $1", tpl)
+    assert _sql(dsn, "SELECT count(*) AS c FROM chore_baselines")[0]["c"] == 0
+    _alembic(dsn, "downgrade", "rules_acceptances")
+    assert not _cols(dsn, "chore_baselines")
+    _alembic(dsn, "upgrade", "head")
+    assert _cols(dsn, "chore_baselines")

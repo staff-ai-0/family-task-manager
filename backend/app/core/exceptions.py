@@ -34,6 +34,12 @@ class RulesNotRecordedException(ConflictException):
     pass
 
 
+class BaselineLimitException(ConflictException):
+    """A template already has its maximum baseline photos (HTTP 409, code
+    ``baseline_limit``)."""
+    pass
+
+
 class EarlyBirdOffException(ConflictException):
     """Rules announced while Early Bird is off (HTTP 409, code ``early_bird_off``)."""
     pass
