@@ -17,8 +17,8 @@ from app.core.upload_validation import MAX_PROOF_BYTES, read_upload_capped
 from app.models.user import User
 from app.schemas.baseline import BaselineOut, BaselineStatusRow, RecommendationsOut
 from app.services import baseline_advisor
-from app.services.family_service import FamilyService
 from app.services.baseline_service import BaselineService
+from app.services.family_service import FamilyService
 
 router = APIRouter()
 

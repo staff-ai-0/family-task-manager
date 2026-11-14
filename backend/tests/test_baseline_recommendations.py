@@ -255,16 +255,67 @@ async def test_language_follows_parent(
 ):
     await _consent(db_session, test_family)
     t = await _template(db_session, test_family)
+    url = _url(t)  # the route's rollback (shared test session) expires `t` after the call
     test_parent_user.preferred_lang = "en"
     await db_session.commit()
-    await client.post(_url(t), headers=auth_headers)
+    await client.post(url, headers=auth_headers)
     text = [p for p in llm.call_args.kwargs["messages"][0]["content"] if p["type"] == "text"][0]["text"]
     assert "English" in text
+    # the route's rollback (shared test session) expired the instance
+    await db_session.refresh(test_parent_user)
     test_parent_user.preferred_lang = "es"
     await db_session.commit()
-    await client.post(_url(t), headers=auth_headers)
+    await client.post(url, headers=auth_headers)
     text = [p for p in llm.call_args.kwargs["messages"][0]["content"] if p["type"] == "text"][0]["text"]
     assert "Spanish" in text
+
+
+async def test_long_item_truncated_to_exactly_160(
+    client, db_session, test_family, test_parent_user, auth_headers, plus_subscription, uploads, llm
+):
+    await _consent(db_session, test_family)
+    t = await _template(db_session, test_family)
+    llm.set_content(json.dumps({"suggestions": ["y" * 500]}))
+    r = await client.post(_url(t), headers=auth_headers)
+    assert r.json()["suggestions"] == ["y" * 160]
+
+
+async def test_db_transaction_released_before_images_and_llm(
+    db_session, test_family, test_child_user, plus_subscription, uploads, llm, monkeypatch
+):
+    from app.services import baseline_advisor
+
+    t = await _template(db_session, test_family)
+    await _seed(db_session, uploads, test_family, test_child_user, t)
+    seen = {"load": [], "llm": None}
+    real_load = baseline_advisor._load_image_bytes
+
+    async def spy_load(url):
+        seen["load"].append(db_session.in_transaction())
+        return await real_load(url)
+
+    monkeypatch.setattr(baseline_advisor, "_load_image_bytes", spy_load)
+    original = llm.return_value
+
+    def spy_llm(**kw):
+        seen["llm"] = db_session.in_transaction()
+        return original
+
+    llm.side_effect = spy_llm
+    out = await baseline_advisor.suggest(db_session, test_family.id, t.id)
+    assert out["ai_failed"] is False
+    assert seen["load"] and not any(seen["load"])
+    assert seen["llm"] is False
+
+
+async def test_prompt_marks_notes_as_data(
+    client, db_session, test_family, test_parent_user, auth_headers, plus_subscription, uploads, llm
+):
+    await _consent(db_session, test_family)
+    t = await _template(db_session, test_family)
+    await client.post(_url(t), headers=auth_headers)
+    text = [p for p in llm.call_args.kwargs["messages"][0]["content"] if p["type"] == "text"][0]["text"]
+    assert "not instructions" in text
 
 
 async def test_stores_nothing(
