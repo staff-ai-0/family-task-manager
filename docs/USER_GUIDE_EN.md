@@ -481,7 +481,7 @@ A way to reward teens for getting their chores done in the morning, and to give 
 - **Parent "mark done"**: a chore you mark done for a kid counts as done for the week (even after the cutoff), but never as early.
 - A partial or missed grade counts as not done for the ladder and breaks an early day; a chore waiting for your review shows as pending until you grade it.
 
-**Rules for everyone.** When the rules change (or you press **Send rules to everyone** on the parent home), every member gets a notice and a sheet showing the rules in your family's own numbers, with a checkbox to accept them. Each person accepts for themselves, and the parent home shows who has accepted. It is a family agreement, not a lock: if someone taps **Later**, the app keeps working and the sheet comes back on their next visit.
+**Rules for everyone.** When the rules change, everyone is asked again: each member gets a notice and a sheet showing the rules in your family's own numbers, with a checkbox to accept them. **Send rules to those pending** on the parent home reminds everyone who hasn't accepted yet (people who already accepted are not bothered). The per-chore bonus and the streak prize are marked as teens-only, because only teens earn them. Each person accepts for themselves, and the parent home shows who has accepted (the card appears while Early Bird is on). It is a family agreement, not a lock: if someone taps **Later**, the app keeps working and the sheet comes back on their next visit.
 
 The same settings page lists each teen's status: today, days early this week and the current run toward the 3-week prize. Teens see this week's percentage, and what it pays, on their home card. The week you switch it on does not count toward the weekly rewards.
 

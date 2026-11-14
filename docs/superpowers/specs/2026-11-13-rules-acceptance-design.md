@@ -24,11 +24,16 @@ Family-scoped everywhere; integer cents; no native dialogs; `hidden` attribute n
 Where the ladder percentages/early bonus % live as constants (expose them from `early_bird_rules.py` and reuse in `week_ladder` rather than copying literals, if cheap); how the Layout detects "welcome tour running" (reuse the existing suppression check used by ModuleTour).
 
 ## As built — deviations
-- `accept` uses INSERT … ON CONFLICT DO NOTHING (constraint `uq_rules_acceptances_user_version`) and re-reads the row, so a double tap never errors or duplicates.
-- The parent acceptances list filters to active, approved members.
-- `stale_version`, `early_bird_off` and `announce_too_soon` carry a top-level `code` on the error response.
+- `accept` uses INSERT … ON CONFLICT DO NOTHING (constraint `uq_rules_acceptances_family_user_version`) and re-reads the row, so a double tap never errors or duplicates. If the re-read finds nothing the route answers 409 `accept_not_recorded`, never a 500.
+- **R3 — the key includes the family**: `UNIQUE(family_id, user_id, rules_version)` (the Record bullet above said `UNIQUE(user_id, rules_version)`). An invitation can move an existing account to another family; with the old key, accepting v1 there hit the old family's row, inserted nothing and 500'd. The migration was edited in place (the table was never released).
+- The parent acceptances list filters to active, approved members, and is EMPTY while Early Bird is off, so the parent card (hidden on an empty list) never offers an Announce that can only fail.
+- `stale_version`, `early_bird_off`, `announce_too_soon` and `accept_not_recorded` carry a top-level `code` on the error response.
 - The family export gained `progress/rules_acceptances.json`.
-- An auto-announce while Early Bird is off sends nothing (announce raises `early_bird_off`, swallowed best-effort); only enabling Early Bird or a version bump while on announces.
+- The settings hook never calls announce while Early Bird is off: only a `rules_version` bump while on, or switching Early Bird on, announces (after the commit; a failure — including a failing rollback in the cleanup — is logged and never fails the save). A save that does both sends ONE notice per pending member.
+- **R1 — the per-chore bonus % bumps `rules_version`**: the sheet shows and snapshots `early_bird_bonus_pct`, so it joined the bump list (cutoff, grab end, alarms, deadline, streak amount, per-chore bonus %).
+- **R2 — announce notifies only members still pending** (amends "for every active member" in the API bullet): active, approved members with no acceptance for the current version in this family. `sent` is how many were notified; 0 is a valid answer ("Everyone has already accepted the rules."), writes nothing and starts no hourly cap. A version bump leaves everyone pending, so it still reaches everyone. The card button reads "Send rules to those pending".
+- **R4 — teens-only labels**: the per-chore bonus and streak prize lines say "(teens)" / "(adolescentes)", because the backend pays them to teens only; each line is omitted when its value is 0.
+- `/dashboard?rules=1` keeps `rules=1` when it redirects a parent to `/parent` (`parentHomeUrl`), and the sheet removes `rules` from the URL once read (`stripRulesParam`), so a later reload honours "Later". `/admin` is a skip path.
 - `rules_update` is in `SUPERSEDING_TYPES` in `notification_service.py`.
 - The sheet's welcome-tour suppression relies on `window.__ftmTourStarted` plus a 600 ms delay.
 - Known limits: no focus trap in the sheet; two parents racing Announce can double-send; an auto-announce (forced) uses up the manual hourly allowance.
