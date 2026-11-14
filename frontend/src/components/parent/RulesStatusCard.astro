@@ -1,0 +1,95 @@
+---
+/**
+ * Parent hub: who has accepted the current chore rules. Starts hidden; the
+ * script reveals it when GET /api/rules/acceptances returns rows (403 for
+ * non-parents, 401, errors and empty lists keep it hidden). "Send rules" posts
+ * /api/rules/announce (the server enforces Early Bird on + once per hour).
+ */
+import { buttonClass } from "../../lib/buttonClasses";
+import { cardCopy } from "../../lib/rulesNotice";
+
+interface Props {
+    lang: "es" | "en";
+}
+const { lang } = Astro.props;
+const c = cardCopy(lang);
+---
+
+<section data-rules-status data-lang={lang} hidden class="max-w-md mx-auto w-full mb-6" aria-labelledby="rules-status-heading">
+    <h2 id="rules-status-heading" class="text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft mb-1 px-1">{c.title}</h2>
+    <div class="rounded-2xl border border-brand-ink/10 bg-brand-cream-deep p-3 shadow-[var(--shadow-card)]">
+        <p data-rules-summary class="font-bold text-brand-ink"></p>
+        <p data-rules-pending class="mt-1 text-xs text-brand-ink-soft" hidden></p>
+        <button type="button" data-rules-announce class={`mt-3 ${buttonClass("secondary", "sm")} disabled:cursor-not-allowed disabled:opacity-50`}>{c.send}</button>
+    </div>
+</section>
+
+<script>
+    import { showToast } from "../../lib/toast";
+    import {
+        announceErrorMessage,
+        announceResultMessage,
+        cardCopy,
+        pendingNames,
+        statusSummary,
+    } from "../../lib/rulesNotice";
+
+    const MAX_NAMES = 5;
+
+    async function initRulesStatus() {
+        const root = document.querySelector<HTMLElement>("[data-rules-status]");
+        if (!root || root.dataset.bound === "1") return;
+        root.dataset.bound = "1";
+        const lang = root.dataset.lang === "en" ? "en" : "es";
+
+        let rows: any[] = [];
+        try {
+            const res = await fetch("/api/rules/acceptances", { credentials: "same-origin" });
+            if (!res.ok) return;
+            const data = await res.json();
+            rows = Array.isArray(data) ? data : [];
+        } catch {
+            return;
+        }
+        if (!rows.length) return;
+
+        const summary = statusSummary(rows, lang);
+        root.querySelector("[data-rules-summary]")!.textContent = summary;
+        const names = pendingNames(rows);
+        const pendingEl = root.querySelector<HTMLElement>("[data-rules-pending]")!;
+        if (names.length) {
+            const shown = names.slice(0, MAX_NAMES).join(", ");
+            const extra = names.length > MAX_NAMES ? ` +${names.length - MAX_NAMES}` : "";
+            pendingEl.textContent = `${cardCopy(lang).pending}: ${shown}${extra}`;
+            pendingEl.hidden = false;
+        }
+        root.hidden = false;
+
+        const btn = root.querySelector<HTMLButtonElement>("[data-rules-announce]")!;
+        btn.addEventListener("click", async () => {
+            if (btn.disabled) return;
+            btn.disabled = true; // synchronous: no double submit
+            try {
+                const res = await fetch("/api/rules/announce", { method: "POST", credentials: "same-origin" });
+                if (res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    showToast(announceResultMessage(Number(body?.sent) || 0, lang), "success");
+                } else {
+                    let code = "";
+                    try {
+                        const body = await res.json();
+                        code = typeof body?.code === "string" ? body.code : "";
+                    } catch {
+                        /* non-JSON error body */
+                    }
+                    showToast(announceErrorMessage(code, lang), "error");
+                }
+            } catch {
+                showToast(announceErrorMessage("", lang), "error");
+            }
+            btn.disabled = false;
+        });
+    }
+    document.addEventListener("astro:page-load", initRulesStatus);
+    if (document.readyState !== "loading") initRulesStatus();
+</script>
