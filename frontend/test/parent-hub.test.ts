@@ -9,6 +9,7 @@ import {
     monthLabel,
     monthSummaryView,
     nudgeLabel,
+    parentHomeUrl,
 } from "../src/lib/parentHub";
 
 const NOW = new Date("2026-09-28T20:00:00Z");
@@ -236,5 +237,19 @@ describe("monthSummaryView", () => {
         if (card.show) {
             expect([bar.budgetedCents, bar.spentCents, bar.pct, bar.over]).toEqual([card.budgetedCents, card.spentCents, card.pct, card.over]);
         }
+    });
+});
+
+describe("parentHomeUrl (/dashboard -> /parent for a parent)", () => {
+    it("carries module_off and rules through the hop", () => {
+        expect(parentHomeUrl("")).toBe("/parent");
+        expect(parentHomeUrl("?module_off=1")).toBe("/parent?module_off=1");
+        expect(parentHomeUrl("?rules=1")).toBe("/parent?rules=1");
+        expect(parentHomeUrl("?module_off=1&rules=1")).toBe("/parent?module_off=1&rules=1");
+        expect(parentHomeUrl(new URLSearchParams("rules=1&module_off=1"))).toBe("/parent?module_off=1&rules=1");
+    });
+    it("drops anything else and non-1 values", () => {
+        expect(parentHomeUrl("?rules=0&module_off=yes&x=1")).toBe("/parent");
+        expect(parentHomeUrl("?next=//evil.example&rules=1")).toBe("/parent?rules=1");
     });
 });

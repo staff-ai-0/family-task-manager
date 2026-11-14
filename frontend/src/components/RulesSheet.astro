@@ -5,7 +5,8 @@
  * GET /api/rules/status; when `required` it shows the family's rules (rendered
  * from the values by lib/rulesNotice.ts) with an acceptance checkbox. Stands
  * down on kiosk pages and while the welcome tour runs. "Later" snoozes for the
- * browser session; ?rules=1 (the notification link) reopens it regardless.
+ * browser session; ?rules=1 (the notification link) reopens it regardless,
+ * and is removed from the URL once read so a later reload honours the snooze.
  */
 import { buttonClass } from "../lib/buttonClasses";
 
@@ -31,7 +32,7 @@ const { lang = "es" } = Astro.props;
             <span id="rules-sheet-check-label"></span>
         </label>
         <div class="mt-5 flex gap-2">
-            <button type="button" id="rules-sheet-later" class="flex-1 rounded-xl border-2 border-brand-ink/15 bg-white py-3 text-sm font-bold text-brand-ink"></button>
+            <button type="button" id="rules-sheet-later" class={`flex-1 ${buttonClass("secondary", "md")}`}></button>
             <button type="button" id="rules-sheet-accept" disabled class={`flex-1 ${buttonClass("primary", "md")} disabled:cursor-not-allowed disabled:opacity-40`}></button>
         </div>
     </div>
@@ -39,7 +40,7 @@ const { lang = "es" } = Astro.props;
 
 <script>
     import { showToast } from "../lib/toast";
-    import { acceptErrorMessage, acceptLabel, rulesLines, sheetCopy, shouldSkipRulesSheet } from "../lib/rulesNotice";
+    import { acceptErrorMessage, acceptLabel, rulesLines, sheetCopy, shouldSkipRulesSheet, stripRulesParam } from "../lib/rulesNotice";
 
     const SNOOZE_KEY = "ftm-rules-snoozed";
 
@@ -67,7 +68,17 @@ const { lang = "es" } = Astro.props;
         root.dataset.bound = "1";
 
         const lang = root.dataset.lang === "en" ? "en" : "es";
-        const forced = new URLSearchParams(window.location.search).get("rules") === "1";
+        const params = new URLSearchParams(window.location.search);
+        const forced = params.get("rules") === "1";
+        if (params.has("rules")) {
+            // Read once: left in the address bar it would reopen the sheet on
+            // every later reload, even after "Later".
+            try {
+                history.replaceState(history.state, "", stripRulesParam(window.location.href));
+            } catch {
+                /* replaceState unavailable: the flag just stays in the URL */
+            }
+        }
         if (!forced && snoozed()) return;
 
         const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;

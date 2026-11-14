@@ -2,8 +2,9 @@
 /**
  * Parent hub: who has accepted the current chore rules. Starts hidden; the
  * script reveals it when GET /api/rules/acceptances returns rows (403 for
- * non-parents, 401, errors and empty lists keep it hidden). "Send rules" posts
- * /api/rules/announce (the server enforces Early Bird on + once per hour).
+ * non-parents, 401, errors and empty lists keep it hidden; the list is empty
+ * whenever Early Bird is off). "Send rules" posts /api/rules/announce, which
+ * notifies only members still pending (server: Early Bird on + once per hour).
  */
 import { buttonClass } from "../../lib/buttonClasses";
 import { cardCopy } from "../../lib/rulesNotice";

@@ -208,3 +208,17 @@ export function firstName(name: unknown): string {
     if (typeof name !== "string") return "";
     return name.trim().split(/\s+/)[0] ?? "";
 }
+
+/** Flags /dashboard carries when it sends a parent to the hub: the "section
+ * switched off" banner and the rules sheet (the notification link is
+ * /dashboard?rules=1). Nothing else survives the hop. */
+const PARENT_HOP_FLAGS = ["module_off", "rules"] as const;
+
+/** Where /dashboard redirects a parent, keeping only PARENT_HOP_FLAGS set to "1". */
+export function parentHomeUrl(search: string | URLSearchParams): string {
+    const from = new URLSearchParams(search);
+    const to = new URLSearchParams();
+    for (const key of PARENT_HOP_FLAGS) if (from.get(key) === "1") to.set(key, "1");
+    const q = to.toString();
+    return q ? `/parent?${q}` : "/parent";
+}

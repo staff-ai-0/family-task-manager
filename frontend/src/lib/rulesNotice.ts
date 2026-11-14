@@ -34,9 +34,10 @@ function pesos(cents: number): string {
     return `$${Math.trunc(n / 100)}`;
 }
 
-/** Pages where the sheet never mounts (public / unauthenticated / kiosk), even with a stale session cookie. */
+/** Pages where the sheet never mounts (public / unauthenticated / kiosk / operator console), even with a stale session cookie. */
 export const RULES_SHEET_SKIP_PATHS = [
     "/kiosk",
+    "/admin",
     "/login",
     "/register",
     "/accept-invitation",
@@ -57,8 +58,16 @@ export function shouldSkipRulesSheet(pathname: string): boolean {
     return RULES_SHEET_SKIP_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+/**
+ * The rule lines, in display order. The per-chore bonus and the streak prize
+ * are paid to teens only (backend: `maybe_award_early_bonus` and the streak
+ * settle skip every other role), so those lines say so; each is left out when
+ * its value is 0 (nothing to promise, no "+0 %" / "$0 MXN").
+ */
 export function rulesLines(rules: RulesValues, lang: Lang): string[] {
     const tiers = [...(rules.bonus_tiers ?? [])].sort((a, b) => a.early_pct - b.early_pct);
+    const bonusOn = Number(rules.chore_bonus_pct) > 0;
+    const streakOn = Number(rules.streak_cents) > 0;
     if (L(lang) === "en") {
         const ladder = tiers.map((t) => `${t.early_pct}% or more early: +${t.bonus_pct}%`).join(". ");
         return [
@@ -69,9 +78,13 @@ export function rulesLines(rules: RulesValues, lang: Lang): string[] {
             ...(tiers.length
                 ? [`Weekly bonus: at 100% done, the bonus depends on the share finished before ${rules.deadline}. ${ladder}.`]
                 : []),
-            `Per-chore bonus: +${rules.chore_bonus_pct}% extra points on a chore completed before ${rules.deadline}.`,
+            ...(bonusOn
+                ? [`Per-chore bonus (teens): +${rules.chore_bonus_pct}% extra points on a chore completed before ${rules.deadline}.`]
+                : []),
             `Reminders: teens get a nudge at ${rules.alarm_1} and again at ${rules.alarm_2}.`,
-            `Streak prize: ${pesos(rules.streak_cents)} MXN for every 3rd consecutive early week.`,
+            ...(streakOn
+                ? [`Streak prize (teens): ${pesos(rules.streak_cents)} MXN for every 3rd consecutive early week.`]
+                : []),
         ];
     }
     const ladder = tiers.map((t) => `${t.early_pct} % o más temprano: +${t.bonus_pct} %`).join(". ");
@@ -83,10 +96,27 @@ export function rulesLines(rules: RulesValues, lang: Lang): string[] {
         ...(tiers.length
             ? [`Bono semanal: con 100 % terminado, el bono depende de cuántas se hicieron antes de las ${rules.deadline}. ${ladder}.`]
             : []),
-        `Bono por tarea: +${rules.chore_bonus_pct} % de puntos extra en una tarea completada antes de las ${rules.deadline}.`,
+        ...(bonusOn
+            ? [`Bono por tarea (adolescentes): +${rules.chore_bonus_pct} % de puntos extra en una tarea completada antes de las ${rules.deadline}.`]
+            : []),
         `Recordatorios: los adolescentes reciben un aviso a las ${rules.alarm_1} y otro a las ${rules.alarm_2}.`,
-        `Premio de racha: ${pesos(rules.streak_cents)} MXN por cada 3.ª semana madrugadora seguida.`,
+        ...(streakOn
+            ? [`Premio de racha (adolescentes): ${pesos(rules.streak_cents)} MXN por cada 3.ª semana madrugadora seguida.`]
+            : []),
     ];
+}
+
+/**
+ * `url` without its `rules` query parameter, as a same-origin path
+ * (path + remaining query + hash) for `history.replaceState`. The sheet reads
+ * `?rules=1` once; leaving it in the address bar would reopen the sheet on
+ * every later reload, even after "Later".
+ */
+export function stripRulesParam(url: string): string {
+    const u = new URL(url, "http://local.invalid");
+    u.searchParams.delete("rules");
+    const q = u.searchParams.toString();
+    return `${u.pathname}${q ? `?${q}` : ""}${u.hash}`;
 }
 
 export function acceptLabel(lang: Lang): string {
@@ -105,9 +135,12 @@ export function pendingNames(rows: AcceptanceRow[]): string[] {
     return rows.filter((r) => !r.accepted_at).map((r) => r.name);
 }
 
+/** Toast after Announce. The server notifies only members still pending, so 0 means everyone already accepted. */
 export function announceResultMessage(sent: number, lang: Lang): string {
     const n = Math.max(0, Math.trunc(Number(sent) || 0));
-    return L(lang) === "en" ? `Rules sent to ${n} member${n === 1 ? "" : "s"}.` : `Reglas enviadas a ${n} ${n === 1 ? "miembro" : "miembros"}.`;
+    const en = L(lang) === "en";
+    if (n === 0) return en ? "Everyone has already accepted the rules." : "Todos ya aceptaron las reglas.";
+    return en ? `Rules sent to ${n} member${n === 1 ? "" : "s"}.` : `Reglas enviadas a ${n} ${n === 1 ? "miembro" : "miembros"}.`;
 }
 
 export function acceptErrorMessage(code: string, lang: Lang): string {
@@ -121,7 +154,8 @@ export function acceptErrorMessage(code: string, lang: Lang): string {
 export function announceErrorMessage(code: string, lang: Lang): string {
     const en = L(lang) === "en";
     if (code === "early_bird_off") return en ? "Turn on Early Bird to send the rules." : "Activa Madrugador para enviar las reglas.";
-    if (code === "announce_too_soon") return en ? "You sent them less than an hour ago." : "Ya las enviaste hace menos de una hora.";
+    // Neutral voice: an automatic send (settings save) also starts the hour.
+    if (code === "announce_too_soon") return en ? "The rules were sent less than an hour ago." : "Las reglas se enviaron hace menos de una hora.";
     return en ? "Couldn't send the rules. Please try again." : "No se pudieron enviar las reglas. Intenta de nuevo.";
 }
 
@@ -135,8 +169,8 @@ export function sheetCopy(lang: Lang) {
 }
 
 const CARD = {
-    es: { title: "Reglas de tareas", send: "Enviar reglas a todos", pending: "Faltan" },
-    en: { title: "Chore rules", send: "Send rules to everyone", pending: "Pending" },
+    es: { title: "Reglas de tareas", send: "Enviar reglas a quienes faltan", pending: "Faltan" },
+    en: { title: "Chore rules", send: "Send rules to those pending", pending: "Pending" },
 } as const;
 
 export function cardCopy(lang: Lang) {
