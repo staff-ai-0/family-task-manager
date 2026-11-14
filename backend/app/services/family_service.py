@@ -172,12 +172,13 @@ class FamilyService:
                 raise ValidationException("teen alarms must be before chore_cutoff")
         rules_changed = False
         # Any real change to a rule-defining setting bumps rules_version in
-        # the same transaction (unchanged values do not).
+        # the same transaction (unchanged values do not). These are the values
+        # the rules sheet shows and RulesService.snapshot records.
         if any(
             col in update_fields and update_fields[col] != getattr(family, col)
             for col in (
                 "chore_cutoff", "grab_window_end", "teen_alarm_1", "teen_alarm_2",
-                "early_bird_deadline", "early_bird_streak_cents",
+                "early_bird_deadline", "early_bird_streak_cents", "early_bird_bonus_pct",
             )
         ):
             family.rules_version = (family.rules_version or 1) + 1

@@ -108,11 +108,22 @@ async def test_enabling_eb_announces(client, db_session, test_family, test_paren
 
 async def test_unwatched_save_sends_nothing(client, db_session, test_family, test_parent_user, auth_headers):
     await _eb(db_session, test_family)
-    r = await _patch(client, auth_headers, early_bird_bonus_pct=25)
+    r = await _patch(client, auth_headers, name="Renamed family")
     assert r.status_code == 200
     r = await _patch(client, auth_headers, early_bird_enabled=True)  # already on
     assert r.status_code == 200
     assert await _rules_notes(db_session) == []
+
+
+async def test_bonus_pct_change_re_asks(
+    client, db_session, test_family, test_parent_user, test_teen_user, auth_headers
+):
+    # The sheet shows the per-chore bonus %, so changing it is a new version.
+    await _eb(db_session, test_family)
+    r = await _patch(client, auth_headers, early_bird_bonus_pct=25)
+    assert r.status_code == 200 and r.json()["rules_version"] == 2
+    notes = await _rules_notes(db_session)
+    assert {n.user_id for n in notes} == {test_parent_user.id, test_teen_user.id}
 
 
 async def test_bump_with_eb_off_sends_nothing(client, db_session, test_family, test_parent_user, auth_headers):
