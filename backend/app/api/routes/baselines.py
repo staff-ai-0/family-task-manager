@@ -5,15 +5,19 @@ Mounted at /api/task-templates BEFORE the task_templates router so the static
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import require_parent_role
+from app.core.premium import require_feature
+from app.core.rate_limiter import AI_LIMIT, limiter
 from app.core.type_utils import to_uuid_required
 from app.core.upload_validation import MAX_PROOF_BYTES, read_upload_capped
 from app.models.user import User
-from app.schemas.baseline import BaselineOut, BaselineStatusRow
+from app.schemas.baseline import BaselineOut, BaselineStatusRow, RecommendationsOut
+from app.services import baseline_advisor
+from app.services.family_service import FamilyService
 from app.services.baseline_service import BaselineService
 
 router = APIRouter()
@@ -59,3 +63,24 @@ async def delete_baseline(
 ):
     await BaselineService.delete(db, to_uuid_required(current_user.family_id), template_id, baseline_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{template_id}/baselines/recommendations", response_model=RecommendationsOut)
+@limiter.limit(AI_LIMIT)
+async def baseline_recommendations(
+    request: Request,
+    template_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """AI tips from the baselines + recent proofs. Stores nothing; an LLM
+    failure is HTTP 200 with ``ai_failed`` so the UI can say so."""
+    # Plan gate first: this burns LLM tokens.
+    await require_feature("ai_features", db, current_user)
+    family_id = to_uuid_required(current_user.family_id)
+    if not await FamilyService.has_ai_processing_consent(db, family_id):
+        raise HTTPException(status_code=403, detail={"error": "ai_consent_required"})
+    await BaselineService._template(db, family_id, template_id)  # 404 for another family's id
+    return await baseline_advisor.suggest(
+        db, family_id, template_id, current_user.preferred_lang or "es"
+    )

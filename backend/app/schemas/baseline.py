@@ -1,6 +1,6 @@
 """Chore baseline API schemas."""
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -23,3 +23,8 @@ class BaselineStatusRow(BaseModel):
     baseline_count: int
     last_baseline_at: Optional[datetime] = None
     due: bool
+
+
+class RecommendationsOut(BaseModel):
+    suggestions: List[str]
+    ai_failed: bool
