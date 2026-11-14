@@ -2670,7 +2670,6 @@ En las tareas que **requieren foto de evidencia** puedes mostrarle a la IA como 
 - **Recordatorio mensual:** una vez al mes recibes una notificacion de "show and tell" y una tarjeta en tu inicio con las tareas cuyas fotos son viejas o faltan, para mantener las referencias al dia.
 - Las fotos son privadas de tu familia. Borra una cuando quieras y la IA deja de usarla.
 
-
 ---
 
 # Capitulo 26: Planes de Suscripcion — Referencia Rapida

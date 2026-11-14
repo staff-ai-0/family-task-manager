@@ -4,7 +4,9 @@ import {
     baselineCountLabel,
     cleanSuggestions,
     dueSummary,
+    cardCopy,
     errorMessage,
+    sectionCopy,
     statusLine,
 } from "../src/lib/showAndTell";
 
@@ -89,5 +91,12 @@ describe("cleanSuggestions", () => {
     it("tolerates non-arrays", () => {
         expect(cleanSuggestions(undefined as any)).toEqual([]);
         expect(cleanSuggestions("nope" as any)).toEqual([]);
+    });
+});
+
+describe("copy key parity", () => {
+    it("es and en expose identical keys", () => {
+        expect(Object.keys(sectionCopy("es")).sort()).toEqual(Object.keys(sectionCopy("en")).sort());
+        expect(Object.keys(cardCopy("es")).sort()).toEqual(Object.keys(cardCopy("en")).sort());
     });
 });

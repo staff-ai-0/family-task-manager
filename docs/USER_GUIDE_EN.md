@@ -2848,7 +2848,6 @@ For chores that **require photo proof**, you can show the AI what "done" looks l
 - **Monthly nudge:** about once a month you get a "show and tell" notification and a card on your home screen listing chores whose photos are old or missing, so the references stay current.
 - Photos are private to your family. Delete one any time and the AI stops using it.
 
-
 ---
 
 # Chapter 26: Subscription Plans — Quick Reference

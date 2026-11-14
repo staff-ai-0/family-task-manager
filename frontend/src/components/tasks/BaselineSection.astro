@@ -93,6 +93,8 @@ const c = sectionCopy(lang);
         const ideasBtn = root.querySelector<HTMLButtonElement>("[data-baselines-ideas]")!;
         const sugEl = root.querySelector<HTMLElement>("[data-baselines-suggestions]")!;
 
+        let currentCount = 0;
+
         function render(rows: any[]) {
             list.replaceChildren();
             for (const r of rows) {
@@ -123,6 +125,8 @@ const c = sectionCopy(lang);
                         danger: true,
                     });
                     if (!ok) return;
+                    if (del.disabled) return;
+                    del.disabled = true;
                     try {
                         const res = await fetch(`${base}/${r.id}`, { method: "DELETE", credentials: "same-origin" });
                         if (!res.ok) {
@@ -134,10 +138,12 @@ const c = sectionCopy(lang);
                     } catch {
                         showToast(errorMessage("", lang), "error");
                     }
+                    del.disabled = false;
                 });
                 li.appendChild(del);
                 list.appendChild(li);
             }
+            currentCount = rows.length;
             countEl.textContent = baselineCountLabel(rows.length, BASELINE_MAX, lang);
             emptyEl.hidden = rows.length > 0;
             addBtn.disabled = rows.length >= BASELINE_MAX;
@@ -177,7 +183,11 @@ const c = sectionCopy(lang);
                 showToast(errorMessage("", lang), "error");
             }
             fileEl.value = "";
-            await load();
+            try {
+                await load();
+            } finally {
+                addBtn.disabled = currentCount >= BASELINE_MAX;
+            }
         });
 
         ideasBtn.addEventListener("click", async () => {
