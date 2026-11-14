@@ -163,7 +163,18 @@ async def test_serve_thumb_and_traversal(client, db_session, test_family, test_p
     assert (await client.get(b["image_url"])).status_code in (401, 403)
 
 
-async def test_status_route_not_shadowed_and_due_logic(client, db_session, test_family, test_parent_user, auth_headers):
+async def test_serve_thumb_falls_back_to_full_image(client, db_session, test_family, test_parent_user, auth_headers):
+    t = await _template(db_session, test_family)
+    b = (await _upload(client, auth_headers, t.id)).json()
+    os.remove(_path(b["image_url"], thumb=True))
+    r = await client.get(b["image_url"] + "?size=thumb", headers=auth_headers)
+    assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg"
+    assert r.content == open(_path(b["image_url"]), "rb").read()
+
+
+async def test_status_route_not_shadowed_and_due_logic(client, db_session, test_family, test_parent_user, auth_headers, plus_subscription):
+    test_family.ai_processing_consent = True
+    await db_session.commit()
     none_t = await _template(db_session, test_family, title="None")
     stale_t = await _template(db_session, test_family, title="Stale")
     fresh_t = await _template(db_session, test_family, title="Fresh")
@@ -184,6 +195,31 @@ async def test_status_route_not_shadowed_and_due_logic(client, db_session, test_
     assert by["Stale"]["due"] is True and by["Stale"]["baseline_count"] == 1
     assert by["Fresh"]["due"] is False
     assert str(none_t.id) == by["None"]["template_id"]
+
+
+async def test_status_route_empty_without_plan_or_consent(client, db_session, test_family, test_parent_user, auth_headers):
+    await _template(db_session, test_family, title="Due")
+    # free plan, no consent
+    assert (await client.get("/api/task-templates/baselines/status", headers=auth_headers)).json() == []
+    # consent but still free
+    test_family.ai_processing_consent = True
+    await db_session.commit()
+    assert (await client.get("/api/task-templates/baselines/status", headers=auth_headers)).json() == []
+
+
+async def test_status_route_empty_without_consent_on_paid_plan(client, db_session, test_family, test_parent_user, auth_headers, plus_subscription):
+    await _template(db_session, test_family, title="Due")
+    test_family.ai_processing_consent = False
+    await db_session.commit()
+    assert (await client.get("/api/task-templates/baselines/status", headers=auth_headers)).json() == []
+
+
+async def test_status_excludes_bonus_templates(db_session, test_family):
+    t = await _template(db_session, test_family, title="Bonus one")
+    t.is_bonus = True
+    await db_session.commit()
+    await _template(db_session, test_family, title="Regular")
+    assert [r["title"] for r in await BaselineService.status(db_session, test_family.id)] == ["Regular"]
 
 
 async def test_status_other_family_excluded(db_session, test_family, other_parent):

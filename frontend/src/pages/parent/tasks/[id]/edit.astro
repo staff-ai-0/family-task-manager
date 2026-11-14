@@ -503,7 +503,9 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                     {t(lang, "pt_save")}
                 </button>
             </form>
-            <BaselineSection lang={lang as "en" | "es"} templateId={String(id)} requiresProof={!!tmpl.requires_proof} />
+            {!tmpl.is_bonus && (
+                <BaselineSection lang={lang as "en" | "es"} templateId={String(id)} requiresProof={!!tmpl.requires_proof} aiLocked={aiLocked} />
+            )}
 </PageLayout>
 
 <script>

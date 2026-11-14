@@ -54,6 +54,7 @@ from app.core.exceptions import ForbiddenException, ValidationException
 from app.core.security import verify_password
 from app.models import FamilyInvitation, User
 from app.models.budget import BudgetReceiptDraft, BudgetTransaction
+from app.models.chore_baseline import ChoreBaseline
 from app.models.family import Family
 from app.models.gig import GigClaim
 from app.models.subscription import FamilySubscription
@@ -63,11 +64,12 @@ from app.services.family_service import FamilyService
 logger = logging.getLogger(__name__)
 
 # Canonical upload locations inside the backend container. Keep in sync with
-# app/api/routes/uploads.py (gig proofs) and
+# app/api/routes/uploads.py (gig proofs, chore baselines) and
 # app/services/budget/receipt_scanner_service.py (receipt drafts).
 UPLOADS_ROOT = settings.UPLOADS_ROOT
 GIG_PROOFS_DIR = os.path.join(UPLOADS_ROOT, "gig-proofs")
 RECEIPT_DRAFTS_DIR = os.path.join(UPLOADS_ROOT, "receipt-drafts")
+BASELINES_DIR = os.path.join(UPLOADS_ROOT, "chore-baselines")
 
 class FamilyDeletionService:
     """Orchestrates soft-delete + eventual hard purge of a family's data."""
@@ -201,6 +203,20 @@ class FamilyDeletionService:
             paths.append(
                 os.path.join(RECEIPT_DRAFTS_DIR, thumb_filename(f"{draft_id}.jpg"))
             )
+
+        baseline_urls = (
+            await db.execute(
+                select(ChoreBaseline.image_url).where(
+                    ChoreBaseline.family_id == family_id,
+                    ChoreBaseline.image_url.is_not(None),
+                )
+            )
+        ).scalars().all()
+        for url in baseline_urls:
+            if url and url.startswith("/uploads/chore-baselines/"):
+                base = os.path.basename(url)
+                paths.append(os.path.join(BASELINES_DIR, base))
+                paths.append(os.path.join(BASELINES_DIR, thumb_filename(base)))
 
         return paths
 

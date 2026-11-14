@@ -43,8 +43,10 @@ PING_TYPES = (NT.STREAK_AT_RISK, NT.QUEST_NUDGE)
 _OPEN = (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE)
 
 
-# Family-local hour from which the monthly show-and-tell nudge may go out.
+# Family-local hours (inclusive) in which the monthly show-and-tell nudge may
+# go out: never overnight, and a missed day just retries on later hourly ticks.
 SHOW_AND_TELL_FIRST_HOUR = 10
+SHOW_AND_TELL_LAST_HOUR = 20
 
 
 def in_ping_window(local_now: datetime) -> bool:
@@ -323,7 +325,7 @@ class PingService:
             try:
                 tz = safe_zoneinfo(fam.timezone)
                 local_now = now.astimezone(tz)
-                if local_now.hour < SHOW_AND_TELL_FIRST_HOUR:
+                if not (SHOW_AND_TELL_FIRST_HOUR <= local_now.hour <= SHOW_AND_TELL_LAST_HOUR):
                     continue
                 month_start = datetime.combine(local_now.date().replace(day=1), time.min, tzinfo=tz)
                 next_month = datetime.combine(

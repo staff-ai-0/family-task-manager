@@ -183,6 +183,9 @@ def _register_cron_jobs(scheduler: AsyncIOScheduler) -> None:
                     logger.info("Smart reminder sweep sent %d reminder(s)", n)
             except Exception:
                 logger.exception("Smart reminder sweep failed")
+                # Shared session: clear a failed transaction so it cannot
+                # poison the nudge below.
+                await session.rollback()
             # Own block: a failure here never blocks the evening sweep above,
             # nor the other way round. Idempotent per family per local month.
             try:

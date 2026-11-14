@@ -86,7 +86,7 @@ describe("cleanSuggestions", () => {
         expect(cleanSuggestions(["1", "2", "3", "4", "5", "6", "7"])).toHaveLength(5);
     });
     it("caps each tip's length", () => {
-        expect(cleanSuggestions(["x".repeat(500)])[0].length).toBeLessThanOrEqual(240);
+        expect(cleanSuggestions(["x".repeat(500)])[0].length).toBeLessThanOrEqual(160);
     });
     it("tolerates non-arrays", () => {
         expect(cleanSuggestions(undefined as any)).toEqual([]);

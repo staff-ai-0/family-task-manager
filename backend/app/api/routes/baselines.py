@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import require_parent_role
-from app.core.premium import require_feature
+from app.core.premium import family_tier_allows, require_feature
 from app.core.rate_limiter import AI_LIMIT, limiter
 from app.core.type_utils import to_uuid_required
 from app.core.upload_validation import MAX_PROOF_BYTES, read_upload_capped
@@ -28,7 +28,14 @@ async def baselines_status(
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    return await BaselineService.status(db, to_uuid_required(current_user.family_id))
+    family_id = to_uuid_required(current_user.family_id)
+    # Baselines only matter to the AI review, so the hub card (and its nudge)
+    # stays empty for a family without the AI consent or a plan with AI.
+    if not await FamilyService.has_ai_processing_consent(db, family_id):
+        return []
+    if not await family_tier_allows(db, family_id, "ai_features"):
+        return []
+    return await BaselineService.status(db, family_id)
 
 
 @router.get("/{template_id}/baselines", response_model=List[BaselineOut])

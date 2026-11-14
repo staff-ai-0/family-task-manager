@@ -103,6 +103,20 @@ async def test_before_ten_family_local_sends_nothing(db_session, paid):
     assert await _rows(db_session) == []
 
 
+@pytest.mark.parametrize("hour,expected", [(10, 1), (20, 1), (21, 0), (23, 0)])
+async def test_hour_window_bounds(db_session, paid, hour, expected):
+    f, _ = await _due_family(db_session)
+    assert await PingService.run_monthly_show_and_tell(db_session, _now(hour=hour)) == expected
+    assert len(await _rows(db_session, f)) == expected
+
+
+async def test_late_miss_retries_next_in_window_tick_once(db_session, paid):
+    f, _ = await _due_family(db_session)
+    assert await PingService.run_monthly_show_and_tell(db_session, _now(hour=22)) == 0
+    assert await PingService.run_monthly_show_and_tell(db_session, _now(hour=11)) == 1
+    assert await PingService.run_monthly_show_and_tell(db_session, _now(hour=12)) == 0
+
+
 async def test_hour_gate_uses_family_timezone(db_session, paid):
     await _due_family(db_session, tz="America/Mexico_City")
     mx = ZoneInfo("America/Mexico_City")
@@ -221,3 +235,13 @@ def test_main_wires_monthly_nudge_in_its_own_try():
     assert set(owners) == {"run_evening_sweep", "run_monthly_show_and_tell"}
     assert owners["run_evening_sweep"] is not owners["run_monthly_show_and_tell"]
     assert all(t.handlers for t in owners.values())
+
+
+def test_main_rolls_back_shared_session_after_evening_failure():
+    src = pathlib.Path(__file__).resolve().parents[1].joinpath("app", "main.py").read_text()
+    fn = next(n for n in ast.walk(ast.parse(src))
+              if isinstance(n, ast.AsyncFunctionDef) and n.name == "_smart_ping_sweep")
+    evening = next(t for t in ast.walk(fn) if isinstance(t, ast.Try)
+                   and "run_evening_sweep" in "\n".join(ast.get_source_segment(src, s) or "" for s in t.body))
+    handler_src = "\n".join(ast.get_source_segment(src, s) or "" for s in evening.handlers[0].body)
+    assert "session.rollback()" in handler_src

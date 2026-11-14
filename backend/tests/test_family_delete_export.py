@@ -998,9 +998,28 @@ class TestFamilyPurge:
             with open(p, "wb") as f:
                 f.write(b"fake-image-bytes")
 
+        # Chore baseline photo (+ thumbnail sibling) must go at purge too.
+        from app.core.thumbnails import thumb_filename
+        from app.models.chore_baseline import ChoreBaseline
+        from app.services.family_deletion_service import BASELINES_DIR
+
+        os.makedirs(BASELINES_DIR, exist_ok=True)
+        bl_name = f"test-bl-{uuid.uuid4().hex}.jpg"
+        bl_path = os.path.join(BASELINES_DIR, bl_name)
+        bl_thumb = os.path.join(BASELINES_DIR, thumb_filename(bl_name))
+        for p in (bl_path, bl_thumb):
+            with open(p, "wb") as f:
+                f.write(b"fake-image-bytes")
+        db_session.add(ChoreBaseline(
+            family_id=fam_a_id, template_id=seeded["template_a"].id,
+            image_url=f"/uploads/chore-baselines/{bl_name}", position=0,
+        ))
+        await db_session.commit()
+
         await _soft_delete(client, seeded["parent_a"])
         # Files still present immediately after soft delete.
         assert os.path.exists(proof_path)
+        assert os.path.exists(bl_path)
         # Age the tombstone past the 30-day window.
         await _backdate_deletion(db_session, fam_a_id, days=31)
 
@@ -1024,6 +1043,8 @@ class TestFamilyPurge:
         # Upload files removed at purge time.
         assert not os.path.exists(proof_path)
         assert not os.path.exists(draft_path)
+        assert not os.path.exists(bl_path)
+        assert not os.path.exists(bl_thumb)
 
         # Other family completely untouched.
         assert await _count(db_session, User, fam_b_id) == 1

@@ -12,8 +12,10 @@ interface Props {
     lang: "es" | "en";
     templateId: string;
     requiresProof: boolean;
+    /** Free plan: the AI "ideas" call would 403, so show the upgrade hint. */
+    aiLocked?: boolean;
 }
-const { lang, templateId, requiresProof } = Astro.props;
+const { lang, templateId, requiresProof, aiLocked = false } = Astro.props;
 const c = sectionCopy(lang);
 ---
 
@@ -46,8 +48,17 @@ const c = sectionCopy(lang);
     </div>
 
     <div class="mt-4 border-t border-brand-ink/10 pt-3">
-        <button type="button" data-baselines-ideas class={`w-full ${buttonClass("secondary", "sm")} disabled:cursor-not-allowed disabled:opacity-50`}>{c.ideas}</button>
-        <p class="mt-1 text-xs text-brand-ink-soft">{c.ideasHint}</p>
+        {aiLocked ? (
+            <p class="text-xs text-brand-ink-soft">
+                🔒 {c.ideasLocked}{" "}
+                <a href="/parent/settings/subscription" class="font-bold underline">{c.upgradeCta}</a>
+            </p>
+        ) : (
+            <>
+                <button type="button" data-baselines-ideas class={`w-full ${buttonClass("secondary", "sm")} disabled:cursor-not-allowed disabled:opacity-50`}>{c.ideas}</button>
+                <p class="mt-1 text-xs text-brand-ink-soft">{c.ideasHint}</p>
+            </>
+        )}
         <ul data-baselines-suggestions class="mt-2 list-disc space-y-1 ps-5 text-sm text-brand-ink" hidden></ul>
     </div>
 </section>
@@ -90,7 +101,7 @@ const c = sectionCopy(lang);
         const fileEl = root.querySelector<HTMLInputElement>("[data-baselines-file]")!;
         const captionEl = root.querySelector<HTMLInputElement>("[data-baselines-caption]")!;
         const addBtn = root.querySelector<HTMLButtonElement>("[data-baselines-add]")!;
-        const ideasBtn = root.querySelector<HTMLButtonElement>("[data-baselines-ideas]")!;
+        const ideasBtn = root.querySelector<HTMLButtonElement>("[data-baselines-ideas]");
         const sugEl = root.querySelector<HTMLElement>("[data-baselines-suggestions]")!;
 
         let currentCount = 0;
@@ -137,8 +148,9 @@ const c = sectionCopy(lang);
                         await load();
                     } catch {
                         showToast(errorMessage("", lang), "error");
+                    } finally {
+                        del.disabled = false;
                     }
-                    del.disabled = false;
                 });
                 li.appendChild(del);
                 list.appendChild(li);
@@ -190,8 +202,8 @@ const c = sectionCopy(lang);
             }
         });
 
-        ideasBtn.addEventListener("click", async () => {
-            if (ideasBtn.disabled) return;
+        ideasBtn?.addEventListener("click", async () => {
+            if (!ideasBtn || ideasBtn.disabled) return;
             ideasBtn.disabled = true; // synchronous: no double submit
             try {
                 const res = await fetch(`${base}/recommendations`, { method: "POST", credentials: "same-origin" });

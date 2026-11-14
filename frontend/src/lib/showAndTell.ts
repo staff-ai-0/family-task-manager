@@ -8,7 +8,7 @@ export type Lang = "es" | "en";
 /** Mirrors the backend cap (409 `baseline_limit`). */
 export const BASELINE_MAX = 4;
 const MAX_SUGGESTIONS = 5;
-const MAX_SUGGESTION_LEN = 240;
+const MAX_SUGGESTION_LEN = 160;
 
 export interface BaselineStatusRow {
     template_id: string;
@@ -111,6 +111,8 @@ export interface SectionCopy {
     removed: string;
     empty: string;
     cancel: string;
+    ideasLocked: string;
+    upgradeCta: string;
 }
 
 export function sectionCopy(lang: string): SectionCopy {
@@ -130,6 +132,8 @@ export function sectionCopy(lang: string): SectionCopy {
               removed: "Photo deleted",
               empty: "No photos yet",
               cancel: "Cancel",
+              ideasLocked: "Ideas from the AI need the Plus plan.",
+              upgradeCta: "See Subscription",
           }
         : {
               title: "Show and tell",
@@ -146,11 +150,37 @@ export function sectionCopy(lang: string): SectionCopy {
               removed: "Foto borrada",
               empty: "Aún no hay fotos",
               cancel: "Cancelar",
+              ideasLocked: "Las ideas de la IA requieren el plan Plus.",
+              upgradeCta: "Ver Suscripción",
           };
 }
 
-export function cardCopy(lang: string): { title: string; cta: string } {
+export function cardCopy(lang: string): { title: string; cta: string; dismiss: string } {
     return L(lang) === "en"
-        ? { title: "Show and tell", cta: "Update photos" }
-        : { title: "Show and tell", cta: "Actualizar fotos" };
+        ? { title: "Show and tell", cta: "Update photos", dismiss: "Not now" }
+        : { title: "Show and tell", cta: "Actualizar fotos", dismiss: "Más tarde" };
+}
+
+/** localStorage key for the hub card's "not now": one per calendar month. */
+export function dismissKey(now: Date = new Date()): string {
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    return `ftm-show-tell-dismissed-${now.getFullYear()}-${m}`;
+}
+
+/** True when the card was dismissed this calendar month. Never throws. */
+export function isDismissed(store: Pick<Storage, "getItem"> | null | undefined, now: Date = new Date()): boolean {
+    try {
+        return store?.getItem(dismissKey(now)) === "1";
+    } catch {
+        return false;
+    }
+}
+
+/** Remember the dismissal for the rest of this calendar month. Never throws. */
+export function dismiss(store: Pick<Storage, "setItem"> | null | undefined, now: Date = new Date()): void {
+    try {
+        store?.setItem(dismissKey(now), "1");
+    } catch {
+        /* storage blocked: the card simply returns next visit */
+    }
 }

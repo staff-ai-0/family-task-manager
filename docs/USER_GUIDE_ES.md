@@ -47,6 +47,7 @@ El objetivo de Family Task Manager es ayudar a las familias a construir, desde t
    - [2.3 Plantillas de Tareas (Padres)](#23-plantillas-de-tareas-padres)
    - [2.4 Asignacion Semanal (Shuffle)](#24-asignacion-semanal-shuffle)
    - [2.5 Calendario de Asignaciones](#25-calendario-de-asignaciones)
+   - [2.6 Show and Tell: Fotos de Referencia para la Evidencia](#26-show-and-tell-fotos-de-referencia-para-la-evidencia)
 3. [Capitulo 3: Premios y Consecuencias](#capitulo-3-premios-y-consecuencias)
    - [3.1 Tienda de Premios](#31-tienda-de-premios)
    - [3.2 Gestionar Premios (Padres)](#32-gestionar-premios-padres)
@@ -535,6 +536,16 @@ Cada tarea en el calendario muestra su estado con un indicador de color:
 | **Cancelada** | Fue cancelada por un padre |
 
 > **Tip:** Si un miembro tiene demasiadas tareas en una semana, ajuste las plantillas o haga un nuevo shuffle.
+
+## 2.6 Show and Tell: Fotos de Referencia para la Evidencia
+
+En las tareas que **requieren foto de evidencia** puedes mostrarle a la IA como se ve "bien hecho". Abre la tarea (**Padres → Tareas → editar**) y busca la seccion **Show and tell**: agrega hasta 4 fotos, cada una con una descripcion opcional para tu familia (por ejemplo, "fregadero vacio y limpio"; la IA no lee las descripciones, solo mira las fotos). Cuando un hijo envia su foto, la revision de la IA la compara con tus fotos de referencia. La revision sigue siendo solo una sugerencia: tu apruebas o la regresas.
+
+> **Lo que necesitas:** la revision de la IA y **Pedir ideas** funcionan solo con un plan con IA **y** con el procesamiento con IA activado en **Ajustes → Familia**. Sin eso puedes guardar las fotos para tu familia, pero la IA no las usara y la tarjeta de recordatorio en tu inicio permanece oculta. Las tareas extra (bonus) no usan fotos de referencia.
+
+- **Pedir ideas** da consejos breves de la IA con base en tus fotos y las evidencias recientes.
+- **Recordatorio mensual:** una vez al mes, cuando tu familia tiene el plan y el procesamiento con IA, recibes una notificacion de "show and tell" y una tarjeta en tu inicio con las tareas cuyas fotos son viejas o faltan, para mantener las referencias al dia. Toca **Mas tarde** en la tarjeta para ocultarla el resto del mes.
+- Las fotos son privadas de tu familia. Borra una cuando quieras y la IA deja de usarla.
 
 ---
 
@@ -2661,14 +2672,6 @@ Jarvis pregunta como maximo una vez al dia y tres veces por semana, y nunca dos 
 
 > **Para papas:** esta funcion esta apagada hasta que la actives: una tarjeta en tu pantalla de inicio pregunta una sola vez, y el interruptor vive en **Ajustes → Familia → Jarvis**. El motivo que elige tu adolescente (y una nota corta, solo para "la app no me deja" u "otra cosa") nos ayuda a mejorar la app. Vemos los conteos de todas las familias juntas, y leemos las notas sin nombres y sin el titulo de la tarea, y solo cuando participan al menos cinco familias. Apagar el interruptor detiene tanto las preguntas como nuestro uso de las respuestas ya dadas. Estos registros se incluyen en la exportacion de datos de tu familia.
 
-
-## 25.6 Show and Tell: Fotos de Referencia para la Evidencia
-
-En las tareas que **requieren foto de evidencia** puedes mostrarle a la IA como se ve "bien hecho". Abre la tarea (**Padres -> Tareas -> editar**) y busca la seccion **Show and tell**: agrega hasta 4 fotos con una descripcion opcional (por ejemplo, "fregadero vacio y limpio"). Cuando un hijo envia su foto, la revision de la IA la compara con tus fotos de referencia. La revision sigue siendo solo una sugerencia: tu apruebas o la regresas.
-
-- **Pedir ideas** da consejos breves de la IA con base en tus fotos y las evidencias recientes. Requiere un plan con IA y el procesamiento con IA activado en los ajustes de la familia.
-- **Recordatorio mensual:** una vez al mes recibes una notificacion de "show and tell" y una tarjeta en tu inicio con las tareas cuyas fotos son viejas o faltan, para mantener las referencias al dia.
-- Las fotos son privadas de tu familia. Borra una cuando quieras y la IA deja de usarla.
 
 ---
 

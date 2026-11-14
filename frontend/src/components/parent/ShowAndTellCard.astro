@@ -2,7 +2,9 @@
 /**
  * Parent hub: chores whose reference photos are due a monthly refresh. Starts
  * hidden; the script reveals it when GET /api/task-templates/baselines/status
- * has due rows (403, 401, errors and empty/none-due lists keep it hidden).
+ * has due rows (403, 401, errors and empty/none-due lists keep it hidden; the
+ * API returns [] for a family without AI consent or a plan with AI). "Not now"
+ * hides it for the rest of the calendar month (localStorage, per-month key).
  */
 import { cardCopy } from "../../lib/showAndTell";
 
@@ -18,11 +20,12 @@ const c = cardCopy(lang);
     <div class="rounded-2xl border border-brand-ink/10 bg-brand-cream-deep p-3 shadow-[var(--shadow-card)]">
         <p data-show-tell-summary class="font-bold text-brand-ink"></p>
         <ul data-show-tell-list class="mt-2 space-y-1"></ul>
+        <button type="button" data-show-tell-dismiss class="mt-2 text-xs font-bold text-brand-ink-soft underline">{c.dismiss}</button>
     </div>
 </section>
 
 <script>
-    import { dueSummary, statusLine, cardCopy } from "../../lib/showAndTell";
+    import { dueSummary, statusLine, cardCopy, isDismissed, dismiss } from "../../lib/showAndTell";
 
     const MAX_ROWS = 5;
 
@@ -31,6 +34,13 @@ const c = cardCopy(lang);
         if (!root || root.dataset.bound === "1") return;
         root.dataset.bound = "1";
         const lang = root.dataset.lang === "en" ? "en" : "es";
+        let store: Storage | null = null;
+        try {
+            store = window.localStorage;
+        } catch {
+            store = null;
+        }
+        if (isDismissed(store)) return;
 
         let rows: any[] = [];
         try {
@@ -60,6 +70,10 @@ const c = cardCopy(lang);
             li.appendChild(a);
             ul.appendChild(li);
         }
+        root.querySelector("[data-show-tell-dismiss]")!.addEventListener("click", () => {
+            dismiss(store);
+            root.hidden = true;
+        });
         root.hidden = false;
     }
     document.addEventListener("astro:page-load", initShowTell);

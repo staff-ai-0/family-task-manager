@@ -134,7 +134,7 @@ class BaselineService:
 
     @staticmethod
     async def status(db: AsyncSession, family_id: UUID, now: Optional[datetime] = None) -> List[dict]:
-        """One row per active proof-required template; ``due`` when it has no
+        """One row per active proof-required (non-bonus) template; ``due`` when it has no
         baseline or its newest one is older than BASELINE_STALE_DAYS."""
         now = now or datetime.now(timezone.utc)
         cutoff = now - timedelta(days=BASELINE_STALE_DAYS)
@@ -154,6 +154,8 @@ class BaselineService:
                 TaskTemplate.family_id == family_id,
                 TaskTemplate.is_active.is_(True),
                 TaskTemplate.requires_proof.is_(True),
+                # Bonus tasks never use baselines (inline auto-approve path).
+                TaskTemplate.is_bonus.is_not(True),
             )
             .group_by(TaskTemplate.id, TaskTemplate.title)
             .order_by(TaskTemplate.title)
