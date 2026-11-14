@@ -231,8 +231,13 @@ class FamilyService:
                 await RulesService.announce(db, family_id, force=True)
             except Exception:
                 logger.exception("rules auto-announce failed for family %s", family_id)
-                await db.rollback()
-                await db.refresh(family)
+                # The save is already committed: a failing cleanup must not
+                # turn it into a 500 either.
+                try:
+                    await db.rollback()
+                    await db.refresh(family)
+                except Exception:
+                    logger.exception("rules auto-announce cleanup failed for family %s", family_id)
         return family
 
     @staticmethod

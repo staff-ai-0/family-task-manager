@@ -131,9 +131,12 @@ class RulesService:
 
     @staticmethod
     async def announce(db: AsyncSession, family_id, *, force: bool = False) -> int:
-        """Tell every active, approved member the rules need their acceptance.
-        The notification rows double as the send record, so the hourly cap
-        needs no column. Returns how many members were notified."""
+        """Tell every active, approved member who has NOT accepted the current
+        rules version that the rules need their acceptance (whoever already
+        accepted has nothing to do, and their link would open nothing). The
+        notification rows double as the send record, so the hourly cap needs
+        no column; a send to nobody writes nothing and starts no cap. Returns
+        how many members were notified (0 is a valid answer)."""
         # Local import: notification_service pulls in push machinery.
         from app.services.notification_service import NotificationService
 
@@ -151,11 +154,16 @@ class RulesService:
             )).first()
             if recent is not None:
                 raise AnnounceTooSoonException("announce_too_soon")
+        accepted = select(RulesAcceptance.user_id).where(
+            RulesAcceptance.family_id == family_id,
+            RulesAcceptance.rules_version == RulesService._version(fam),
+        )
         members = (await db.execute(
             select(User.id).where(
                 User.family_id == family_id,
                 User.is_active.is_(True),
                 User.approval_status == APPROVAL_APPROVED,
+                User.id.not_in(accepted),
             )
         )).scalars().all()
         for uid in members:
