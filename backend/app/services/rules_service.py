@@ -80,6 +80,8 @@ class RulesService:
         if version != RulesService._version(fam):
             raise StaleRulesVersionException("stale_version")
         # Upsert-safe: a double tap or concurrent request never makes two rows.
+        # The key includes family_id: an invitation can move an account to
+        # another family, whose v1 is a different agreement.
         await db.execute(
             pg_insert(RulesAcceptance)
             .values(
@@ -88,7 +90,7 @@ class RulesService:
                 rules_version=version,
                 snapshot=RulesService.snapshot(fam),
             )
-            .on_conflict_do_nothing(constraint="uq_rules_acceptances_user_version")
+            .on_conflict_do_nothing(constraint="uq_rules_acceptances_family_user_version")
         )
         await db.commit()
         return await RulesService._existing(db, user, version)
@@ -96,6 +98,10 @@ class RulesService:
     @staticmethod
     async def acceptances(db: AsyncSession, family_id) -> list[dict]:
         fam = await RulesService._family(db, family_id)
+        # The rules are Early Bird's: with it off nobody is asked, so the
+        # parent card has nothing to report (it stays hidden on an empty list).
+        if not fam.early_bird_enabled:
+            return []
         version = RulesService._version(fam)
         users = (await db.execute(
             select(User).where(

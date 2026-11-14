@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.exceptions import RulesNotRecordedException
 from app.core.dependencies import get_current_user, require_parent_role
 from app.models.user import User
 from app.schemas.rules import AcceptanceRow, AcceptRequest, AcceptResponse, RulesStatus
@@ -29,6 +30,8 @@ async def accept_rules(
 ):
     # Everyone accepts only for themself: the user comes from the token.
     row = await RulesService.accept(db, current_user, body.version)
+    if row is None:  # nothing to read back: a clean 409, never a 500
+        raise RulesNotRecordedException("accept_not_recorded")
     return {"version": row.rules_version, "accepted_at": row.accepted_at}
 
 

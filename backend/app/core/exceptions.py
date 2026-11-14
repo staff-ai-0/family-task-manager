@@ -28,6 +28,12 @@ class StaleRulesVersionException(ConflictException):
     pass
 
 
+class RulesNotRecordedException(ConflictException):
+    """An accept whose row cannot be read back (HTTP 409, code
+    ``accept_not_recorded``): the client shows its generic retry copy."""
+    pass
+
+
 class EarlyBirdOffException(ConflictException):
     """Rules announced while Early Bird is off (HTTP 409, code ``early_bird_off``)."""
     pass

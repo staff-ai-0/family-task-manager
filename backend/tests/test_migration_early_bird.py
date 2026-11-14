@@ -166,12 +166,17 @@ def test_rules_acceptances_round_trip(scratch_dsn):
     _alembic(dsn, "upgrade", "head")
     assert {"id", "family_id", "user_id", "rules_version", "snapshot", "accepted_at"} <= _cols(
         dsn, "rules_acceptances")
-    fam, usr = uuid.uuid4(), uuid.uuid4()
+    fam, fam_b, usr = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     _insert(dsn, "families", id=fam, name="F")
+    _insert(dsn, "families", id=fam_b, name="B")
     _insert(dsn, "users", id=usr, email=f"{usr}@x.com", family_id=fam, role="TEEN")
     _insert(dsn, "rules_acceptances", id=uuid.uuid4(), family_id=fam, user_id=usr, rules_version=1)
     with pytest.raises(Exception):
         _insert(dsn, "rules_acceptances", id=uuid.uuid4(), family_id=fam, user_id=usr, rules_version=1)
+    # The same member, moved to another family, accepts that family's v1 too.
+    _insert(dsn, "rules_acceptances", id=uuid.uuid4(), family_id=fam_b, user_id=usr, rules_version=1)
+    assert {(r["c"]) for r in _sql(
+        dsn, "SELECT count(*) AS c FROM rules_acceptances WHERE user_id = $1", usr)} == {2}
     _alembic(dsn, "downgrade", "marked_done_by_parent")
     assert not _cols(dsn, "rules_acceptances")
     _alembic(dsn, "upgrade", "head")

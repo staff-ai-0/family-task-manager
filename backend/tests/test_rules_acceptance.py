@@ -1,4 +1,7 @@
 """Rules acceptance: per-member record + /api/rules/{status,accept,acceptances}."""
+import io
+import json
+import zipfile
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -139,6 +142,83 @@ async def test_acceptances_only_current_version(client, db_session, test_family,
     await db_session.commit()
     r = await client.get("/api/rules/acceptances", headers=await _login(client, "parent@test.com"))
     assert {x["user_id"]: x["accepted_at"] for x in r.json()}[str(test_teen_user.id)] is None
+
+
+async def test_acceptances_empty_when_early_bird_off(client, db_session, test_family,
+                                                     test_parent_user, test_teen_user):
+    # The rules belong to Early Bird: with it off the parent card has nothing
+    # to show (and its Announce button could only fail with early_bird_off).
+    h = await _login(client, "parent@test.com")
+    await _enable(db_session, test_family, on=False)
+    r = await client.get("/api/rules/acceptances", headers=h)
+    assert r.status_code == 200 and r.json() == []
+    await _enable(db_session, test_family, on=True)
+    r = await client.get("/api/rules/acceptances", headers=h)
+    assert r.status_code == 200
+    assert {x["user_id"] for x in r.json()} == {str(test_parent_user.id), str(test_teen_user.id)}
+
+
+async def test_member_moved_to_another_family_can_accept_same_version(
+    client, db_session, test_family, test_teen_user
+):
+    # An invitation can MOVE an existing account between families. Accepting
+    # v1 in family A must not block (or 500) accepting v1 in family B.
+    await _enable(db_session, test_family)
+    v = test_family.rules_version
+    h = await _login(client, "teen@test.com")
+    assert (await client.post("/api/rules/accept", json={"version": v}, headers=h)).status_code == 200
+    fam_b = Family(name="B", early_bird_enabled=True, rules_version=v,
+                   early_bird_enabled_at=datetime.now(timezone.utc) - timedelta(days=30))
+    db_session.add(fam_b)
+    await db_session.commit()
+    test_teen_user.family_id = fam_b.id
+    await db_session.commit()
+    h = await _login(client, "teen@test.com")
+    s = (await client.get("/api/rules/status", headers=h)).json()
+    assert s["required"] is True and s["accepted_at"] is None
+    r = await client.post("/api/rules/accept", json={"version": v}, headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["version"] == v and r.json()["accepted_at"] is not None
+    rows = (await db_session.execute(
+        select(RulesAcceptance).where(RulesAcceptance.user_id == test_teen_user.id))).scalars().all()
+    assert {row.family_id for row in rows} == {test_family.id, fam_b.id}
+    assert all(row.rules_version == v for row in rows)
+    s = (await client.get("/api/rules/status", headers=h)).json()
+    assert s["required"] is False
+
+
+async def test_accept_lost_row_is_clean_409(client, db_session, test_family, test_teen_user, monkeypatch):
+    # Belt and braces: if the re-read finds no row the route answers a clean
+    # 409, never a 500 on `None.rules_version`.
+    from app.services.rules_service import RulesService
+
+    await _enable(db_session, test_family)
+
+    async def nothing(*a, **k):
+        return None
+
+    monkeypatch.setattr(RulesService, "_existing", nothing)
+    r = await client.post("/api/rules/accept", json={"version": test_family.rules_version},
+                          headers=await _login(client, "teen@test.com"))
+    assert r.status_code == 409, r.text
+    assert r.json()["code"] == "accept_not_recorded"
+
+
+async def test_export_carries_acceptance_with_snapshot(client, db_session, test_family,
+                                                        test_parent_user, test_teen_user):
+    await _enable(db_session, test_family)
+    v = test_family.rules_version
+    await client.post("/api/rules/accept", json={"version": v},
+                      headers=await _login(client, "teen@test.com"))
+    r = await client.get("/api/families/export", headers=await _login(client, "parent@test.com"))
+    assert r.status_code == 200, r.text
+    rows = json.loads(zipfile.ZipFile(io.BytesIO(r.content)).read("progress/rules_acceptances.json"))
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["user_id"] == str(test_teen_user.id) and row["rules_version"] == v
+    assert set(row["snapshot"]) == {"version", "deadline", "cutoff", "grab_end", "alarm_1", "alarm_2",
+                                    "streak_cents", "chore_bonus_pct", "floor_pct", "bonus_tiers"}
+    assert row["snapshot"]["version"] == v
 
 
 async def test_acceptances_parent_only(client, db_session, test_family, test_teen_user):

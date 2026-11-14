@@ -4,7 +4,8 @@ Revision ID: rules_acceptances
 Revises: marked_done_by_parent
 Create Date: 2026-11-13
 
-Per-member acceptance of the family's chore rules, one row per rules version.
+Per-member acceptance of the family's chore rules, one row per
+(family, member, rules version).
 """
 import sqlalchemy as sa
 from alembic import op
@@ -28,7 +29,10 @@ def upgrade() -> None:
         sa.Column("snapshot", postgresql.JSONB(), nullable=False),
         sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=False,
                   server_default=sa.func.now()),
-        sa.UniqueConstraint("user_id", "rules_version", name="uq_rules_acceptances_user_version"),
+        # family_id in the key: an invitation can move an account to another
+        # family, whose v1 is a different agreement.
+        sa.UniqueConstraint("family_id", "user_id", "rules_version",
+                            name="uq_rules_acceptances_family_user_version"),
     )
     op.create_index("ix_rules_acceptances_family_id", "rules_acceptances", ["family_id"])
 

@@ -12,6 +12,7 @@ from typing import Dict, Any, Optional
 from app.core.exceptions import (
     ChoreExpiredException,
     StaleRulesVersionException,
+    RulesNotRecordedException,
     EarlyBirdOffException,
     AnnounceTooSoonException,
     ConflictException,
@@ -88,6 +89,20 @@ async def stale_rules_version_handler(
             "error": "conflict",
             "code": "stale_version",
             "message": str(exc) or "stale_version",
+            "status_code": status.HTTP_409_CONFLICT,
+        },
+    )
+
+
+async def rules_not_recorded_handler(
+    request: Request, exc: RulesNotRecordedException
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "error": "conflict",
+            "code": "accept_not_recorded",
+            "message": str(exc) or "accept_not_recorded",
             "status_code": status.HTTP_409_CONFLICT,
         },
     )
@@ -240,6 +255,7 @@ def register_exception_handlers(app):
     app.add_exception_handler(ConflictException, conflict_handler)
     app.add_exception_handler(ChoreExpiredException, chore_expired_handler)
     app.add_exception_handler(StaleRulesVersionException, stale_rules_version_handler)
+    app.add_exception_handler(RulesNotRecordedException, rules_not_recorded_handler)
     app.add_exception_handler(EarlyBirdOffException, early_bird_off_handler)
     app.add_exception_handler(AnnounceTooSoonException, announce_too_soon_handler)
     app.add_exception_handler(UnauthorizedException, unauthorized_handler)
