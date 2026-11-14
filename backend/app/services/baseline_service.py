@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
@@ -37,12 +38,16 @@ def baselines_dir() -> str:
 
 class BaselineService:
     @staticmethod
-    async def _template(db: AsyncSession, family_id: UUID, template_id: UUID) -> TaskTemplate:
-        t = (await db.execute(
-            select(TaskTemplate).where(
-                TaskTemplate.id == template_id, TaskTemplate.family_id == family_id
-            )
-        )).scalar_one_or_none()
+    async def _template(
+        db: AsyncSession, family_id: UUID, template_id: UUID, lock: bool = False
+    ) -> TaskTemplate:
+        q = select(TaskTemplate).where(
+            TaskTemplate.id == template_id, TaskTemplate.family_id == family_id
+        )
+        if lock:
+            # Serializes concurrent adds for this template (released at commit).
+            q = q.with_for_update()
+        t = (await db.execute(q)).scalar_one_or_none()
         if t is None:
             raise NotFoundException("Template not found")
         return t
@@ -66,10 +71,8 @@ class BaselineService:
         content_type: str,
         caption: Optional[str] = None,
     ) -> ChoreBaseline:
-        from fastapi import HTTPException
-
         family_id = to_uuid_required(user.family_id)
-        await BaselineService._template(db, family_id, template_id)
+        await BaselineService._template(db, family_id, template_id, lock=True)
 
         if (content_type or "").lower() not in ALLOWED_TYPES:
             raise HTTPException(status_code=415, detail=f"Unsupported type {content_type}")
@@ -86,26 +89,26 @@ class BaselineService:
 
         fname = f"{uuid.uuid4().hex}.{_EXT[real_type]}"
         dest = baselines_dir()
-        await async_fs.write_bytes(os.path.join(dest, fname), file_bytes)
-        thumb = await run_in_threadpool(make_webp_thumbnail, file_bytes)
-        if thumb:
-            await async_fs.write_bytes(os.path.join(dest, thumb_filename(fname)), thumb)
-
-        row = ChoreBaseline(
-            family_id=family_id,
-            template_id=template_id,
-            image_url=f"{URL_PREFIX}{fname}",
-            caption=(caption or None),
-            position=(max_pos + 1) if max_pos is not None else 0,
-            created_by=user.id,
-        )
-        db.add(row)
+        paths = [os.path.join(dest, fname), os.path.join(dest, thumb_filename(fname))]
         try:
+            await async_fs.write_bytes(paths[0], file_bytes)
+            thumb = await run_in_threadpool(make_webp_thumbnail, file_bytes)
+            if thumb:
+                await async_fs.write_bytes(paths[1], thumb)
+            row = ChoreBaseline(
+                family_id=family_id,
+                template_id=template_id,
+                image_url=f"{URL_PREFIX}{fname}",
+                caption=((caption or "").strip() or None),
+                position=(max_pos + 1) if max_pos is not None else 0,
+                created_by=user.id,
+            )
+            db.add(row)
             await db.commit()
-        except Exception:
+        except BaseException:
             await db.rollback()
-            await async_fs.remove_if_exists(os.path.join(dest, fname))
-            await async_fs.remove_if_exists(os.path.join(dest, thumb_filename(fname)))
+            for path in paths:
+                await async_fs.remove_if_exists(path)
             raise
         await db.refresh(row)
         return row

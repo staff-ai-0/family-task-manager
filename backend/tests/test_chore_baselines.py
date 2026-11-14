@@ -144,6 +144,7 @@ async def test_cross_family_isolation(client, db_session, test_family, test_pare
     # Own template, A's baseline id: still 404 and A's row survives.
     tb = await _template(db_session, fam_b, title="B chore")
     assert (await client.delete(f"/api/task-templates/{tb.id}/baselines/{b['id']}", headers=hb)).status_code == 404
+    assert os.path.isfile(_path(b["image_url"])) and os.path.isfile(_path(b["image_url"], thumb=True))
     assert (await client.get(b["image_url"], headers=hb)).status_code == 404
     assert (await client.get(b["image_url"], headers=auth_headers)).status_code == 200
     n = (await db_session.execute(select(func.count()).select_from(ChoreBaseline))).scalar_one()
@@ -156,6 +157,9 @@ async def test_serve_thumb_and_traversal(client, db_session, test_family, test_p
     r = await client.get(b["image_url"] + "?size=thumb", headers=auth_headers)
     assert r.status_code == 200 and r.headers["content-type"] == "image/webp"
     assert (await client.get("/uploads/chore-baselines/nope.jpg", headers=auth_headers)).status_code == 404
+    for bad in ("..%2fsecret", ".hidden", "%2e%2e%2fsecret", "..%5csecret"):
+        got = await client.get(f"/uploads/chore-baselines/{bad}", headers=auth_headers)
+        assert got.status_code in (400, 404), (bad, got.status_code)
     assert (await client.get(b["image_url"])).status_code in (401, 403)
 
 
@@ -209,3 +213,58 @@ async def test_export_registry_and_model_insert(db_session, test_family):
                                  image_url="/uploads/chore-baselines/x.jpg", position=0))
     await db_session.commit()
     assert (await db_session.execute(select(func.count()).select_from(ChoreBaseline))).scalar_one() == 1
+
+
+async def test_concurrent_adds_respect_cap(db_session, test_engine, test_family, test_parent_user):
+    """Two overlapping adds with 3 existing: exactly one wins, the other gets
+    baseline_limit (the template row lock serializes count+insert)."""
+    import asyncio
+
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    from app.core.exceptions import BaselineLimitException
+
+    t = await _template(db_session, test_family)
+    for i in range(MAX_BASELINES_PER_TEMPLATE - 1):
+        db_session.add(ChoreBaseline(family_id=test_family.id, template_id=t.id,
+                                     image_url=f"/uploads/chore-baselines/s{i}.jpg", position=i))
+    await db_session.commit()
+
+    maker = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def one():
+        async with maker() as s:
+            user = await s.get(User, test_parent_user.id)
+            return await BaselineService.add(s, user, t.id, _jpeg(), "image/jpeg", None)
+
+    res = await asyncio.gather(one(), one(), return_exceptions=True)
+    assert sum(isinstance(r, ChoreBaseline) for r in res) == 1, res
+    assert sum(isinstance(r, BaselineLimitException) for r in res) == 1, res
+    rows = (await db_session.execute(
+        select(ChoreBaseline.position).where(ChoreBaseline.template_id == t.id))).scalars().all()
+    assert len(rows) == MAX_BASELINES_PER_TEMPLATE and len(set(rows)) == len(rows)
+
+
+async def test_failed_commit_removes_written_files(db_session, test_family, test_parent_user, monkeypatch):
+    t = await _template(db_session, test_family)
+    seen = []
+    async def boom_commit():
+        raise RuntimeError("db down")
+
+    orig_write = __import__("app.core.async_fs", fromlist=["x"]).write_bytes
+
+    async def spy(path, data):
+        seen.append(path)
+        await orig_write(path, data)
+
+    monkeypatch.setattr("app.services.baseline_service.async_fs.write_bytes", spy)
+    monkeypatch.setattr(db_session, "commit", boom_commit)
+    with pytest.raises(RuntimeError):
+        await BaselineService.add(db_session, test_parent_user, t.id, _jpeg(), "image/jpeg", "  ")
+    assert len(seen) == 2 and not any(os.path.exists(p) for p in seen)
+
+
+async def test_blank_caption_becomes_null(client, db_session, test_family, test_parent_user, auth_headers):
+    t = await _template(db_session, test_family)
+    r = await _upload(client, auth_headers, t.id, caption="   ")
+    assert r.status_code == 201 and r.json()["caption"] is None
