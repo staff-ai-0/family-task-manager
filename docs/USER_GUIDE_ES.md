@@ -481,6 +481,8 @@ Una forma de premiar a los adolescentes por hacer sus tareas temprano, y de pone
 - **"Marcar hecha" por un padre**: una tarea que marcas como hecha cuenta como hecha para la semana (aunque sea después de la hora de corte), pero nunca como temprana.
 - Una calificación parcial o fallida cuenta como no hecha para la escalera y rompe el día temprano; una tarea en espera de tu revisión aparece como pendiente hasta que la califiques.
 
+**Reglas para todos.** Cuando cambian las reglas (o cuando pulsas **Enviar reglas a todos** en el inicio de padres), cada miembro recibe un aviso y una hoja con las reglas en los números de tu familia, con una casilla para aceptarlas. Cada persona acepta por sí misma, y el inicio de padres muestra quién ya aceptó. Es un acuerdo familiar, no un bloqueo: si alguien toca **Más tarde**, la app sigue funcionando y la hoja vuelve en su próxima visita.
+
 La misma pantalla muestra el estado de cada adolescente: hoy, días tempranos de la semana y la racha hacia el premio de 3 semanas. En su inicio, cada adolescente ve el porcentaje de la semana y lo que le paga. La semana en que lo activas no cuenta para los premios semanales.
 
 ---

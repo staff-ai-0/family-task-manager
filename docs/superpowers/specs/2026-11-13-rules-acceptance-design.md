@@ -1,6 +1,6 @@
 # Rules announcement + acceptance record (chore rules project 2 of 3)
 
-Status: APPROVED by the user 2026-11-13 ("just have a record they accepted, go with your plan") · builds on chore rules v2 (PR #315).
+Status: IMPLEMENTED on branch feat/rules-acceptance (pending merge)
 
 ## Intent
 Every family member is told the chore rules (cutoff, grab window, weekly ladder, early deadline, alarms, streak prize) and each one records "I understand and accept these rules; no future claims about results computed with them". The user wants **a record that they accepted** — nothing more (no hard lock-out, no dispute workflow).
@@ -22,3 +22,13 @@ Family-scoped everywhere; integer cents; no native dialogs; `hidden` attribute n
 
 ## Left to the builder
 Where the ladder percentages/early bonus % live as constants (expose them from `early_bird_rules.py` and reuse in `week_ladder` rather than copying literals, if cheap); how the Layout detects "welcome tour running" (reuse the existing suppression check used by ModuleTour).
+
+## As built — deviations
+- `accept` uses INSERT … ON CONFLICT DO NOTHING (constraint `uq_rules_acceptances_user_version`) and re-reads the row, so a double tap never errors or duplicates.
+- The parent acceptances list filters to active, approved members.
+- `stale_version`, `early_bird_off` and `announce_too_soon` carry a top-level `code` on the error response.
+- The family export gained `progress/rules_acceptances.json`.
+- An auto-announce while Early Bird is off sends nothing (announce raises `early_bird_off`, swallowed best-effort); only enabling Early Bird or a version bump while on announces.
+- `rules_update` is in `SUPERSEDING_TYPES` in `notification_service.py`.
+- The sheet's welcome-tour suppression relies on `window.__ftmTourStarted` plus a 600 ms delay.
+- Known limits: no focus trap in the sheet; two parents racing Announce can double-send; an auto-announce (forced) uses up the manual hourly allowance.
