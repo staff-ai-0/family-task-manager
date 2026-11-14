@@ -23,6 +23,7 @@ from app.core.config import settings
 from app.core.llm import RECEIPT_MODEL, get_llm_client
 from app.core.metrics import record_llm_call
 from app.core.thumbnails import downscale_for_vision
+from app.services.baseline_service import MAX_BASELINES_TO_AI
 
 # Hard ceiling on the whole review. The kid's "done" tap can wait on this
 # (bonus tasks auto-approve inline), so a slow provider must degrade to the
@@ -64,7 +65,11 @@ def _strip_local_prefix(url: str) -> Optional[str]:
         return None
     if url.startswith("/uploads/"):
         # /uploads/<rest> lives under UPLOADS_ROOT (default /app/uploads).
-        return os.path.join(settings.UPLOADS_ROOT, url[len("/uploads/"):])
+        root = os.path.realpath(settings.UPLOADS_ROOT)
+        path = os.path.realpath(os.path.join(root, url[len("/uploads/"):]))
+        if path != root and not path.startswith(root + os.sep):
+            return None  # traversal outside the uploads root
+        return path
     return None
 
 
@@ -127,7 +132,7 @@ async def validate_proof_photo(
     # Baselines (parent reference photos) go BEFORE the proof. One that fails
     # to load or decode is skipped silently.
     baseline_uris: list[str] = []
-    for burl in baseline_urls:
+    for burl in list(baseline_urls)[:MAX_BASELINES_TO_AI]:
         try:
             braw, bmedia = await _load_image_bytes(burl)
             bshrunk = await run_in_threadpool(downscale_for_vision, braw)

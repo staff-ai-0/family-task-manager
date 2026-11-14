@@ -2,6 +2,7 @@
 
 import base64
 import io
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -91,6 +92,27 @@ class TestValidatorBaselines:
         assert b > 200 and r < 60 and g < 60
         text = _text(content).lower()
         assert "reference" in text and "2" in text
+
+    async def test_validator_caps_baselines_at_three(self, uploads, llm):
+        urls = [
+            _write(uploads, f"chore-baselines/c{i}.jpg", (255, 0, 0)) for i in range(5)
+        ]
+        proof = _write(uploads, "gig-proofs/p.jpg", (0, 0, 255))
+        await validate_proof_photo(proof, "Make bed", None, baseline_urls=urls)
+        assert len(_images(_content(llm))) == 4  # 3 baselines + proof
+
+    async def test_traversal_url_is_never_read(self, uploads, llm, tmp_path_factory):
+        outside = tmp_path_factory.mktemp("outside")
+        (outside / "secret.jpg").write_bytes(_jpeg((255, 0, 0)))
+        rel = os.path.relpath(outside / "secret.jpg", uploads)
+        evil = "/uploads/" + rel
+        assert ".." in evil
+        proof = _write(uploads, "gig-proofs/p.jpg", (0, 0, 255))
+        await validate_proof_photo(proof, "Make bed", None, baseline_urls=[evil])
+        assert len(_images(_content(llm))) == 1
+        from app.services.task_proof_validator import _strip_local_prefix
+
+        assert _strip_local_prefix(evil) is None
 
     async def test_zero_baselines_same_shape_as_today(self, uploads, llm):
         proof = _write(uploads, "gig-proofs/p.jpg", (0, 0, 255))
