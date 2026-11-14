@@ -39,7 +39,7 @@ const { lang = "es" } = Astro.props;
 
 <script>
     import { showToast } from "../lib/toast";
-    import { acceptErrorMessage, acceptLabel, rulesLines, sheetCopy } from "../lib/rulesNotice";
+    import { acceptErrorMessage, acceptLabel, rulesLines, sheetCopy, shouldSkipRulesSheet } from "../lib/rulesNotice";
 
     const SNOOZE_KEY = "ftm-rules-snoozed";
 
@@ -61,8 +61,8 @@ const { lang = "es" } = Astro.props;
     async function initRules() {
         const root = document.getElementById("rules-sheet-root");
         if (!root || root.dataset.bound === "1") return;
-        // Never on the kiosk wall, never stacked over the welcome tour.
-        if (window.location.pathname.startsWith("/kiosk")) return;
+        // Never on the kiosk wall or public pages, never stacked over the welcome tour.
+        if (shouldSkipRulesSheet(window.location.pathname)) return;
         if ((window as any).__ftmTourStarted) return;
         root.dataset.bound = "1";
 

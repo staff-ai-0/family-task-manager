@@ -34,6 +34,29 @@ function pesos(cents: number): string {
     return `$${Math.trunc(n / 100)}`;
 }
 
+/** Pages where the sheet never mounts (public / unauthenticated / kiosk), even with a stale session cookie. */
+export const RULES_SHEET_SKIP_PATHS = [
+    "/kiosk",
+    "/login",
+    "/register",
+    "/accept-invitation",
+    "/forgot-password",
+    "/reset-password",
+    "/verify-email",
+    "/privacidad",
+    "/terminos",
+    "/soporte",
+    "/pricing",
+    "/tdah",
+    "/404",
+    "/500",
+] as const;
+
+export function shouldSkipRulesSheet(pathname: string): boolean {
+    if (pathname === "/") return true;
+    return RULES_SHEET_SKIP_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 export function rulesLines(rules: RulesValues, lang: Lang): string[] {
     const tiers = [...(rules.bonus_tiers ?? [])].sort((a, b) => a.early_pct - b.early_pct);
     if (L(lang) === "en") {
@@ -43,7 +66,9 @@ export function rulesLines(rules: RulesValues, lang: Lang): string[] {
             `Evening cutoff: at ${rules.cutoff} your open chores go up for grabs and do not count as done.`,
             `Up for grabs: until ${rules.grab_end}, any family member can take a chore that was left open.`,
             `Weekly pay: under ${rules.floor_pct}% of the week's chores done, no base pay; from ${rules.floor_pct}% to 99%, each completed chore pays.`,
-            `Weekly bonus: at 100% done, the bonus depends on the share finished before ${rules.deadline}. ${ladder}.`,
+            ...(tiers.length
+                ? [`Weekly bonus: at 100% done, the bonus depends on the share finished before ${rules.deadline}. ${ladder}.`]
+                : []),
             `Per-chore bonus: +${rules.chore_bonus_pct}% extra points on a chore completed before ${rules.deadline}.`,
             `Reminders: teens get a nudge at ${rules.alarm_1} and again at ${rules.alarm_2}.`,
             `Streak prize: ${pesos(rules.streak_cents)} MXN for every 3rd consecutive early week.`,
@@ -55,7 +80,9 @@ export function rulesLines(rules: RulesValues, lang: Lang): string[] {
         `Hora de corte: a las ${rules.cutoff} tus tareas abiertas quedan para tomar y no cuentan como hechas.`,
         `Para tomar: hasta las ${rules.grab_end}, cualquier miembro de la familia puede tomar una tarea que quedó abierta.`,
         `Pago semanal: con menos de ${rules.floor_pct} % de las tareas de la semana, sin pago base; de ${rules.floor_pct} a 99 %, cada tarea completada paga.`,
-        `Bono semanal: con 100 % terminado, el bono depende de cuántas se hicieron antes de las ${rules.deadline}. ${ladder}.`,
+        ...(tiers.length
+            ? [`Bono semanal: con 100 % terminado, el bono depende de cuántas se hicieron antes de las ${rules.deadline}. ${ladder}.`]
+            : []),
         `Bono por tarea: +${rules.chore_bonus_pct} % de puntos extra en una tarea completada antes de las ${rules.deadline}.`,
         `Recordatorios: los adolescentes reciben un aviso a las ${rules.alarm_1} y otro a las ${rules.alarm_2}.`,
         `Premio de racha: ${pesos(rules.streak_cents)} MXN por cada 3.ª semana madrugadora seguida.`,

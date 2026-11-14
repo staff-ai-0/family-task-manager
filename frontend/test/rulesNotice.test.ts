@@ -6,6 +6,7 @@ import {
     announceResultMessage,
     pendingNames,
     rulesLines,
+    shouldSkipRulesSheet,
     statusSummary,
 } from "../src/lib/rulesNotice";
 
@@ -26,22 +27,65 @@ const rules = {
 };
 
 describe("rulesLines", () => {
-    for (const lang of ["es", "en"] as const) {
-        it(`renders every value from the fixture (${lang})`, () => {
+    it("pins every rule line (ES)", () => {
+        const l = rulesLines(rules, "es");
+        expect(l).toContain("Hora madrugadora: termina tus tareas antes de las 10:00.");
+        expect(l).toContain("Hora de corte: a las 21:00 tus tareas abiertas quedan para tomar y no cuentan como hechas.");
+        expect(l).toContain("Para tomar: hasta las 23:00, cualquier miembro de la familia puede tomar una tarea que quedó abierta.");
+        expect(l).toContain("Pago semanal: con menos de 55 % de las tareas de la semana, sin pago base; de 55 a 99 %, cada tarea completada paga.");
+        expect(l).toContain("Bono semanal: con 100 % terminado, el bono depende de cuántas se hicieron antes de las 10:00. 70 % o más temprano: +3 %. 85 % o más temprano: +8 %.");
+        expect(l).toContain("Bono por tarea: +25 % de puntos extra en una tarea completada antes de las 10:00.");
+        expect(l).toContain("Recordatorios: los adolescentes reciben un aviso a las 09:00 y otro a las 09:45.");
+        expect(l).toContain("Premio de racha: $450 MXN por cada 3.ª semana madrugadora seguida.");
+        expect(l).toHaveLength(8);
+    });
+    it("pins every rule line (EN)", () => {
+        const l = rulesLines(rules, "en");
+        expect(l).toContain("Early deadline: finish your chores before 10:00.");
+        expect(l).toContain("Evening cutoff: at 21:00 your open chores go up for grabs and do not count as done.");
+        expect(l).toContain("Up for grabs: until 23:00, any family member can take a chore that was left open.");
+        expect(l).toContain("Weekly pay: under 55% of the week's chores done, no base pay; from 55% to 99%, each completed chore pays.");
+        expect(l).toContain("Weekly bonus: at 100% done, the bonus depends on the share finished before 10:00. 70% or more early: +3%. 85% or more early: +8%.");
+        expect(l).toContain("Per-chore bonus: +25% extra points on a chore completed before 10:00.");
+        expect(l).toContain("Reminders: teens get a nudge at 09:00 and again at 09:45.");
+        expect(l).toContain("Streak prize: $450 MXN for every 3rd consecutive early week.");
+        expect(l).toHaveLength(8);
+    });
+    it("no default leakage", () => {
+        for (const lang of ["es", "en"] as const) {
             const text = rulesLines(rules, lang).join("\n");
-            for (const v of ["10:00", "21:00", "23:00", "09:00", "09:45", "$450", "25", "55", "70", "85", "3", "8"]) {
-                expect(text).toContain(v);
+            for (const bad of ["11:00", "20:30", "$380", "undefined", "NaN"]) expect(text).not.toContain(bad);
+        }
+    });
+    it("empty or missing tiers drops the bonus line cleanly", () => {
+        for (const bt of [[], undefined as any]) {
+            for (const lang of ["es", "en"] as const) {
+                const l = rulesLines({ ...rules, bonus_tiers: bt }, lang);
+                expect(l).toHaveLength(7);
+                expect(l.join("\n")).not.toMatch(/\.\s*\./);
+                expect(l.join("\n")).not.toMatch(/Weekly bonus|Bono semanal/);
             }
-            expect(text).not.toContain("11:00");
-            expect(text).not.toContain("20:30");
-            expect(text).not.toContain("$380");
-            expect(text).not.toContain("undefined");
-        });
-    }
-    it("one line per rule, all non-empty", () => {
-        const lines = rulesLines(rules, "es");
-        expect(lines.length).toBeGreaterThanOrEqual(5);
-        lines.forEach((l) => expect(l.trim().length).toBeGreaterThan(0));
+        }
+    });
+    it("pesos: integer division, floor", () => {
+        const at = (c: number) => rulesLines({ ...rules, streak_cents: c }, "es").at(-1);
+        expect(at(38000)).toContain("$380 MXN");
+        expect(at(50000)).toContain("$500 MXN");
+        expect(at(38050)).toContain("$380 MXN"); // 38050 cents floors to $380, never $380.5
+        expect(at(38050)).not.toContain("380.5");
+    });
+});
+
+describe("shouldSkipRulesSheet", () => {
+    it("skips public, kiosk and root", () => {
+        for (const p of ["/", "/login", "/register", "/accept-invitation", "/forgot-password", "/reset-password", "/verify-email", "/privacidad", "/terminos", "/kiosk", "/kiosk/abc"]) {
+            expect(shouldSkipRulesSheet(p), p).toBe(true);
+        }
+    });
+    it("does not skip app pages", () => {
+        for (const p of ["/dashboard", "/parent", "/parent/settings/family", "/budget", "/loginx-not", "/kioskette"]) {
+            expect(shouldSkipRulesSheet(p), p).toBe(false);
+        }
     });
 });
 
