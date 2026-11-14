@@ -31,6 +31,7 @@ class NotificationType:
     DEADLINE_SOON = "deadline_soon"
     UP_FOR_GRABS = "up_for_grabs"
     CHORE_ALARM = "chore_alarm"
+    RULES_UPDATE = "rules_update"
     EARLY_BIRD_PAYOUT = "early_bird_payout"
     LATE_PENALTY_APPLIED = "late_penalty_applied"
     REWARDS_LOCKED = "rewards_locked"

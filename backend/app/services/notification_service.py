@@ -27,7 +27,7 @@ from app.models.notification import Notification, NotificationType as NT
 # The UX-D4a smart reminders (streak at risk / quest nudge) supersede too.
 SUPERSEDING_TYPES = frozenset({
     NT.TASK_DUE, NT.TASK_ASSIGNED, NT.PARENT_NUDGE, NT.STREAK_AT_RISK, NT.QUEST_NUDGE,
-    NT.DEADLINE_SOON, NT.UP_FOR_GRABS, NT.CHORE_ALARM,
+    NT.DEADLINE_SOON, NT.UP_FOR_GRABS, NT.CHORE_ALARM, NT.RULES_UPDATE,
 })
 
 # The unread badge only counts the last N days. Older unread rows stay in the
@@ -104,6 +104,11 @@ _COPY = {
         "type": NT.QUEST_NUDGE,
         "title": {"es": "🏁 Te falta 1 para tu misión de la semana", "en": "🏁 1 away from this week's quest"},
         "body": {"es": "Complétala y gana +{bonus} puntos.", "en": "Finish it for +{bonus} points."},
+    },
+    "rules_update": {
+        "type": NT.RULES_UPDATE,
+        "title": {"es": "Nuevas reglas de tareas", "en": "New chore rules"},
+        "body": {"es": "Léelas y acepta para que quede registro.", "en": "Read them and accept so it's on record."},
     },
     "chore_alarm": {
         "type": NT.CHORE_ALARM,

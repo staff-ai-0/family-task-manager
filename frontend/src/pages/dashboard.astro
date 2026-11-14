@@ -17,6 +17,7 @@ import { checkinView } from "../lib/checkin";
 import { mysteryView } from "../lib/mystery";
 import { earlyBirdView } from "../lib/earlyBird";
 import { pickDashboardRoutines } from "../lib/routines";
+import { parentHomeUrl } from "../lib/parentHub";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -36,10 +37,10 @@ if (!userOk) {
 }
 
 // Parents' home is /parent — their own chores render there as a compact deck.
-// module_off survives the hop so the "section switched off" banner still shows.
+// module_off (the "section switched off" banner) and rules (the rules sheet,
+// from the rules_update notification link) survive the hop.
 if (user.role === "parent") {
-    const moduleOff = Astro.url.searchParams.get("module_off") === "1";
-    return Astro.redirect(`/parent${moduleOff ? "?module_off=1" : ""}`);
+    return Astro.redirect(parentHomeUrl(Astro.url.searchParams));
 }
 
 // ── Kid home (TEEN + CHILD), UX-C1 ────────────────────────────────────────

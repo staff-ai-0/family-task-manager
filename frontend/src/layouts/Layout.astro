@@ -3,6 +3,7 @@ import "../styles/global.css";
 import { t } from "../lib/i18n";
 import ToastContainer from "../components/ToastContainer.astro";
 import AppDialog from "../components/ui/AppDialog.astro";
+import RulesSheet from "../components/RulesSheet.astro";
 import Head from "../components/meta/Head.astro";
 interface Props {
 	title?: string;
@@ -110,6 +111,7 @@ const hasSession = Astro.cookies.has("access_token") || Astro.cookies.has("refre
 <body class="bg-brand-cream text-brand-ink antialiased" data-ui-mode={resolvedUiMode}>
     <ToastContainer />
     <AppDialog />
+    {hasSession && <RulesSheet lang={lang === "en" ? "en" : "es"} />}
 
     <!-- Email verification prompts render per-page via VerifyEmailBanner.astro
          (dashboard) — the old global #verify-banner strip lived here and

@@ -1,0 +1,189 @@
+---
+/**
+ * Chore-rules acceptance sheet, mounted ONCE by Layout.astro (only when the
+ * request carries a session). After astro:page-load it asks
+ * GET /api/rules/status; when `required` it shows the family's rules (rendered
+ * from the values by lib/rulesNotice.ts) with an acceptance checkbox. Stands
+ * down on kiosk pages and while the welcome tour runs. "Later" snoozes for the
+ * browser session; ?rules=1 (the notification link) reopens it regardless,
+ * and is removed from the URL once read so a later reload honours the snooze.
+ */
+import { buttonClass } from "../lib/buttonClasses";
+
+interface Props {
+    lang?: "es" | "en";
+}
+const { lang = "es" } = Astro.props;
+---
+
+<div id="rules-sheet-root" data-lang={lang} hidden>
+    <div id="rules-sheet-backdrop" class="fixed inset-0 z-[55] bg-black/40"></div>
+    <div
+        id="rules-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rules-sheet-title"
+        class="fixed inset-x-0 bottom-0 z-[60] mx-auto max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-3xl border-2 border-brand-ink bg-brand-cream px-5 pt-5 pb-[max(1rem,env(safe-area-inset-bottom))] text-brand-ink shadow-[var(--shadow-card)]"
+    >
+        <h2 id="rules-sheet-title" class="font-display text-lg font-extrabold leading-tight"></h2>
+        <ul id="rules-sheet-lines" class="mt-3 list-disc space-y-2 pl-5 text-sm"></ul>
+        <label class="mt-4 flex items-start gap-3 text-sm font-semibold">
+            <input id="rules-sheet-check" type="checkbox" class="mt-1 h-5 w-5 shrink-0 accent-brand-ink" />
+            <span id="rules-sheet-check-label"></span>
+        </label>
+        <div class="mt-5 flex gap-2">
+            <button type="button" id="rules-sheet-later" class={`flex-1 ${buttonClass("secondary", "md")}`}></button>
+            <button type="button" id="rules-sheet-accept" disabled class={`flex-1 ${buttonClass("primary", "md")} disabled:cursor-not-allowed disabled:opacity-40`}></button>
+        </div>
+    </div>
+</div>
+
+<script>
+    import { showToast } from "../lib/toast";
+    import { acceptErrorMessage, acceptLabel, rulesLines, sheetCopy, shouldSkipRulesSheet, stripRulesParam } from "../lib/rulesNotice";
+
+    const SNOOZE_KEY = "ftm-rules-snoozed";
+
+    function snoozed(): boolean {
+        try {
+            return sessionStorage.getItem(SNOOZE_KEY) === "1";
+        } catch {
+            return false;
+        }
+    }
+    function snooze() {
+        try {
+            sessionStorage.setItem(SNOOZE_KEY, "1");
+        } catch {
+            /* storage unavailable: snooze only lasts until reload */
+        }
+    }
+
+    async function initRules() {
+        const root = document.getElementById("rules-sheet-root");
+        if (!root || root.dataset.bound === "1") return;
+        // Never on the kiosk wall or public pages, never stacked over the welcome tour.
+        if (shouldSkipRulesSheet(window.location.pathname)) return;
+        if ((window as any).__ftmTourStarted) return;
+        root.dataset.bound = "1";
+
+        const lang = root.dataset.lang === "en" ? "en" : "es";
+        const params = new URLSearchParams(window.location.search);
+        const forced = params.get("rules") === "1";
+        if (params.has("rules")) {
+            // Read once: left in the address bar it would reopen the sheet on
+            // every later reload, even after "Later".
+            try {
+                history.replaceState(history.state, "", stripRulesParam(window.location.href));
+            } catch {
+                /* replaceState unavailable: the flag just stays in the URL */
+            }
+        }
+        if (!forced && snoozed()) return;
+
+        const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+        const check = $<HTMLInputElement>("rules-sheet-check");
+        const acceptBtn = $<HTMLButtonElement>("rules-sheet-accept");
+        const laterBtn = $<HTMLButtonElement>("rules-sheet-later");
+        const copy = sheetCopy(lang);
+        let version = 0;
+        let previousFocus: Element | null = null;
+
+        const hide = () => {
+            root.hidden = true;
+            document.removeEventListener("keydown", onKey);
+            if (previousFocus instanceof HTMLElement) previousFocus.focus();
+        };
+        const later = () => {
+            snooze();
+            hide();
+        };
+        function onKey(e: KeyboardEvent) {
+            if (e.key === "Escape") later();
+        }
+
+        async function load(): Promise<boolean> {
+            try {
+                const res = await fetch("/api/rules/status", { credentials: "same-origin" });
+                if (!res.ok) return false; // 401/403/5xx: do nothing silently
+                const data = await res.json();
+                if (!data?.required || !data.rules) return false;
+                version = Number(data.version ?? data.rules.version) || 0;
+                $("rules-sheet-title").textContent = copy.title;
+                const ul = $("rules-sheet-lines");
+                ul.replaceChildren(
+                    ...rulesLines(data.rules, lang).map((line) => {
+                        const li = document.createElement("li");
+                        li.textContent = line;
+                        return li;
+                    }),
+                );
+                $("rules-sheet-check-label").textContent = acceptLabel(lang);
+                laterBtn.textContent = copy.later;
+                acceptBtn.textContent = copy.accept;
+                check.checked = false;
+                acceptBtn.disabled = true;
+                return true;
+            } catch {
+                return false;
+            }
+        }
+
+        if (!(await load())) return;
+        // The welcome tour may have started while we were fetching.
+        if ((window as any).__ftmTourStarted) return;
+
+        previousFocus = document.activeElement;
+        root.hidden = false;
+        check.focus();
+        document.addEventListener("keydown", onKey);
+
+        check.addEventListener("change", () => {
+            acceptBtn.disabled = !check.checked;
+        });
+        laterBtn.addEventListener("click", later);
+        $("rules-sheet-backdrop").addEventListener("click", later);
+
+        acceptBtn.addEventListener("click", async () => {
+            if (acceptBtn.disabled || !check.checked) return;
+            acceptBtn.disabled = true; // synchronous: no double submit
+            try {
+                const res = await fetch("/api/rules/accept", {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ version }),
+                });
+                if (res.ok) {
+                    hide();
+                    showToast(copy.saved, "success");
+                    return;
+                }
+                let code = "";
+                try {
+                    const body = await res.json();
+                    code = typeof body?.code === "string" ? body.code : "";
+                } catch {
+                    /* non-JSON error body */
+                }
+                showToast(acceptErrorMessage(code, lang), "error");
+                if (code === "stale_version") {
+                    // Re-render the new text; the member must tick again.
+                    if (!(await load())) hide();
+                    return;
+                }
+            } catch {
+                showToast(acceptErrorMessage("", lang), "error");
+            }
+            acceptBtn.disabled = !check.checked;
+        });
+    }
+
+    function start() {
+        // Layout fires astro:page-load on DOMContentLoaded; give the welcome
+        // tour (which sets __ftmTourStarted) a beat to claim the screen first.
+        setTimeout(initRules, 600);
+    }
+    document.addEventListener("astro:page-load", start);
+    if (document.readyState === "complete") start();
+</script>

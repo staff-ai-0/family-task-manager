@@ -22,6 +22,28 @@ class ChoreExpiredException(ConflictException):
     pass
 
 
+class StaleRulesVersionException(ConflictException):
+    """Accepting a rules version that is no longer current (HTTP 409, code
+    ``stale_version``): the client reloads the rules and asks again."""
+    pass
+
+
+class RulesNotRecordedException(ConflictException):
+    """An accept whose row cannot be read back (HTTP 409, code
+    ``accept_not_recorded``): the client shows its generic retry copy."""
+    pass
+
+
+class EarlyBirdOffException(ConflictException):
+    """Rules announced while Early Bird is off (HTTP 409, code ``early_bird_off``)."""
+    pass
+
+
+class AnnounceTooSoonException(FamilyAppException):
+    """Rules announced again within the hour (HTTP 429, code ``announce_too_soon``)."""
+    pass
+
+
 class PermissionDeniedError(FamilyAppException):
     """Raised when user doesn't have permission for an operation"""
     pass

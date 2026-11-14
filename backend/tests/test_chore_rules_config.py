@@ -61,9 +61,14 @@ async def test_update_bumps_rules_version(client, auth_headers, db_session, test
     assert r.status_code == 200 and await version() == 5
     r = await _patch(client, auth_headers, teen_alarm_1="14:00", teen_alarm_2="18:00")
     assert r.status_code == 200 and await version() == 6
-    # a non-watched field does not bump
+    # the per-chore bonus % is shown in (and snapshotted by) the rules sheet
     r = await _patch(client, auth_headers, early_bird_bonus_pct=25)
-    assert r.status_code == 200 and await version() == 6
+    assert r.status_code == 200 and await version() == 7
+    r = await _patch(client, auth_headers, early_bird_bonus_pct=25)  # unchanged
+    assert r.status_code == 200 and await version() == 7
+    # a non-watched field does not bump
+    r = await _patch(client, auth_headers, name="Renamed family")
+    assert r.status_code == 200 and await version() == 7
 
 
 async def test_validation_rejects_cutoff_before_deadline(client, auth_headers):
