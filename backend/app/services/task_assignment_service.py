@@ -2717,10 +2717,16 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             if not await family_tier_allows(db, family_id, "ai_features"):
                 return
 
+            from app.services.baseline_service import BaselineService
+
+            baseline_urls = await BaselineService.urls_for_ai(
+                db, family_id, assignment.template.id
+            )
             validation = await validate_proof_photo(
                 assignment.proof_image_url,
                 assignment.template.title,
                 assignment.template.description,
+                baseline_urls=baseline_urls,
             )
             if validation is None:
                 return
