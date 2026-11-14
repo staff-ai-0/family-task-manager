@@ -2661,6 +2661,16 @@ Jarvis pregunta como maximo una vez al dia y tres veces por semana, y nunca dos 
 
 > **Para papas:** esta funcion esta apagada hasta que la actives: una tarjeta en tu pantalla de inicio pregunta una sola vez, y el interruptor vive en **Ajustes → Familia → Jarvis**. El motivo que elige tu adolescente (y una nota corta, solo para "la app no me deja" u "otra cosa") nos ayuda a mejorar la app. Vemos los conteos de todas las familias juntas, y leemos las notas sin nombres y sin el titulo de la tarea, y solo cuando participan al menos cinco familias. Apagar el interruptor detiene tanto las preguntas como nuestro uso de las respuestas ya dadas. Estos registros se incluyen en la exportacion de datos de tu familia.
 
+
+## 25.6 Show and Tell: Fotos de Referencia para la Evidencia
+
+En las tareas que **requieren foto de evidencia** puedes mostrarle a la IA como se ve "bien hecho". Abre la tarea (**Padres -> Tareas -> editar**) y busca la seccion **Show and tell**: agrega hasta 4 fotos con una descripcion opcional (por ejemplo, "fregadero vacio y limpio"). Cuando un hijo envia su foto, la revision de la IA la compara con tus fotos de referencia. La revision sigue siendo solo una sugerencia: tu apruebas o la regresas.
+
+- **Pedir ideas** da consejos breves de la IA con base en tus fotos y las evidencias recientes. Requiere un plan con IA y el procesamiento con IA activado en los ajustes de la familia.
+- **Recordatorio mensual:** una vez al mes recibes una notificacion de "show and tell" y una tarjeta en tu inicio con las tareas cuyas fotos son viejas o faltan, para mantener las referencias al dia.
+- Las fotos son privadas de tu familia. Borra una cuando quieras y la IA deja de usarla.
+
+
 ---
 
 # Capitulo 26: Planes de Suscripcion — Referencia Rapida

@@ -1,6 +1,6 @@
 # Monthly show-and-tell + AI baseline photos (chore rules project 3 of 3)
 
-Status: APPROVED (user: "just dive in, go with your recommendations") — my calls, not asked one by one.
+Status: IMPLEMENTED on branch worktree-show-and-tell (approved: user: "just dive in, go with your recommendations") — my calls, not asked one by one.
 
 ## Intent
 Once a month a parent does a chore step by step and photographs it. Those photos are the family's own standard of "done right": the AI compares a kid's proof photo against them, and can suggest how to tighten the chore. Goal: fairer, more consistent proof review (chores are graded and paid).

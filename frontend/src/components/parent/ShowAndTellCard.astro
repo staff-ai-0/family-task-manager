@@ -1,0 +1,67 @@
+---
+/**
+ * Parent hub: chores whose reference photos are due a monthly refresh. Starts
+ * hidden; the script reveals it when GET /api/task-templates/baselines/status
+ * has due rows (403, 401, errors and empty/none-due lists keep it hidden).
+ */
+import { cardCopy } from "../../lib/showAndTell";
+
+interface Props {
+    lang: "es" | "en";
+}
+const { lang } = Astro.props;
+const c = cardCopy(lang);
+---
+
+<section data-show-tell data-lang={lang} hidden class="max-w-md mx-auto w-full mb-6" aria-labelledby="show-tell-heading">
+    <h2 id="show-tell-heading" class="text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft mb-1 px-1">{c.title}</h2>
+    <div class="rounded-2xl border border-brand-ink/10 bg-brand-cream-deep p-3 shadow-[var(--shadow-card)]">
+        <p data-show-tell-summary class="font-bold text-brand-ink"></p>
+        <ul data-show-tell-list class="mt-2 space-y-1"></ul>
+    </div>
+</section>
+
+<script>
+    import { dueSummary, statusLine, cardCopy } from "../../lib/showAndTell";
+
+    const MAX_ROWS = 5;
+
+    async function initShowTell() {
+        const root = document.querySelector<HTMLElement>("[data-show-tell]");
+        if (!root || root.dataset.bound === "1") return;
+        root.dataset.bound = "1";
+        const lang = root.dataset.lang === "en" ? "en" : "es";
+
+        let rows: any[] = [];
+        try {
+            const res = await fetch("/api/task-templates/baselines/status", { credentials: "same-origin" });
+            if (!res.ok) return;
+            const data = await res.json();
+            rows = Array.isArray(data) ? data.filter((r) => r && r.due) : [];
+        } catch {
+            return;
+        }
+        if (!rows.length) return;
+
+        root.querySelector("[data-show-tell-summary]")!.textContent = dueSummary(rows, lang);
+        const ul = root.querySelector<HTMLElement>("[data-show-tell-list]")!;
+        for (const r of rows.slice(0, MAX_ROWS)) {
+            const li = document.createElement("li");
+            const a = document.createElement("a");
+            a.href = `/parent/tasks/${encodeURIComponent(String(r.template_id))}/edit`;
+            a.className = "block rounded-xl bg-brand-cream px-3 py-2 text-sm text-brand-ink";
+            const t = document.createElement("span");
+            t.className = "font-bold";
+            t.textContent = String(r.title);
+            const s = document.createElement("span");
+            s.className = "block text-xs text-brand-ink-soft";
+            s.textContent = `${statusLine(r, lang)} · ${cardCopy(lang).cta}`;
+            a.append(t, s);
+            li.appendChild(a);
+            ul.appendChild(li);
+        }
+        root.hidden = false;
+    }
+    document.addEventListener("astro:page-load", initShowTell);
+    if (document.readyState !== "loading") initShowTell();
+</script>

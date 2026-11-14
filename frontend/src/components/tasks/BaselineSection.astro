@@ -1,0 +1,215 @@
+---
+/**
+ * Show-and-tell section on the template edit page: reference photos of "what
+ * done looks like" (max 4) used by the AI proof review. Lives OUTSIDE the
+ * page's POST form and drives its own fetches through /api/task-templates/*.
+ * Suggestions are rendered with textContent only.
+ */
+import { buttonClass } from "../../lib/buttonClasses";
+import { sectionCopy } from "../../lib/showAndTell";
+
+interface Props {
+    lang: "es" | "en";
+    templateId: string;
+    requiresProof: boolean;
+}
+const { lang, templateId, requiresProof } = Astro.props;
+const c = sectionCopy(lang);
+---
+
+<section
+    data-baselines
+    data-lang={lang}
+    data-template-id={templateId}
+    class="mt-6 rounded-2xl border border-brand-ink/10 bg-brand-cream-deep p-4 shadow-[var(--shadow-card)]"
+    aria-labelledby="baselines-heading"
+>
+    <h2 id="baselines-heading" class="text-sm font-extrabold uppercase tracking-wider text-brand-ink-soft">{c.title}</h2>
+    <p class="mt-1 text-xs text-brand-ink-soft">{c.intro}</p>
+    <p data-baselines-note class="mt-2 text-xs font-bold text-brand-ink" hidden={requiresProof}>{c.needsProof}</p>
+
+    <p data-baselines-count class="mt-3 text-xs font-bold text-brand-ink"></p>
+    <p data-baselines-empty class="mt-2 text-sm text-brand-ink-soft">{c.empty}</p>
+    <ul data-baselines-list class="mt-2 grid grid-cols-2 gap-3"></ul>
+
+    <div class="mt-3 space-y-2">
+        <input
+            type="text"
+            data-baselines-caption
+            maxlength="120"
+            placeholder={c.caption}
+            aria-label={c.caption}
+            class="w-full rounded-xl border border-brand-ink/10 bg-brand-cream px-3 py-2 text-sm text-brand-ink"
+        />
+        <input type="file" data-baselines-file accept="image/jpeg,image/png,image/webp" class="sr-only" tabindex="-1" aria-hidden="true" />
+        <button type="button" data-baselines-add class={`w-full ${buttonClass("secondary", "sm")} disabled:cursor-not-allowed disabled:opacity-50`}>{c.add}</button>
+    </div>
+
+    <div class="mt-4 border-t border-brand-ink/10 pt-3">
+        <button type="button" data-baselines-ideas class={`w-full ${buttonClass("secondary", "sm")} disabled:cursor-not-allowed disabled:opacity-50`}>{c.ideas}</button>
+        <p class="mt-1 text-xs text-brand-ink-soft">{c.ideasHint}</p>
+        <ul data-baselines-suggestions class="mt-2 list-disc space-y-1 ps-5 text-sm text-brand-ink" hidden></ul>
+    </div>
+</section>
+
+<script>
+    import { showToast } from "../../lib/toast";
+    import { confirmSheet } from "../../lib/dialogs";
+    import {
+        BASELINE_MAX,
+        baselineCountLabel,
+        cleanSuggestions,
+        errorMessage,
+        sectionCopy,
+    } from "../../lib/showAndTell";
+
+    async function errorCode(res: Response): Promise<string | number> {
+        try {
+            const body = await res.json();
+            const d = body?.detail;
+            const code = typeof d === "object" && d ? d.error ?? d.code : body?.code;
+            if (typeof code === "string" && code) return code;
+        } catch {
+            /* non-JSON body */
+        }
+        return res.status;
+    }
+
+    function initBaselines() {
+        const root = document.querySelector<HTMLElement>("[data-baselines]");
+        if (!root || root.dataset.bound === "1") return;
+        root.dataset.bound = "1";
+        const lang = root.dataset.lang === "en" ? "en" : "es";
+        const tid = root.dataset.templateId!;
+        const c = sectionCopy(lang);
+        const base = `/api/task-templates/${tid}/baselines`;
+
+        const list = root.querySelector<HTMLElement>("[data-baselines-list]")!;
+        const countEl = root.querySelector<HTMLElement>("[data-baselines-count]")!;
+        const emptyEl = root.querySelector<HTMLElement>("[data-baselines-empty]")!;
+        const fileEl = root.querySelector<HTMLInputElement>("[data-baselines-file]")!;
+        const captionEl = root.querySelector<HTMLInputElement>("[data-baselines-caption]")!;
+        const addBtn = root.querySelector<HTMLButtonElement>("[data-baselines-add]")!;
+        const ideasBtn = root.querySelector<HTMLButtonElement>("[data-baselines-ideas]")!;
+        const sugEl = root.querySelector<HTMLElement>("[data-baselines-suggestions]")!;
+
+        function render(rows: any[]) {
+            list.replaceChildren();
+            for (const r of rows) {
+                const li = document.createElement("li");
+                li.className = "rounded-xl bg-brand-cream p-2";
+                const img = document.createElement("img");
+                img.src = `${String(r.image_url)}?size=thumb`;
+                img.alt = r.caption ? String(r.caption) : c.title;
+                img.loading = "lazy";
+                img.className = "w-full aspect-square object-cover rounded-lg";
+                li.appendChild(img);
+                if (r.caption) {
+                    const p = document.createElement("p");
+                    p.className = "mt-1 text-xs text-brand-ink";
+                    p.textContent = String(r.caption);
+                    li.appendChild(p);
+                }
+                const del = document.createElement("button");
+                del.type = "button";
+                del.className = "mt-1 text-xs font-bold text-brand-coral-text underline";
+                del.textContent = c.remove;
+                del.addEventListener("click", async () => {
+                    const ok = await confirmSheet({
+                        title: c.removeTitle,
+                        body: c.removeBody,
+                        confirmLabel: c.remove,
+                        cancelLabel: c.cancel,
+                        danger: true,
+                    });
+                    if (!ok) return;
+                    try {
+                        const res = await fetch(`${base}/${r.id}`, { method: "DELETE", credentials: "same-origin" });
+                        if (!res.ok) {
+                            showToast(errorMessage(await errorCode(res), lang), "error");
+                            return;
+                        }
+                        showToast(c.removed, "success");
+                        await load();
+                    } catch {
+                        showToast(errorMessage("", lang), "error");
+                    }
+                });
+                li.appendChild(del);
+                list.appendChild(li);
+            }
+            countEl.textContent = baselineCountLabel(rows.length, BASELINE_MAX, lang);
+            emptyEl.hidden = rows.length > 0;
+            addBtn.disabled = rows.length >= BASELINE_MAX;
+        }
+
+        async function load() {
+            try {
+                const res = await fetch(base, { credentials: "same-origin" });
+                if (!res.ok) return;
+                const data = await res.json();
+                render(Array.isArray(data) ? data : []);
+            } catch {
+                /* leave the empty state */
+            }
+        }
+
+        // input.click() must stay synchronous with the tap (iOS drops pickers opened after an await).
+        addBtn.addEventListener("click", () => fileEl.click());
+
+        fileEl.addEventListener("change", async () => {
+            const file = fileEl.files?.[0];
+            if (!file) return;
+            addBtn.disabled = true;
+            try {
+                const fd = new FormData();
+                fd.append("file", file);
+                const cap = captionEl.value.trim();
+                if (cap) fd.append("caption", cap);
+                const res = await fetch(base, { method: "POST", body: fd, credentials: "same-origin" });
+                if (res.ok) {
+                    captionEl.value = "";
+                    showToast(c.uploaded, "success");
+                } else {
+                    showToast(errorMessage(await errorCode(res), lang), "error");
+                }
+            } catch {
+                showToast(errorMessage("", lang), "error");
+            }
+            fileEl.value = "";
+            await load();
+        });
+
+        ideasBtn.addEventListener("click", async () => {
+            if (ideasBtn.disabled) return;
+            ideasBtn.disabled = true; // synchronous: no double submit
+            try {
+                const res = await fetch(`${base}/recommendations`, { method: "POST", credentials: "same-origin" });
+                if (!res.ok) {
+                    showToast(errorMessage(await errorCode(res), lang), "error", 6000);
+                } else {
+                    const body = await res.json().catch(() => ({}));
+                    const tips = cleanSuggestions(body?.suggestions);
+                    if (body?.ai_failed || !tips.length) {
+                        showToast(errorMessage("ai_failed", lang), "error", 6000);
+                    } else {
+                        sugEl.replaceChildren();
+                        for (const tip of tips) {
+                            const li = document.createElement("li");
+                            li.textContent = tip;
+                            sugEl.appendChild(li);
+                        }
+                        sugEl.hidden = false;
+                    }
+                }
+            } catch {
+                showToast(errorMessage("", lang), "error");
+            }
+            ideasBtn.disabled = false;
+        });
+
+        load();
+    }
+    document.addEventListener("astro:page-load", initBaselines);
+    if (document.readyState !== "loading") initBaselines();
+</script>

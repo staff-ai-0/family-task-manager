@@ -2840,6 +2840,15 @@ Jarvis asks at most once a day and three times a week, and never twice about the
 
 > **For parents:** check-ins are off until you turn them on — a card on your home screen asks once, and the switch lives in **Settings → Family → Jarvis**. The reason your teen picks (and a short note, only for "the app won't let me" or "something else") helps us improve the app. We see counts for all families together, and read notes without names and without the chore's title — and only once at least five families take part. Turning the switch off stops both the questions and our use of the answers already given. These records are included in your family's data export.
 
+## 25.6 Show and Tell: Reference Photos for Photo Proof
+
+For chores that **require photo proof**, you can show the AI what "done" looks like. Open the chore (**Parent -> Tasks -> edit**) and find the **Show and tell** section: add up to 4 photos with an optional caption (for example, "sink empty and wiped"). When a kid sends a proof photo, the AI review compares it against your reference photos. The review is still advice only: you approve or send back.
+
+- **Ask for ideas** gives short AI tips based on your photos and recent proofs. It needs a plan with AI and AI processing turned on in family settings.
+- **Monthly nudge:** about once a month you get a "show and tell" notification and a card on your home screen listing chores whose photos are old or missing, so the references stay current.
+- Photos are private to your family. Delete one any time and the AI stops using it.
+
+
 ---
 
 # Chapter 26: Subscription Plans — Quick Reference
