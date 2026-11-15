@@ -352,3 +352,20 @@ for the GCP VM (`sudo docker compose`, `/etc/systemd/system/`). Kept for
 rollback reference only — do not install them on 10.1.0.91. If ever used
 again, run the script with
 `COMPOSE_FILE=docker-compose.gcp.yml COMPOSE_CMD="sudo docker compose" SKIP_UPLOADS=1`.
+
+## Stack unit: tunnel boot race (2026-11-15)
+
+`family-task-manager.service` runs `compose up -d` once at boot. After an unclean
+reboot cloudflared can start before the host resolver works, fail its edge SRV lookup
+and exit 0; nothing retried it, so both hostnames returned 530 with a healthy backend.
+The unit now waits for DNS (`ExecStartPre`, max ~2 min, never fatal) and runs
+`scripts/ensure-tunnel-onprem.sh` (`ExecStartPost`), which starts the tunnel again until
+it is healthy (default 10 min, never fails the unit).
+
+The script ships with the next `deploy-onprem.sh`. The unit file lives outside the repo
+checkout, so re-install it once on 10.1.0.91 (as jc, no sudo):
+
+```bash
+cp ~/family-task-manager/scripts/systemd/family-task-manager.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+```
