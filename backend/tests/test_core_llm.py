@@ -111,6 +111,7 @@ class TestOneHomeForTheClient:
             "services/task_proof_validator.py",
             "services/budget/category_ai_service.py",
             "services/budget/receipt_scanner_service.py",
+            "services/baseline_advisor.py",
         ]
         for rel in expected:
             source = (APP_ROOT / rel).read_text()

@@ -1,0 +1,93 @@
+"""Chore baseline photo endpoints (parent only). HTTP only; logic in BaselineService.
+
+Mounted at /api/task-templates BEFORE the task_templates router so the static
+``/baselines/status`` path can never be read as a ``/{template_id}``."""
+from typing import List, Optional
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.core.dependencies import require_parent_role
+from app.core.premium import family_tier_allows, require_feature
+from app.core.rate_limiter import AI_LIMIT, limiter
+from app.core.type_utils import to_uuid_required
+from app.core.upload_validation import MAX_PROOF_BYTES, read_upload_capped
+from app.models.user import User
+from app.schemas.baseline import BaselineOut, BaselineStatusRow, RecommendationsOut
+from app.services import baseline_advisor
+from app.services.baseline_service import BaselineService
+from app.services.family_service import FamilyService
+
+router = APIRouter()
+
+
+@router.get("/baselines/status", response_model=List[BaselineStatusRow])
+async def baselines_status(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    family_id = to_uuid_required(current_user.family_id)
+    # Baselines only matter to the AI review, so the hub card (and its nudge)
+    # stays empty for a family without the AI consent or a plan with AI.
+    if not await FamilyService.has_ai_processing_consent(db, family_id):
+        return []
+    if not await family_tier_allows(db, family_id, "ai_features"):
+        return []
+    return await BaselineService.status(db, family_id)
+
+
+@router.get("/{template_id}/baselines", response_model=List[BaselineOut])
+async def list_baselines(
+    template_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    return await BaselineService.list(db, to_uuid_required(current_user.family_id), template_id)
+
+
+@router.post("/{template_id}/baselines", response_model=BaselineOut, status_code=status.HTTP_201_CREATED)
+async def upload_baseline(
+    template_id: UUID,
+    file: UploadFile = File(..., description="Baseline image (JPEG, PNG, WebP). Max 15MB."),
+    caption: Optional[str] = Form(None, max_length=120),
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    body = await read_upload_capped(file, MAX_PROOF_BYTES)
+    return await BaselineService.add(
+        db, current_user, template_id, body, file.content_type or "", caption
+    )
+
+
+@router.delete("/{template_id}/baselines/{baseline_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_baseline(
+    template_id: UUID,
+    baseline_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    await BaselineService.delete(db, to_uuid_required(current_user.family_id), template_id, baseline_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{template_id}/baselines/recommendations", response_model=RecommendationsOut)
+@limiter.limit(AI_LIMIT)
+async def baseline_recommendations(
+    request: Request,
+    template_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """AI tips from the baselines + recent proofs. Stores nothing; an LLM
+    failure is HTTP 200 with ``ai_failed`` so the UI can say so."""
+    # Plan gate first: this burns LLM tokens.
+    await require_feature("ai_features", db, current_user)
+    family_id = to_uuid_required(current_user.family_id)
+    if not await FamilyService.has_ai_processing_consent(db, family_id):
+        raise HTTPException(status_code=403, detail={"error": "ai_consent_required"})
+    await BaselineService._template(db, family_id, template_id)  # 404 for another family's id
+    return await baseline_advisor.suggest(
+        db, family_id, template_id, current_user.preferred_lang or "es"
+    )

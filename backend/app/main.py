@@ -15,7 +15,7 @@ from app.core.request_context import RequestIDLogFilter, RequestIDMiddleware
 from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, cash, invitations, subscriptions, coupons, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm, bank, family_cup, referrals, routines
 from app.api.routes.budget import router as budget_router
 from app.api.routes.gigs import router as gigs_router
-from app.api.routes import early_bird, oversight, onboarding, progress, rules
+from app.api.routes import early_bird, oversight, onboarding, progress, rules, baselines
 from app.jobs.subscription_sweep import run_sweep
 from app.services.task_assignment_service import TaskAssignmentService
 from app.services.consequence_service import ConsequenceService
@@ -183,6 +183,18 @@ def _register_cron_jobs(scheduler: AsyncIOScheduler) -> None:
                     logger.info("Smart reminder sweep sent %d reminder(s)", n)
             except Exception:
                 logger.exception("Smart reminder sweep failed")
+                # Shared session: clear a failed transaction so it cannot
+                # poison the nudge below.
+                await session.rollback()
+            # Own block: a failure here never blocks the evening sweep above,
+            # nor the other way round. Idempotent per family per local month.
+            try:
+                from app.services.ping_service import PingService
+                n = await PingService.run_monthly_show_and_tell(session)
+                if n:
+                    logger.info("Show-and-tell nudge sent %d notification(s)", n)
+            except Exception:
+                logger.exception("Show-and-tell nudge failed")
 
     async def _early_bird_sweep():
         # Early Bird: deadline reminders (-60/-30 min) and up-for-grabs pushes.
@@ -514,6 +526,7 @@ import os
 try:
     os.makedirs(os.path.join(settings.UPLOADS_ROOT, "gig-proofs"), exist_ok=True)
     os.makedirs(os.path.join(settings.UPLOADS_ROOT, "receipts"), exist_ok=True)
+    os.makedirs(os.path.join(settings.UPLOADS_ROOT, "chore-baselines"), exist_ok=True)
 except OSError:
     # Non-container environments (e.g. running the test suite on the host)
     # have no writable /app; the uploads routes are container-only anyway.
@@ -527,6 +540,8 @@ app.include_router(oauth.router, prefix="/api/oauth", tags=["OAuth"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(onboarding.router, prefix="/api/families/onboarding", tags=["Onboarding"])
 app.include_router(families.router, prefix="/api/families", tags=["Families"])
+# Baselines first: static /baselines/status must win over any /{template_id}.
+app.include_router(baselines.router, prefix="/api/task-templates", tags=["Chore Baselines"])
 app.include_router(task_templates.router, prefix="/api/task-templates", tags=["Task Templates"])
 app.include_router(task_assignments.router, prefix="/api/task-assignments", tags=["Task Assignments"])
 app.include_router(rewards.router, prefix="/api/rewards", tags=["Rewards"])

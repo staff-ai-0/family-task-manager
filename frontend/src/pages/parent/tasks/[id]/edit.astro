@@ -5,6 +5,7 @@ import { isFreePlan } from "../../../../lib/plan";
 import { t } from "../../../../lib/i18n";
 import { buttonClass } from "../../../../lib/buttonClasses";
 import EveningChoreToggle from "../../../../components/tasks/EveningChoreToggle.astro";
+import BaselineSection from "../../../../components/tasks/BaselineSection.astro";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -502,6 +503,9 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                     {t(lang, "pt_save")}
                 </button>
             </form>
+            {!tmpl.is_bonus && (
+                <BaselineSection lang={lang as "en" | "es"} templateId={String(id)} requiresProof={!!tmpl.requires_proof} aiLocked={aiLocked} />
+            )}
 </PageLayout>
 
 <script>

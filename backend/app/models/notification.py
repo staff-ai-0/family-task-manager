@@ -32,6 +32,8 @@ class NotificationType:
     UP_FOR_GRABS = "up_for_grabs"
     CHORE_ALARM = "chore_alarm"
     RULES_UPDATE = "rules_update"
+    # Monthly show-and-tell nudge to parents (the row is the once-a-month send record).
+    SHOW_AND_TELL = "show_and_tell"
     EARLY_BIRD_PAYOUT = "early_bird_payout"
     LATE_PENALTY_APPLIED = "late_penalty_applied"
     REWARDS_LOCKED = "rewards_locked"

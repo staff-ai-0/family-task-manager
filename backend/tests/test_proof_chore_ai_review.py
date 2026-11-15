@@ -87,7 +87,7 @@ def spy(monkeypatch):
     calls: list = []
     result = {"value": ProofValidation(score=0.9, explanation="Cama hecha")}
 
-    async def fake(url, title, description=None):
+    async def fake(url, title, description=None, baseline_urls=()):
         calls.append((url, title))
         return result["value"]
 

@@ -618,3 +618,13 @@ async def test_scan_payout_receipts_free_403(client: AsyncClient, auth_headers):
         headers=auth_headers,
     )
     _assert_upgrade_required(r)
+
+
+@pytest.mark.asyncio
+async def test_baseline_recommendations_free_403(client: AsyncClient, auth_headers):
+    from uuid import uuid4
+
+    r = await client.post(
+        f"/api/task-templates/{uuid4()}/baselines/recommendations", headers=auth_headers
+    )
+    _assert_upgrade_required(r)

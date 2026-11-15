@@ -6,9 +6,14 @@ const page = readFileSync(fileURLToPath(new URL("../src/pages/privacidad.astro",
 
 describe("privacy notice — teen check-ins", () => {
     it("is a new version", () => {
-        expect(page).toContain('version: "v2 — 1 de octubre de 2026"');
-        expect(page).toContain('version: "v2 — October 1, 2026"');
+        expect(page).toContain('version: "v3 — 13 de noviembre de 2026"');
+        expect(page).toContain('version: "v3 — November 13, 2026"');
         expect(page).not.toContain("v1 — ");
+        expect(page).not.toContain("v2 — ");
+        expect(page).toContain("Reference photos that parents may upload");
+        expect(page).toContain("Fotografías de referencia que las madres y padres");
+        expect(page).toContain("recent proof photos are sent to the AI provider");
+        expect(page).toContain("fotos de evidencia recientes");
     });
     it("says what is stored, who sees it and how to turn it off, in both languages", () => {
         expect(page).toContain("Acompañamiento de Jarvis para adolescentes");

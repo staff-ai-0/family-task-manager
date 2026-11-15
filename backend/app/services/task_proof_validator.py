@@ -13,7 +13,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Sequence
 
 import httpx
 from fastapi.concurrency import run_in_threadpool
@@ -23,6 +23,7 @@ from app.core.config import settings
 from app.core.llm import RECEIPT_MODEL, get_llm_client
 from app.core.metrics import record_llm_call
 from app.core.thumbnails import downscale_for_vision
+from app.services.baseline_service import MAX_BASELINES_TO_AI
 
 # Hard ceiling on the whole review. The kid's "done" tap can wait on this
 # (bonus tasks auto-approve inline), so a slow provider must degrade to the
@@ -47,6 +48,11 @@ Look at the image and answer in JSON only (no markdown):
 Be lenient on framing and lighting — kids take messy photos. Be strict on relevance — a photo of an empty room when the task is "make bed" should score very low. A blank or off-topic photo (selfie, meme, random object) should score below 0.2."""
 
 
+BASELINE_PROMPT_ADDENDUM = """
+
+REFERENCE PHOTOS: the first {n} image(s) are the family's reference for this task done properly. The LAST image is the kid's proof photo. Judge the LAST image against the reference photos: does it show the same task done to a similar standard? Be lenient on camera angle and lighting."""
+
+
 @dataclass
 class ProofValidation:
     score: float
@@ -58,7 +64,12 @@ def _strip_local_prefix(url: str) -> Optional[str]:
     if not url:
         return None
     if url.startswith("/uploads/"):
-        return os.path.join("/app", url.lstrip("/"))
+        # /uploads/<rest> lives under UPLOADS_ROOT (default /app/uploads).
+        root = os.path.realpath(settings.UPLOADS_ROOT)
+        path = os.path.realpath(os.path.join(root, url[len("/uploads/"):]))
+        if path != root and not path.startswith(root + os.sep):
+            return None  # traversal outside the uploads root
+        return path
     return None
 
 
@@ -91,6 +102,7 @@ async def validate_proof_photo(
     proof_image_url: str,
     task_title: str,
     task_description: Optional[str] = None,
+    baseline_urls: Sequence[str] = (),
 ) -> Optional[ProofValidation]:
     """
     Returns a ProofValidation with score in [0.0, 1.0]. Returns None when
@@ -117,6 +129,25 @@ async def validate_proof_photo(
 
     client = get_llm_client()
 
+    # Baselines (parent reference photos) go BEFORE the proof. One that fails
+    # to load or decode is skipped silently.
+    baseline_uris: list[str] = []
+    for burl in list(baseline_urls)[:MAX_BASELINES_TO_AI]:
+        try:
+            braw, bmedia = await _load_image_bytes(burl)
+            bshrunk = await run_in_threadpool(downscale_for_vision, braw)
+            if bshrunk is None:
+                continue
+            braw, bmedia = bshrunk
+            baseline_uris.append(
+                f"data:{bmedia};base64,"
+                + base64.standard_b64encode(braw).decode("utf-8")
+            )
+        except Exception:
+            continue
+    if baseline_uris:
+        prompt += BASELINE_PROMPT_ADDENDUM.format(n=len(baseline_uris))
+
     # Shrink before base64: a raw phone photo is 4-11MB and made this call slow.
     shrunk = await run_in_threadpool(downscale_for_vision, image_bytes)
     if shrunk is not None:
@@ -138,6 +169,10 @@ async def validate_proof_photo(
                         {
                             "role": "user",
                             "content": [
+                                *(
+                                    {"type": "image_url", "image_url": {"url": u}}
+                                    for u in baseline_uris
+                                ),
                                 {"type": "image_url", "image_url": {"url": data_uri}},
                                 {"type": "text", "text": prompt},
                             ],

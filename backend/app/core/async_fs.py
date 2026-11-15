@@ -47,6 +47,13 @@ def _write_bytes(path: str, data: bytes) -> None:
         fh.write(data)
 
 
+def _remove_if_exists(path: str) -> None:
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
+
+
 # ── async wrappers ───────────────────────────────────────────────────────
 
 async def read_bytes_or_none(path: str) -> bytes | None:
@@ -73,3 +80,8 @@ async def exists(path: str) -> bool:
 
 async def is_file(path: str) -> bool:
     return await run_in_threadpool(os.path.isfile, path)
+
+
+async def remove_if_exists(path: str) -> None:
+    """Delete a file; absence is not an error."""
+    await run_in_threadpool(_remove_if_exists, path)

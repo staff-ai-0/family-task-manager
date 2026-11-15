@@ -47,6 +47,7 @@ Family Task Manager's objective is to help families build real habits of respons
    - [2.3 Task Templates (Parents)](#23-task-templates-parents)
    - [2.4 Weekly Assignment (Shuffle)](#24-weekly-assignment-shuffle)
    - [2.5 Assignment Calendar](#25-assignment-calendar)
+   - [2.6 Show and Tell: Reference Photos for Photo Proof](#26-show-and-tell-reference-photos-for-photo-proof)
 3. [Chapter 3: Rewards and Consequences](#chapter-3-rewards-and-consequences)
    - [3.1 Rewards Store](#31-rewards-store)
    - [3.2 Managing Rewards (Parents)](#32-managing-rewards-parents)
@@ -535,6 +536,16 @@ Each task on the calendar shows its status with a color indicator:
 | **Cancelled** | It was cancelled by a parent |
 
 > **Tip:** If a member has too many tasks in a week, adjust the templates or run a new shuffle.
+
+## 2.6 Show and Tell: Reference Photos for Photo Proof
+
+For chores that **require photo proof**, you can show the AI what "done" looks like. Open the chore (**Parent → Tasks → edit**) and find the **Show and tell** section: add up to 4 photos, each with an optional caption for your family (for example, "sink empty and wiped"; the AI does not read captions, it only looks at the photos). When a kid sends a proof photo, the AI review compares it against your reference photos. The review is still advice only: you approve or send back.
+
+> **What you need:** the AI review and **Ask for ideas** work only on a plan with AI **and** with AI processing turned on in **Settings → Family**. Without them you can still keep the photos for your family, but the AI will not use them, and the home-screen reminder card stays hidden. Bonus tasks do not use reference photos.
+
+- **Ask for ideas** gives short AI tips based on your photos and recent proofs.
+- **Monthly nudge:** about once a month, when your family has the plan and AI processing, you get a "show and tell" notification and a card on your home screen listing chores whose photos are old or missing, so the references stay current. Tap **Not now** on the card to hide it for the rest of the month.
+- Photos are private to your family. Delete one any time and the AI stops using it.
 
 ---
 

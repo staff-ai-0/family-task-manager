@@ -19,6 +19,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.thumbnails import thumb_filename
 from app.models import User
+from app.models.chore_baseline import ChoreBaseline
 from app.models.gig import GigClaim
 from app.models.task_assignment import TaskAssignment
 
@@ -26,6 +27,7 @@ router = APIRouter()
 
 UPLOADS_ROOT = settings.UPLOADS_ROOT
 GIG_PROOFS_DIR = os.path.join(UPLOADS_ROOT, "gig-proofs")
+BASELINES_DIR = os.path.join(UPLOADS_ROOT, "chore-baselines")
 
 # UUID-named files are content-immutable — cache them for a year. Kept `private`
 # because the bytes are family-scoped behind auth (must not land in shared caches).
@@ -119,3 +121,38 @@ async def serve_gig_proof(
             "X-Content-Type-Options": "nosniff",
         },
     )
+
+
+@router.get("/uploads/chore-baselines/{filename}")
+async def serve_chore_baseline(
+    filename: str,
+    size: Optional[str] = Query(None, description="Pass `thumb` for the ~200px WebP thumbnail."),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Serve a chore baseline photo, only to the family whose row owns it."""
+    filename = _safe_filename(filename)
+    url = f"/uploads/chore-baselines/{filename}"
+    owned = (
+        await db.execute(
+            select(ChoreBaseline.id)
+            .where(
+                ChoreBaseline.image_url == url,
+                ChoreBaseline.family_id == current_user.family_id,
+            )
+            .limit(1)
+        )
+    ).first()
+    if owned is None:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    headers = {"Cache-Control": _IMMUTABLE_CACHE, "X-Content-Type-Options": "nosniff"}
+    if size == "thumb":
+        thumb_path = os.path.join(BASELINES_DIR, thumb_filename(filename))
+        if await async_fs.is_file(thumb_path):
+            return FileResponse(thumb_path, media_type="image/webp", headers=headers)
+
+    path = os.path.join(BASELINES_DIR, filename)
+    if not await async_fs.is_file(path):
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(path, headers=headers)
