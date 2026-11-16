@@ -141,6 +141,37 @@ class TokenResponse(BaseModel):
     switched: bool = False
 
 
+# Profile switcher (UX-E4)
+class ProfileSwitchRequest(BaseModel):
+    user_id: UUID
+    pin: str = Field(..., pattern=r"^\d{4}$")
+
+
+class ProfileReturnRequest(BaseModel):
+    password: str
+
+
+class ProfileEntry(BaseModel):
+    id: UUID
+    name: str
+    role: str
+    color: str
+    has_pin: bool
+
+
+class ProfileListResponse(BaseModel):
+    profiles: List[ProfileEntry]
+    home_refresh_token: str
+
+
+class ProfileSwitchResponse(TokenResponse):
+    home_refresh_token: str
+
+
+class ProfileReturnResponse(TokenResponse):
+    pass
+
+
 # Email / password-reset schemas
 class ForgotPasswordRequest(BaseModel):
     """Request to send a password reset email"""

@@ -51,6 +51,14 @@ def _fail_key(device_id, user_id) -> str:
     return f"kiosk_pin_fails:{device_id}:{user_id}"
 
 
+def _switch_pair_key(home_user_id, member_id) -> str:
+    return f"switch_pin_fails:pair:{home_user_id}:{member_id}"
+
+
+def _switch_member_key(member_id) -> str:
+    return f"switch_pin_fails:member:{member_id}"
+
+
 async def _redis():
     import redis.asyncio as aioredis
 
@@ -174,5 +182,47 @@ class MemberPrefsService:
         r = await _redis()
         try:
             await r.delete(_fail_key(device_id, user_id))
+        finally:
+            await r.aclose()
+
+    # ── Profile-switch PIN throttle (UX-E4) ─────────────────────────────
+    # Two counters: (home parent, member) and member-wide. The member-wide
+    # one stops an attacker from dodging the lock by rotating home sessions.
+
+    @staticmethod
+    async def switch_failures(home_user_id, member_id) -> int:
+        r = await _redis()
+        try:
+            pair = await r.get(_switch_pair_key(home_user_id, member_id))
+            member = await r.get(_switch_member_key(member_id))
+        finally:
+            await r.aclose()
+        counts = []
+        for val in (pair, member):
+            try:
+                counts.append(int(val or 0))
+            except (TypeError, ValueError):
+                counts.append(0)
+        return max(counts)
+
+    @staticmethod
+    async def record_switch_failure(home_user_id, member_id) -> None:
+        r = await _redis()
+        try:
+            for key in (
+                _switch_pair_key(home_user_id, member_id),
+                _switch_member_key(member_id),
+            ):
+                await r.incr(key)
+                await r.expire(key, PIN_FAILURE_WINDOW_SECONDS)
+        finally:
+            await r.aclose()
+
+    @staticmethod
+    async def clear_switch_failures(home_user_id, member_id) -> None:
+        """Clears only the pair key; the member-wide counter self-expires."""
+        r = await _redis()
+        try:
+            await r.delete(_switch_pair_key(home_user_id, member_id))
         finally:
             await r.aclose()
