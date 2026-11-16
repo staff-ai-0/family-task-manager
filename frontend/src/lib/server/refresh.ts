@@ -1,4 +1,4 @@
-import { authCookies } from "../auth-cookies";
+import { authCookies, switchedMarker } from "../auth-cookies";
 
 const API = () => process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
 
@@ -18,11 +18,12 @@ export async function refreshAccessToken(refreshToken: string): Promise<RefreshR
     });
     if (!resp.ok) return { ok: false };
     const body = await resp.json();
-    return {
-        ok: true,
-        accessToken: body.access_token,
-        setCookies: authCookies(body.access_token, body.refresh_token, !import.meta.env.DEV),
-    };
+    const secure = !import.meta.env.DEV;
+    const switched = body.switched === true;
+    const setCookies = authCookies(body.access_token, body.refresh_token, secure, switched);
+    // Keep the UX marker in step with the sliding 2 h session.
+    if (switched) setCookies.push(switchedMarker(secure));
+    return { ok: true, accessToken: body.access_token, setCookies };
 }
 
 /** Read a cookie value from a raw Cookie header. */

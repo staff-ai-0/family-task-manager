@@ -4,6 +4,7 @@ import { apiFetch } from "../../../lib/api";
 import { buttonClass } from "../../../lib/buttonClasses";
 import { centsToPesos, daysFromFamily, ladderExplainer, teenTodayLabel } from "../../../lib/earlyBirdSettings";
 import { runProgress } from "../../../lib/earlyBird";
+import { profileCopy } from "../../../lib/profileSwitch";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -158,6 +159,7 @@ const L = labels ?? {
     dz_error: "Could not delete. Try again.",
 };
 const aiConsent: boolean = family?.ai_processing_consent === true;
+const PC = profileCopy(lang);
 ---
 
 <PageLayout
@@ -195,6 +197,15 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
             <span id="status-msg" class="text-sm" aria-live="polite"></span>
         </div>
     </form>
+
+    <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-3" id="share-device-section">
+        <h2 class="text-base font-extrabold text-brand-ink">{PC.shareTitle}</h2>
+        <p class="text-sm text-brand-ink-soft">{PC.shareBody}</p>
+        <button type="button" id="share-device-btn" class={`disabled:opacity-60 ${buttonClass("secondary", "sm")}`}>
+            {PC.shareCta}
+        </button>
+        <p id="share-device-status" class="text-sm text-red-700" aria-live="polite"></p>
+    </section>
 
     <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-3" id="quest-section"
              data-saved={lang === "es" ? "Guardado." : "Saved."}
@@ -553,6 +564,36 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
         </div>
     </section>
 </PageLayout>
+
+<script>
+    import { profileCopy } from "../../../lib/profileSwitch";
+    import { queueToast } from "../../../lib/dialogs";
+    import { showToast } from "../../../lib/toast";
+
+    const shareBtn = document.getElementById("share-device-btn") as HTMLButtonElement | null;
+    const L = profileCopy(document.documentElement.lang === "en" ? "en" : "es");
+    shareBtn?.addEventListener("click", async () => {
+        shareBtn.disabled = true;
+        try {
+            const r = await fetch("/api/auth/profile/share", { method: "POST" });
+            if (r.ok) {
+                // replace: Back must not reopen this parent page (I4).
+                location.replace("/profiles");
+                return;
+            }
+            if (r.status === 401) {
+                // share is excluded from transparent refresh: a stale tab ends here.
+                queueToast(L.sessionExpired, "error");
+                location.replace("/login");
+                return;
+            }
+            showToast(L.error, "error");
+        } catch {
+            showToast(L.error, "error");
+        }
+        shareBtn.disabled = false;
+    });
+</script>
 
 <script define:vars={{
     savedLabel: L.saved,

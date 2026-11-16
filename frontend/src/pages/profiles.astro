@@ -1,0 +1,201 @@
+---
+/**
+ * Shared-device profile picker (UX-E4). Public route: it reads nothing from
+ * `access_token`; auth rests on the httpOnly `ftm_home` cookie, which only the
+ * profile API routes (and the backend) ever see.
+ */
+import Layout from "../layouts/Layout.astro";
+import Icon from "../components/ui/Icon.astro";
+import { headerToneClass } from "../lib/headerTone";
+import { profileCopy } from "../lib/profileSwitch";
+
+const lang = Astro.cookies.get("lang")?.value === "en" ? "en" : "es";
+const L = profileCopy(lang);
+---
+
+<Layout title={L.title} lang={lang}>
+    <header class={`px-4 py-6 text-center ${headerToneClass("sky")}`}>
+        <h1 class="font-display text-3xl font-extrabold tracking-tight">{L.title}</h1>
+        <p class="mt-1 text-sm font-semibold">{L.pickPrompt}</p>
+    </header>
+
+    <main class="mx-auto w-full max-w-2xl flex-1 px-4 py-6">
+        <p id="picker-error" class="mb-4 hidden rounded-xl border-2 border-brand-ink bg-brand-coral p-3 text-center text-sm font-semibold text-brand-ink" role="alert"></p>
+
+        <div id="profile-grid" class="grid grid-cols-2 gap-4 sm:grid-cols-3" data-profile-grid></div>
+
+        <section id="pin-pad" class="hidden" data-pin-pad aria-labelledby="pin-title">
+            <div class="mx-auto max-w-xs text-center">
+                <div id="pin-avatar" class="mx-auto mb-2 flex h-20 w-20 items-center justify-center rounded-full border-2 border-brand-ink bg-brand-sun text-3xl font-extrabold text-brand-ink"></div>
+                <p id="pin-name" class="font-display text-xl font-extrabold text-brand-ink"></p>
+                <h2 id="pin-title" class="mt-1 text-sm font-semibold text-brand-ink-soft">{L.pinTitle}</h2>
+                <div id="pin-dots" class="my-4 flex justify-center gap-3" aria-hidden="true"></div>
+                <p id="pin-error" class="mb-3 hidden text-sm font-semibold text-red-700" role="alert"></p>
+                <div class="grid grid-cols-3 gap-3">
+                    {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
+                        <button type="button" data-pin-digit={d} class="h-16 rounded-2xl border-2 border-brand-ink bg-brand-cream text-2xl font-extrabold text-brand-ink shadow-[var(--shadow-card)] active:bg-brand-sky">{d}</button>
+                    ))}
+                    <button type="button" data-pin-back class="h-16 rounded-2xl border-2 border-brand-ink bg-brand-cream-deep text-brand-ink shadow-[var(--shadow-card)]" aria-label={L.clear}>
+                        <Icon name="back" class="mx-auto h-6 w-6" />
+                    </button>
+                    <button type="button" data-pin-digit="0" class="h-16 rounded-2xl border-2 border-brand-ink bg-brand-cream text-2xl font-extrabold text-brand-ink shadow-[var(--shadow-card)] active:bg-brand-sky">0</button>
+                    <button type="button" data-pin-cancel class="h-16 rounded-2xl border-2 border-brand-ink bg-brand-cream-deep text-brand-ink shadow-[var(--shadow-card)]" aria-label={L.cancel}>
+                        <Icon name="close" class="mx-auto h-6 w-6" />
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+</Layout>
+
+<script>
+    import { pinPadAppend, profileCopy, switchFailureAction } from "../lib/profileSwitch";
+
+    type Profile = { id: string; name: string; role: string; color: string; has_pin: boolean };
+
+    const L = profileCopy(document.documentElement.lang === "en" ? "en" : "es");
+    const grid = document.getElementById("profile-grid") as HTMLElement;
+    const pad = document.getElementById("pin-pad") as HTMLElement;
+    const pageError = document.getElementById("picker-error") as HTMLElement;
+    const pinError = document.getElementById("pin-error") as HTMLElement;
+    const dots = document.getElementById("pin-dots") as HTMLElement;
+    const pinName = document.getElementById("pin-name") as HTMLElement;
+    const pinAvatar = document.getElementById("pin-avatar") as HTMLElement;
+
+    let selected: Profile | null = null;
+    let pin = "";
+    let busy = false;
+
+    const HEX = /^#[0-9a-fA-F]{6}$/;
+    const initial = (name: string) => (name.trim()[0] ?? "?").toUpperCase();
+    const paint = (el: HTMLElement, color: string) => {
+        if (HEX.test(color)) el.style.backgroundColor = color;
+    };
+
+    function renderDots() {
+        dots.replaceChildren();
+        for (let i = 0; i < 4; i++) {
+            const d = document.createElement("span");
+            d.className =
+                "h-4 w-4 rounded-full border-2 border-brand-ink " + (i < pin.length ? "bg-brand-ink" : "bg-brand-cream");
+            dots.appendChild(d);
+        }
+    }
+
+    function showGrid() {
+        selected = null;
+        pin = "";
+        pad.classList.add("hidden");
+        grid.classList.remove("hidden");
+    }
+
+    function openPad(p: Profile) {
+        selected = p;
+        pin = "";
+        pinName.textContent = p.name;
+        pinAvatar.textContent = initial(p.name);
+        paint(pinAvatar, p.color);
+        pinError.classList.add("hidden");
+        renderDots();
+        grid.classList.add("hidden");
+        pad.classList.remove("hidden");
+    }
+
+    async function submit() {
+        if (!selected || busy) return;
+        busy = true;
+        try {
+            const r = await fetch("/api/auth/profile/switch", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_id: selected.id, pin }),
+            });
+            if (r.ok) {
+                // replace: Back must not return to the picker/pad (I4).
+                location.replace("/dashboard");
+                return;
+            }
+            const action = switchFailureAction(r.status);
+            if ("redirect" in action) {
+                // ftm_home expired or revoked: no PIN can work here (I1).
+                location.replace(action.redirect);
+                return;
+            }
+            pinError.textContent = L[action.message];
+        } catch {
+            pinError.textContent = L.error;
+        }
+        pinError.classList.remove("hidden");
+        pin = "";
+        renderDots();
+        busy = false;
+    }
+
+    pad.addEventListener("click", (e) => {
+        const t = e.target as HTMLElement;
+        const digit = t.closest<HTMLElement>("[data-pin-digit]")?.dataset.pinDigit;
+        if (digit !== undefined) {
+            if (busy) return;
+            pin = pinPadAppend(pin, digit);
+            pinError.classList.add("hidden");
+            renderDots();
+            if (pin.length === 4) void submit();
+        } else if (t.closest("[data-pin-back]")) {
+            if (!busy) {
+                pin = pin.slice(0, -1);
+                renderDots();
+            }
+        } else if (t.closest("[data-pin-cancel]")) {
+            if (!busy) showGrid();
+        }
+    });
+
+    function renderProfiles(profiles: Profile[]) {
+        grid.replaceChildren();
+        for (const p of profiles) {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.dataset.profileId = p.id;
+            b.className =
+                "flex flex-col items-center gap-2 rounded-2xl border-2 border-brand-ink bg-brand-cream p-4 shadow-[var(--shadow-card)] " +
+                (p.has_pin ? "active:bg-brand-sky" : "opacity-60 cursor-not-allowed");
+            const av = document.createElement("span");
+            av.className =
+                "flex h-20 w-20 items-center justify-center rounded-full border-2 border-brand-ink bg-brand-sun text-3xl font-extrabold text-brand-ink";
+            av.textContent = initial(p.name);
+            paint(av, p.color);
+            const nm = document.createElement("span");
+            nm.className = "font-display text-lg font-extrabold text-brand-ink";
+            nm.textContent = p.name;
+            b.append(av, nm);
+            if (p.has_pin) {
+                b.addEventListener("click", () => openPad(p));
+            } else {
+                b.disabled = true;
+                const hint = document.createElement("span");
+                hint.className = "text-xs font-semibold text-brand-ink-soft";
+                hint.textContent = L.noPin;
+                b.appendChild(hint);
+            }
+            grid.appendChild(b);
+        }
+    }
+
+    async function load() {
+        try {
+            const r = await fetch("/api/auth/profile/list");
+            if (r.status === 401 || r.status === 403) {
+                location.replace("/login");
+                return;
+            }
+            if (!r.ok) throw new Error("list failed");
+            const data = await r.json();
+            renderProfiles(Array.isArray(data.profiles) ? data.profiles : []);
+        } catch {
+            pageError.textContent = L.error;
+            pageError.classList.remove("hidden");
+        }
+    }
+
+    void load();
+</script>

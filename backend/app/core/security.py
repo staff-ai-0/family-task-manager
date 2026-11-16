@@ -49,13 +49,42 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_refresh_token(sub: str, version: int) -> str:
-    """Create a long-lived refresh JWT carrying the user's token_version."""
-    expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+def create_refresh_token(sub: str, version: int, switched: bool = False) -> str:
+    """Create a long-lived refresh JWT carrying the user's token_version.
+
+    A switched (profile-switcher) session gets the `sw` claim and a short
+    idle TTL instead of the normal 30 days."""
+    if switched:
+        expire = datetime.now(timezone.utc) + timedelta(hours=settings.SWITCHED_REFRESH_TOKEN_EXPIRE_HOURS)
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode = {
         "sub": sub,
         "ver": version,
         "type": "refresh",
+        "jti": uuid.uuid4().hex,
+        "exp": expire,
+    }
+    if switched:
+        to_encode["sw"] = True
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def create_home_token(sub: str, version: int) -> str:
+    """The shared-device "home" token (profile switcher, UX-E4).
+
+    It sits in the httpOnly `ftm_home` cookie, which anyone holding the
+    device can still copy out of DevTools. So it is its OWN type, never a
+    refresh token: `decode_token` rejects it at /api/auth/refresh and at every
+    access-token route, and only the profile/* endpoints accept it (list and
+    switch can never mint a parent session; return needs the parent's
+    password). Same 30-day lifetime and `ver` check as a refresh token, so a
+    token_version bump revokes it."""
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode = {
+        "sub": sub,
+        "ver": version,
+        "type": "home",
         "jti": uuid.uuid4().hex,
         "exp": expire,
     }

@@ -68,6 +68,7 @@
         confirmSheet,
         defaultLabels,
         isPromptValueValid,
+        promptInputAttrs,
         promptSheet,
         queueToast,
         registerDialogHost,
@@ -106,6 +107,10 @@
             const resolve = settle;
             settle = null;
             current = null;
+            // Every path (submit, cancel, Esc, backdrop, close) lands here: never
+            // leave a typed answer (e.g. the parent's password) in the field.
+            // `value` was already read by the caller.
+            input.value = "";
             if (dlg.open) dlg.close();
             returnFocus?.focus?.();
             returnFocus = null;
@@ -134,8 +139,10 @@
                     if (req.kind === "prompt") {
                         field.hidden = false;
                         label.textContent = req.opts.label ?? o.title;
-                        input.type = "text";
-                        input.inputMode = req.opts.inputType === "number" ? "decimal" : "text";
+                        const attrs = promptInputAttrs(req.opts.inputType);
+                        input.type = attrs.type;
+                        input.autocomplete = attrs.autocomplete;
+                        input.inputMode = attrs.inputMode;
                         input.placeholder = req.opts.placeholder ?? "";
                         input.value = req.opts.defaultValue ?? "";
                     } else {

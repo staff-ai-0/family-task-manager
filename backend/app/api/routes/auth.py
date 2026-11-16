@@ -164,15 +164,19 @@ async def refresh_tokens(
             detail="Refresh token is no longer valid",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token = create_access_token(
-        {"sub": str(user.id), "role": user.role.value, "family_id": str(user.family_id)}
-    )
-    refresh_token = create_refresh_token(str(user.id), version=user.token_version)
+    # A switched (profile-switcher) session stays switched across refreshes.
+    sw = bool(payload.get("sw"))
+    access_data = {"sub": str(user.id), "role": user.role.value, "family_id": str(user.family_id)}
+    if sw:
+        access_data["sw"] = True
+    access_token = create_access_token(access_data)
+    refresh_token = create_refresh_token(str(user.id), version=user.token_version, switched=sw)
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
         user=UserResponse.model_validate(user),
+        switched=sw,
     )
 
 

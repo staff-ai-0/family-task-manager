@@ -18,7 +18,7 @@ WHICH kid's view shows on a shared wall tablet.
 """
 
 import json
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 from uuid import UUID
 
 from app.core.config import settings
@@ -49,6 +49,27 @@ def _prefs_key(family_id) -> str:
 
 def _fail_key(device_id, user_id) -> str:
     return f"kiosk_pin_fails:{device_id}:{user_id}"
+
+
+def _switch_pair_key(home_user_id, member_id) -> str:
+    return f"switch_pin_fails:pair:{home_user_id}:{member_id}"
+
+
+def _switch_member_key(member_id) -> str:
+    return f"switch_pin_fails:member:{member_id}"
+
+
+# KEYS[1] = member key, KEYS[2] = pair key. DECR only an existing positive
+# counter (DECR keeps the TTL; DECR on a missing key would create -1 with
+# none), then drop the pair key.
+_REFUND_LUA = """
+local v = tonumber(redis.call('GET', KEYS[1]) or '0')
+if v and v > 0 then
+    redis.call('DECR', KEYS[1])
+end
+redis.call('DEL', KEYS[2])
+return 1
+"""
 
 
 async def _redis():
@@ -176,3 +197,66 @@ class MemberPrefsService:
             await r.delete(_fail_key(device_id, user_id))
         finally:
             await r.aclose()
+
+    # ── Profile-switch PIN throttle (UX-E4) ─────────────────────────────
+    # Two counters: (home parent, member) and member-wide. The member-wide
+    # one stops an attacker from dodging the lock by rotating home sessions.
+    #
+    # RESERVE FIRST: every attempt is counted BEFORE the PIN is checked, in
+    # one MULTI/EXEC (INCR + EXPIRE on both keys), and the caller refuses the
+    # attempt when either count is over PIN_MAX_FAILURES. A read-then-check-
+    # then-increment gate let N concurrent requests all pass the read, and a
+    # separate INCR/EXPIRE could leave a key with no TTL (member locked
+    # forever) if the process died in between. A successful PIN refunds its
+    # own reservation; a wrong PIN needs no further write.
+
+    @staticmethod
+    async def reserve_switch_attempt(home_user_id, member_id) -> Tuple[int, int]:
+        """Count one attempt on both keys atomically. Returns (member, pair)."""
+        member_key = _switch_member_key(member_id)
+        pair_key = _switch_pair_key(home_user_id, member_id)
+        r = await _redis()
+        try:
+            async with r.pipeline(transaction=True) as pipe:
+                pipe.incr(member_key)
+                pipe.expire(member_key, PIN_FAILURE_WINDOW_SECONDS)
+                pipe.incr(pair_key)
+                pipe.expire(pair_key, PIN_FAILURE_WINDOW_SECONDS)
+                member_count, _, pair_count, _ = await pipe.execute()
+        finally:
+            await r.aclose()
+        return int(member_count), int(pair_count)
+
+    @staticmethod
+    async def refund_switch_attempt(home_user_id, member_id) -> None:
+        """After a correct PIN: drop the pair key and give back the member
+        reservation this attempt took. Atomic, never below zero, and never
+        creates a key (a DECR on an expired key would leave -1 with no TTL)."""
+        r = await _redis()
+        try:
+            await r.eval(
+                _REFUND_LUA,
+                2,
+                _switch_member_key(member_id),
+                _switch_pair_key(home_user_id, member_id),
+            )
+        finally:
+            await r.aclose()
+
+    @staticmethod
+    async def switch_failures(home_user_id, member_id) -> int:
+        """Read-only view (max of both counters) for tests and diagnostics.
+        Never use it as the gate: that is reserve_switch_attempt's job."""
+        r = await _redis()
+        try:
+            pair = await r.get(_switch_pair_key(home_user_id, member_id))
+            member = await r.get(_switch_member_key(member_id))
+        finally:
+            await r.aclose()
+        counts = []
+        for val in (pair, member):
+            try:
+                counts.append(int(val or 0))
+            except (TypeError, ValueError):
+                counts.append(0)
+        return max(counts)

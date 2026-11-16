@@ -138,6 +138,42 @@ class TokenResponse(BaseModel):
     refresh_token: Optional[str] = None
     token_type: str = "bearer"
     user: UserResponse
+    switched: bool = False
+
+
+# Profile switcher (UX-E4)
+class ProfileSwitchRequest(BaseModel):
+    user_id: UUID
+    pin: str = Field(..., pattern=r"^\d{4}$")
+
+
+class ProfileReturnRequest(BaseModel):
+    password: str
+
+
+class ProfileEntry(BaseModel):
+    id: UUID
+    name: str
+    role: str
+    color: str
+    has_pin: bool
+
+
+class ProfileListResponse(BaseModel):
+    profiles: List[ProfileEntry]
+    home_token: str
+
+
+class ProfileSwitchResponse(TokenResponse):
+    home_token: str
+
+
+class ProfileShareResponse(BaseModel):
+    home_token: str
+
+
+class ProfileReturnResponse(TokenResponse):
+    pass
 
 
 # Email / password-reset schemas

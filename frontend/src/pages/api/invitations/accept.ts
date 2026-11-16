@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import type { LoginResponse } from "../../../types/api";
-import { authCookies } from "../../../lib/auth-cookies";
+import { authCookies, clearHomeCookie, clearSharedHint, clearSwitchedMarker } from "../../../lib/auth-cookies";
 
 /**
  * POST /api/invitations/accept
@@ -33,7 +33,12 @@ export const POST: APIRoute = async ({ request }) => {
 
         if (response.ok) {
             const result = data as LoginResponse;
-            const cookies = authCookies(result.access_token, result.refresh_token, !import.meta.env.DEV);
+            const cookies = [
+                ...authCookies(result.access_token, result.refresh_token, !import.meta.env.DEV),
+                ...clearHomeCookie(),
+                ...clearSharedHint(),
+                ...clearSwitchedMarker(),
+            ];
             const headers = new Headers({ "Content-Type": "application/json" });
             for (const c of cookies) headers.append("Set-Cookie", c);
             return new Response(

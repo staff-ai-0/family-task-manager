@@ -6,6 +6,7 @@ import {
     defaultLabels,
     isPromptValueValid,
     normalizePromptValue,
+    promptInputAttrs,
     promptSheet,
     queueToast,
     registerDialogHost,
@@ -122,6 +123,18 @@ describe("confirmSheet / promptSheet", () => {
         registerDialogHost({ open: async () => "12,50" });
         expect(await promptSheet({ title: "Monto", inputType: "number" })).toBe("12.50");
     });
+    it("a password prompt reaches the host as a password and comes back verbatim", async () => {
+        let seen: DialogRequest | null = null;
+        registerDialogHost({
+            open: async (req) => {
+                seen = req;
+                return "pa,ss 12,50";
+            },
+        });
+        expect(await promptSheet({ title: "Contraseña", inputType: "password", minLength: 1 })).toBe("pa,ss 12,50");
+        expect(seen!.kind).toBe("prompt");
+        expect((seen! as Extract<DialogRequest, { kind: "prompt" }>).opts.inputType).toBe("password");
+    });
     it("opens one dialog at a time, in order", async () => {
         const opened: string[] = [];
         const resolvers: Array<(v: boolean) => void> = [];
@@ -142,6 +155,23 @@ describe("confirmSheet / promptSheet", () => {
         expect(opened).toEqual(["A", "B"]);
         resolvers[1](false);
         expect(await second).toBe(false);
+    });
+});
+
+describe("promptInputAttrs (I3: the return-to-parent password field)", () => {
+    it("a password field never invites the browser's saved password", () => {
+        // current-password would offer the parent's saved password to the kid
+        // holding the device and can trigger "Save password?".
+        expect(promptInputAttrs("password")).toEqual({
+            type: "password",
+            autocomplete: "new-password",
+            inputMode: "text",
+        });
+    });
+    it("text and number prompts keep autofill off", () => {
+        expect(promptInputAttrs("text")).toEqual({ type: "text", autocomplete: "off", inputMode: "text" });
+        expect(promptInputAttrs(undefined)).toEqual({ type: "text", autocomplete: "off", inputMode: "text" });
+        expect(promptInputAttrs("number")).toEqual({ type: "text", autocomplete: "off", inputMode: "decimal" });
     });
 });
 

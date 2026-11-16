@@ -47,6 +47,13 @@ export const PUBLIC_ROUTES: readonly string[] = [
     "/kiosk",                   // Wall display — token gated via ?token=...
     "/api/kiosk/snapshot",
     "/api/kiosk/pin-view",      // device token in body, PIN-scoped
+    // Shared-device profile switcher: these run with no access_token; auth is
+    // the httpOnly ftm_home cookie, validated by the backend. `share` is NOT
+    // here — it needs the parent's live session. CSRF origin check still applies.
+    "/profiles",
+    "/api/auth/profile/list",
+    "/api/auth/profile/switch",
+    "/api/auth/profile/return",
 ];
 
 /** Origins always accepted in dev, regardless of the request's Host. */
@@ -60,10 +67,49 @@ const DEV_ORIGINS: readonly string[] = [
 /** The canonical production origin. */
 const PROD_HOST = "family.agent-ia.mx";
 
+/**
+ * Strip trailing slashes ("/a/b/" and "/a/b//" -> "/a/b"; "/" stays "/").
+ *
+ * Astro serves "/x/" and "/x" as the same route, so every exact-match list
+ * below must see them as the same path. Otherwise a trailing slash slips a
+ * route out of NO_REFRESH_ROUTES (a refresh on profile/switch would land its
+ * Set-Cookie after the route's own and restore the previous session) or out
+ * of PUBLIC_ROUTES.
+ */
+export function normalizePath(path: string): string {
+    const p = path.replace(/\/+$/, "");
+    return p === "" ? "/" : p;
+}
+
 export function isPublicRoute(path: string): boolean {
     // The /api/translate prefix is public wholesale (guide pages translate
     // content before the reader has an account).
-    return PUBLIC_ROUTES.includes(path) || path.startsWith("/api/translate");
+    return PUBLIC_ROUTES.includes(normalizePath(path)) || path.startsWith("/api/translate");
+}
+
+/**
+ * Profile switcher (UX-E4): where a visitor with NO usable session goes when
+ * the browser carries the `ftm_shared` hint (a shared family device), or null
+ * to keep the normal behaviour.
+ *
+ * The landing page "/" (the PWA start_url) and protected pages go to the
+ * picker: the normal /login bounce would put a kid in front of the parent's
+ * saved password and Google account once the 2 h kid session has expired.
+ * Every other public page (login, legal, marketing, the picker itself) stays
+ * reachable, and API routes keep their JSON 401.
+ *
+ * UX only: ftm_shared authorises nothing; the picker still needs ftm_home.
+ */
+export function sharedDeviceRedirect(
+    path: string,
+    hasSession: boolean,
+    sharedHint: boolean,
+): string | null {
+    if (hasSession || !sharedHint) return null;
+    const p = normalizePath(path);
+    if (p === "/api" || p.startsWith("/api/")) return null;
+    if (p === "/" || !isPublicRoute(p)) return "/profiles";
+    return null;
 }
 
 export function isAdminSurface(path: string): boolean {
@@ -175,6 +221,10 @@ const NO_REFRESH_ROUTES: readonly string[] = [
     "/api/oauth/google",
     "/api/oauth/google/",
     "/api/invitations/accept",
+    "/api/auth/profile/switch", // writes the kid's pair; a refresh would restore the previous session
+    "/api/auth/profile/return", // writes the parent's pair
+    "/api/auth/profile/share",  // clears the ordinary session
+    "/api/auth/profile/list",
 ];
 
 /**
@@ -196,7 +246,7 @@ export function shouldAttemptRefresh(
     nowMs: number = Date.now(),
 ): boolean {
     if (!refreshToken) return false;
-    if (NO_REFRESH_ROUTES.includes(path)) return false;
+    if (NO_REFRESH_ROUTES.includes(normalizePath(path))) return false;
     return isJwtExpired(accessToken, nowMs);
 }
 

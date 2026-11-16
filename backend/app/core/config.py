@@ -30,7 +30,8 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "your-secret-key-change-this-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # 1 hour (was 10080 / 7 days)
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 30  # sliding window: refreshed on every use, so this is idle-timeout, not session length
+    SWITCHED_REFRESH_TOKEN_EXPIRE_HOURS: int = 2  # profile-switcher sessions (`sw` claim): short sliding idle timeout
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30 # sliding window: refreshed on every use, so this is idle-timeout, not session length
     # Separate signing key for Starlette SessionMiddleware cookies so it does
     # not share the JWT signing key. Defaults to SECRET_KEY when unset so dev
     # and existing envs keep working; production .env sets a distinct value.
