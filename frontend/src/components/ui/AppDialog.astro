@@ -134,7 +134,8 @@
                     if (req.kind === "prompt") {
                         field.hidden = false;
                         label.textContent = req.opts.label ?? o.title;
-                        input.type = "text";
+                        input.type = req.opts.inputType === "password" ? "password" : "text";
+                        input.autocomplete = req.opts.inputType === "password" ? "current-password" : "off";
                         input.inputMode = req.opts.inputType === "number" ? "decimal" : "text";
                         input.placeholder = req.opts.placeholder ?? "";
                         input.value = req.opts.defaultValue ?? "";

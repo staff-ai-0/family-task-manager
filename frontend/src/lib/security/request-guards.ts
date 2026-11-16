@@ -47,6 +47,13 @@ export const PUBLIC_ROUTES: readonly string[] = [
     "/kiosk",                   // Wall display — token gated via ?token=...
     "/api/kiosk/snapshot",
     "/api/kiosk/pin-view",      // device token in body, PIN-scoped
+    // Shared-device profile switcher: these run with no access_token; auth is
+    // the httpOnly ftm_home cookie, validated by the backend. `share` is NOT
+    // here — it needs the parent's live session. CSRF origin check still applies.
+    "/profiles",
+    "/api/auth/profile/list",
+    "/api/auth/profile/switch",
+    "/api/auth/profile/return",
 ];
 
 /** Origins always accepted in dev, regardless of the request's Host. */

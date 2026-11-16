@@ -11,6 +11,7 @@
 import Icon from "./ui/Icon.astro";
 import type { IconName } from "../lib/icons";
 import { t } from "../lib/i18n";
+import { profileCopy } from "../lib/profileSwitch";
 
 interface Props {
     role?: string;
@@ -129,6 +130,14 @@ const links = isParent ? parentLinks : kidLinks;
             ))}
         </div>
 
+        <!-- Shared-device session (ftm_sw marker, set by the profile switcher): the way back to the parent. Revealed by the script below. -->
+        <div class="px-4 pt-2 border-t border-brand-ink/10" data-back-to-parent-wrap hidden>
+            <button type="button" data-back-to-parent class="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-brand-sky text-brand-ink font-semibold text-sm border-2 border-brand-ink">
+                <Icon name="profile" class="h-5 w-5" />
+                {profileCopy(lang).backToParent}
+            </button>
+        </div>
+
         <div class="flex gap-2 px-4 pb-5 pt-2 border-t border-brand-ink/10">
             <form method="POST" action="/api/lang" class="flex-1">
                 <input type="hidden" name="lang" value={nextLang} />
@@ -213,6 +222,44 @@ const links = isParent ? parentLinks : kidLinks;
             const first = f[0], last = f[f.length - 1];
             if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
             else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        });
+    });
+</script>
+
+<script>
+    import { isSwitchedSession, profileCopy } from "../lib/profileSwitch";
+    import { promptSheet } from "../lib/dialogs";
+    import { showToast } from "../lib/toast";
+
+    document.addEventListener("astro:page-load", () => {
+        const wrap = document.querySelector<HTMLElement>("[data-back-to-parent-wrap]");
+        const btn = document.querySelector<HTMLElement>("[data-back-to-parent]");
+        if (!wrap || !btn || !isSwitchedSession(document.cookie)) return;
+        wrap.hidden = false;
+        const L = profileCopy(document.documentElement.lang === "en" ? "en" : "es");
+        btn.addEventListener("click", async () => {
+            const password = await promptSheet({
+                title: L.backToParent,
+                label: L.passwordPrompt,
+                inputType: "password",
+                minLength: 1,
+                cancelLabel: L.cancel,
+            });
+            if (!password) return;
+            try {
+                const r = await fetch("/api/auth/profile/return", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ password }),
+                });
+                if (r.ok) {
+                    location.href = "/parent";
+                    return;
+                }
+                showToast(r.status === 401 || r.status === 403 ? L.wrongPassword : L.error, "error");
+            } catch {
+                showToast(L.error, "error");
+            }
         });
     });
 </script>

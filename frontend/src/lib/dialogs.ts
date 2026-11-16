@@ -20,7 +20,7 @@ export interface PromptOptions extends ConfirmOptions {
     label?: string;
     defaultValue?: string;
     placeholder?: string;
-    inputType?: "text" | "number";
+    inputType?: "text" | "number" | "password";
     requireMatch?: string;
     minLength?: number;
 }
