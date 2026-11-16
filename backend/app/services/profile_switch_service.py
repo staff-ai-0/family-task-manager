@@ -58,6 +58,8 @@ class ProfileSwitchService:
         if (
             payload.get("ver") != user.token_version
             or user.deleted_at is not None
+            or not user.is_active
+            or user.approval_status != APPROVAL_APPROVED
             or family_active is False
             or family_deleted_at is not None
         ):

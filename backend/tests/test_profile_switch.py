@@ -318,3 +318,26 @@ class TestProfileSwitch:
         me = await client.get("/api/auth/me", headers=_bearer(r.json()["access_token"]))
         assert me.status_code == 200
         assert me.json()["id"] == str(u.id)
+
+    async def test_deactivated_parent_home_token_rejected(
+        self, client, db_session, home, kid, test_parent_user
+    ):
+        from app.services.auth_service import AuthService
+
+        await AuthService.deactivate_user(db_session, test_parent_user.id)
+        r = await client.get("/api/auth/profile/list", headers=_bearer(home))
+        assert r.status_code == 401
+        r = await _switch(client, home, kid.id)
+        assert r.status_code == 401
+
+    async def test_unapproved_parent_home_token_rejected(
+        self, client, db_session, home, kid, test_parent_user
+    ):
+        await db_session.execute(
+            update(User).where(User.id == test_parent_user.id).values(approval_status="pending")
+        )
+        await db_session.commit()
+        r = await client.get("/api/auth/profile/list", headers=_bearer(home))
+        assert r.status_code == 401
+        r = await _switch(client, home, kid.id)
+        assert r.status_code == 401
