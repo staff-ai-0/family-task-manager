@@ -1,5 +1,7 @@
 # Profile switcher (UX-E4) — design
 
+**As built.** Status: built, see plan docs/superpowers/plans/2026-11-15-profile-switch.md. Route names, cookie paths and the extra cookies below are amended to match the implementation.
+
 Date: 2026-11-15. Status: approved approach, awaiting spec review. Program: UX audit `docs/audit/2026-09-27-ux-competitive/` (E4).
 
 ## Intent
@@ -28,15 +30,15 @@ A family often shares one phone or tablet. Today a kid there needs their own ema
 
 ## Behavior
 
-**Switch.** `POST /api/auth/profile-switch {user_id, pin}`, authenticated by the device's *home* session (below). The target must be an active, approved CHILD or TEEN in the caller's family; anything else is the same 403 as a wrong PIN (no oracle for which ids exist). On success it returns a normal access + refresh pair for the kid, both carrying a claim `sw: true` (switched). The `sw` claim survives `/api/auth/refresh`.
+**Switch.** `POST /api/auth/profile/switch {user_id, pin}`, authenticated by the device's *home* session (below). The target must be an active, approved CHILD or TEEN in the caller's family; anything else is the same 403 as a wrong PIN (no oracle for which ids exist). On success it returns a normal access + refresh pair for the kid, both carrying a claim `sw: true` (switched). The `sw` claim survives `/api/auth/refresh`.
 
-**Home session.** A parent who wants a shared device signs in normally, then taps "Share this device" (parent settings). The frontend stores the parent's refresh token in a separate httpOnly cookie `ftm_home` whose `Path` is restricted to the two Astro routes `/api/auth/profile-switch` and `/api/auth/profile-return`, so it is never sent with ordinary requests and a kid session cannot read or use it. The ordinary `ftm` cookies are then replaced by the kid's pair. The avatar picker (names, avatar colors, "has PIN") is served by the home cookie through a small `GET /api/auth/profile-list` on the same restricted path.
+**Home session.** A parent who wants a shared device signs in normally, then taps "Share this device" (parent settings). The frontend stores the parent's refresh token in a separate httpOnly cookie `ftm_home` whose `Path=/api/auth/profile`, restricted to the Astro routes `/api/auth/profile/switch` and `/api/auth/profile/return`, so it is never sent with ordinary requests and a kid session cannot read or use it. The ordinary `ftm` cookies are then replaced by the kid's pair. The avatar picker (names, avatar colors, "has PIN") is served by the home cookie through a small `GET /api/auth/profile/list` on the same restricted path.
 
-**Return.** `POST /api/auth/profile-return {password}` uses `ftm_home` plus the parent's current password (re-verified, rate-limited by the existing `AUTH_LIMIT`). It restores the parent's ordinary cookies. A PIN is never accepted for return.
+**Return.** `POST /api/auth/profile/return {password}` uses `ftm_home` plus the parent's current password (re-verified, rate-limited by the existing `AUTH_LIMIT`). It restores the parent's ordinary cookies. A PIN is never accepted for return.
 
 **Limits on a switched session.**
 - Refresh-token lifetime 2 hours instead of 30 days (my call), so a left-behind device falls back to the picker.
-- `sw` sessions cannot call profile-switch or profile-return (a kid cannot switch to a sibling from a kid session; they go back to the picker, which needs the home cookie).
+- `sw` sessions cannot call profile/switch or profile/return (a kid cannot switch to a sibling from a kid session; they go back to the picker, which needs the home cookie).
 - Teen and kid roles keep exactly their existing permissions; `sw` adds no privilege.
 
 **PIN throttle.** Failures are counted per (family member, home session user) and also per member alone, in Redis, with the existing `PIN_MAX_FAILURES` and lockout window (429 after the cap). A member-wide counter stops a sibling rotating devices. Success clears only the per-pair counter.
@@ -44,6 +46,14 @@ A family often shares one phone or tablet. Today a kid there needs their own ema
 **Parents.** PIN set/reset stays where it is today (kiosk member prefs, parent only). The picker shows "Ask a parent to set a PIN" for a member with none.
 
 **Revocation.** `token_version` bump (logout-everywhere, password reset, soft-delete) already invalidates a kid's switched sessions. A parent's logout-everywhere also invalidates `ftm_home`, because it is that parent's refresh token.
+
+## As built amendments
+
+- **Routes.** Nested names `/api/auth/profile/list`, `/api/auth/profile/switch`, `/api/auth/profile/return`, plus the frontend-only `/api/auth/profile/share` (Astro route, no backend counterpart; it sets `ftm_home`).
+- **Cookie path.** `ftm_home` is `Path=/api/auth/profile`. The names are nested because of the RFC 6265 path boundary: `/api/auth/profile` does not match `/api/auth/profile-switch` (a path matches only on a `/` boundary), so flat names would never receive the cookie.
+- **`ftm_sw`.** A readable (non-httpOnly) marker cookie set on a switched session and renewed on refresh. UX hint only (show "back to picker"); no authorization depends on it.
+- **Share.** `share` also clears the parent's ordinary session cookies, so a shared device rests at the picker. The parent returns with their password.
+- **Home-token endpoints** reject inactive or unapproved parents.
 
 ## Constraints
 
@@ -59,7 +69,7 @@ Tests prove: wrong PIN and unknown member give the same 403; non-kid target 403;
 
 ## Calls made after the builder check (mine, not the user's)
 
-- **Home token.** `ftm_home` holds a normal PARENT refresh token. `profile-switch`, `profile-list` and `profile-return` each validate it exactly like `/api/auth/refresh` (type `refresh`, `ver == token_version`, family active) and require role PARENT (a TEEN or CHILD home token is 403). Each use rotates it and rewrites `ftm_home`. Nothing in a kid session ever touches it. On return the backend mints a fresh parent access + refresh pair; nothing is "restored".
+- **Home token.** `ftm_home` holds a normal PARENT refresh token. `profile/switch`, `profile/list` and `profile/return` each validate it exactly like `/api/auth/refresh` (type `refresh`, `ver == token_version`, family active) and require role PARENT (a TEEN or CHILD home token is 403). Each use rotates it and rewrites `ftm_home`. Nothing in a kid session ever touches it. On return the backend mints a fresh parent access + refresh pair; nothing is "restored".
 - **Switched-session lifetime.** Sliding, not absolute: each refresh of a `sw` token issues a new `sw` pair with a 2 h refresh TTL, so a kid is not logged out mid-use, and an abandoned device falls back to the picker after 2 h idle.
 - **PIN check.** Wrap `MemberPrefsService.verify_member_pin` (no throttle of its own). Reuse the `PIN_MAX_FAILURES` and lockout constants; the new Redis keys use a separate prefix (`switch_pin_fails:`), never the kiosk's `kiosk_pin_fails:`.
 - **Redis flush.** The picker's "has PIN" flag reads the same prefs entry, so after a flush every member shows "Ask a parent to set a PIN". Accepted (fail closed).
