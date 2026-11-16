@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { authCookies, clearSwitchedMarker } from "../../../../lib/auth-cookies";
+import { authCookies, clearSwitchedMarker, uiRoleCookie } from "../../../../lib/auth-cookies";
 import { callProfile, errorFrom, json } from "../../../../lib/server/profile-proxy";
 
 /**
@@ -26,6 +26,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         const setCookies = [
             ...authCookies(d.access_token, d.refresh_token, !import.meta.env.DEV),
             ...clearSwitchedMarker(),
+            ...uiRoleCookie(d.user?.role, !import.meta.env.DEV),
         ];
         return json(200, { success: true }, setCookies);
     } catch {

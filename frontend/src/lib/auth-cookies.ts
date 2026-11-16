@@ -61,6 +61,13 @@ export function switchedMarker(secure: boolean): string {
     return buildCookie("ftm_sw", "1", { maxAge: SWITCHED_REFRESH_MAX_AGE, secure });
 }
 
+/** ui_role cookie (UI mode hint read by Layout), same shape login uses. */
+export function uiRoleCookie(role: unknown, secure: boolean): string[] {
+    const r = String(role || "").toLowerCase();
+    if (!r) return [];
+    return [`ui_role=${r}; Path=/; Max-Age=${60 * 60 * 24 * 7}; SameSite=Lax${secure ? "; Secure" : ""}`];
+}
+
 export function clearSwitchedMarker(): string[] {
     return [
         "ftm_sw=; Path=/; SameSite=Lax; Max-Age=0",

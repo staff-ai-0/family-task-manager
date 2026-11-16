@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import type { LoginResponse, ApiError } from "../../../types/api";
-import { authCookies } from "../../../lib/auth-cookies";
+import { authCookies, clearHomeCookie, clearSwitchedMarker } from "../../../lib/auth-cookies";
 import { clientIpHeaders } from "../../../lib/client-ip";
 
 /**
@@ -36,7 +36,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
             // Manually set cookies via Set-Cookie header for reliability.
             // NB: named authCks, not `cookies` — the Astro `cookies` API is
             // destructured above and used below (cookies.has("lang")).
-            const authCks = authCookies(result.access_token, result.refresh_token, !import.meta.env.DEV);
+            const authCks = [
+                ...authCookies(result.access_token, result.refresh_token, !import.meta.env.DEV),
+                ...clearHomeCookie(),
+                ...clearSwitchedMarker(),
+            ];
 
             const headers = new Headers({ "Content-Type": "application/json" });
             for (const c of authCks) headers.append("Set-Cookie", c);

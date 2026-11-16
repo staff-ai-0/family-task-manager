@@ -175,6 +175,10 @@ const NO_REFRESH_ROUTES: readonly string[] = [
     "/api/oauth/google",
     "/api/oauth/google/",
     "/api/invitations/accept",
+    "/api/auth/profile/switch", // writes the kid's pair; a refresh would restore the previous session
+    "/api/auth/profile/return", // writes the parent's pair
+    "/api/auth/profile/share",  // clears the ordinary session
+    "/api/auth/profile/list",
 ];
 
 /**

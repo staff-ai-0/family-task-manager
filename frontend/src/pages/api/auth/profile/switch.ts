@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { authCookies, homeCookie, switchedMarker } from "../../../../lib/auth-cookies";
+import { authCookies, homeCookie, switchedMarker, uiRoleCookie } from "../../../../lib/auth-cookies";
 import { callProfile, errorFrom, json } from "../../../../lib/server/profile-proxy";
 
 /**
@@ -28,6 +28,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         const setCookies = [
             ...authCookies(d.access_token, d.refresh_token, secure, true),
             switchedMarker(secure),
+            ...uiRoleCookie(d.user?.role, secure),
         ];
         if (d.home_refresh_token) setCookies.push(homeCookie(d.home_refresh_token, secure));
         return json(200, { success: true }, setCookies);

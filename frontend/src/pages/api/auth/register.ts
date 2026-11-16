@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import type { LoginResponse } from "../../../types/api";
-import { authCookies } from "../../../lib/auth-cookies";
+import { authCookies, clearHomeCookie, clearSwitchedMarker } from "../../../lib/auth-cookies";
 import { clientIpHeaders } from "../../../lib/client-ip";
 
 /**
@@ -101,7 +101,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
         if (response.ok) {
             const result = data as LoginResponse;
-            const authCks = authCookies(result.access_token, result.refresh_token, !import.meta.env.DEV);
+            const authCks = [
+                ...authCookies(result.access_token, result.refresh_token, !import.meta.env.DEV),
+                ...clearHomeCookie(),
+                ...clearSwitchedMarker(),
+            ];
             const headers = new Headers({ "Content-Type": "application/json" });
             for (const c of authCks) headers.append("Set-Cookie", c);
             // Seed the UI language cookie so the dashboard renders in the chosen language.

@@ -5,6 +5,7 @@ import {
     clearHomeCookie,
     switchedMarker,
     clearSwitchedMarker,
+    uiRoleCookie,
 } from "../src/lib/auth-cookies";
 
 /** RFC 6265 5.1.4 path-match. */
@@ -65,6 +66,13 @@ describe("ftm_sw marker", () => {
         const cl = clearSwitchedMarker();
         expect(cl.length).toBe(2);
         for (const x of cl) expect(x).toContain("Max-Age=0");
+    });
+});
+
+describe("uiRoleCookie", () => {
+    it("lowercases the role and is empty without one", () => {
+        expect(uiRoleCookie("CHILD", true)[0]).toContain("ui_role=child; Path=/");
+        expect(uiRoleCookie(undefined, true)).toEqual([]);
     });
 });
 
