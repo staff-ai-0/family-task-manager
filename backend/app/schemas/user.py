@@ -138,6 +138,7 @@ class TokenResponse(BaseModel):
     refresh_token: Optional[str] = None
     token_type: str = "bearer"
     user: UserResponse
+    switched: bool = False
 
 
 # Email / password-reset schemas
