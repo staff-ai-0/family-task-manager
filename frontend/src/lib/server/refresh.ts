@@ -21,7 +21,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<RefreshR
     return {
         ok: true,
         accessToken: body.access_token,
-        setCookies: authCookies(body.access_token, body.refresh_token, !import.meta.env.DEV),
+        setCookies: authCookies(body.access_token, body.refresh_token, !import.meta.env.DEV, body.switched === true),
     };
 }
 

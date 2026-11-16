@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import type { LoginResponse, ApiError } from "../../../types/api";
-import { authCookies } from "../../../lib/auth-cookies";
+import { authCookies, clearHomeCookie, clearSwitchedMarker } from "../../../lib/auth-cookies";
 import { clientIpHeaders } from "../../../lib/client-ip";
 
 /**
@@ -73,7 +73,12 @@ export const POST: APIRoute = async ({ request }) => {
         if (response.ok) {
             const result: LoginResponse = await response.json();
 
-            const cookies = authCookies(result.access_token, result.refresh_token, !import.meta.env.DEV);
+            // A normal login ends any profile-switch state on this browser.
+            const cookies = [
+                ...authCookies(result.access_token, result.refresh_token, !import.meta.env.DEV),
+                ...clearHomeCookie(),
+                ...clearSwitchedMarker(),
+            ];
 
             // Stash role for UI theming (W4.2). Non-httpOnly so the
             // Astro server-side Layout can read it on subsequent renders.
