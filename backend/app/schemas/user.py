@@ -161,11 +161,15 @@ class ProfileEntry(BaseModel):
 
 class ProfileListResponse(BaseModel):
     profiles: List[ProfileEntry]
-    home_refresh_token: str
+    home_token: str
 
 
 class ProfileSwitchResponse(TokenResponse):
-    home_refresh_token: str
+    home_token: str
+
+
+class ProfileShareResponse(BaseModel):
+    home_token: str
 
 
 class ProfileReturnResponse(TokenResponse):

@@ -1,19 +1,24 @@
 """Profile switcher routes (UX-E4), mounted at /api/auth/profile/*.
 
-All three are authenticated by the parent's refresh token ("home token")
-as a Bearer, never by an access token.
+`share` is authenticated by the parent's ordinary ACCESS token and returns a
+"home" token. `list`, `switch` and `return` accept ONLY that home token as
+the Bearer (type "home"); a refresh or access token gets 401 there, and a
+home token gets 401 everywhere else.
 """
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.dependencies import get_current_user
 from app.core.rate_limiter import AUTH_LIMIT, limiter
 from app.core.security import oauth2_scheme
+from app.models.user import User
 from app.schemas.user import (
     ProfileListResponse,
     ProfileReturnRequest,
     ProfileReturnResponse,
+    ProfileShareResponse,
     ProfileSwitchRequest,
     ProfileSwitchResponse,
     UserResponse,
@@ -21,6 +26,14 @@ from app.schemas.user import (
 from app.services.profile_switch_service import ProfileSwitchService
 
 router = APIRouter()
+
+
+@router.post("/profile/share", response_model=ProfileShareResponse)
+async def share_device(
+    token: str = Depends(oauth2_scheme),
+    current_user: User = Depends(get_current_user),
+):
+    return ProfileShareResponse(home_token=ProfileSwitchService.share(current_user, token))
 
 
 @router.get("/profile/list", response_model=ProfileListResponse)
@@ -32,7 +45,7 @@ async def list_profiles(
     profiles = await ProfileSwitchService.list_profiles(db, home)
     return ProfileListResponse(
         profiles=profiles,
-        home_refresh_token=ProfileSwitchService.new_home_token(home),
+        home_token=ProfileSwitchService.new_home_token(home),
     )
 
 
@@ -54,7 +67,7 @@ async def switch_profile(
         token_type="bearer",
         user=UserResponse.model_validate(user),
         switched=True,
-        home_refresh_token=ProfileSwitchService.new_home_token(home),
+        home_token=ProfileSwitchService.new_home_token(home),
     )
 
 

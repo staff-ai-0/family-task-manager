@@ -1,10 +1,13 @@
 """Profile switcher (UX-E4): a parent on a shared device hands it to a kid.
 
-Security model: the caller authenticates with the PARENT's refresh token
-("home token"). A kid's PIN then mints a switched (`sw`) session for that
-kid. Every failure of target or PIN returns the same generic 403 so the
-endpoint is not an oracle for which ids/PINs exist, and unknown/invalid
-targets never touch the Redis throttle.
+Security model: the caller authenticates with a "home" token, minted by
+`share` from the PARENT's live access token. It is its own JWT type
+(`type: "home"`), NOT a refresh token, so a copy taken out of the browser's
+cookie jar cannot be traded at /api/auth/refresh for a parent session. A
+kid's PIN then mints a switched (`sw`) session for that kid. Every failure of
+target or PIN returns the same generic 403 so the endpoint is not an oracle
+for which ids/PINs exist, and unknown/invalid targets never touch the Redis
+throttle.
 """
 
 from typing import List, Tuple
@@ -15,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import (
     create_access_token,
+    create_home_token,
     create_refresh_token,
     decode_token,
     verify_password,
@@ -25,6 +29,7 @@ from app.schemas.user import ProfileEntry
 from app.services.member_prefs_service import (
     PIN_MAX_FAILURES,
     MemberPrefsService,
+    color_hex,
     resolve_color_name,
 )
 
@@ -37,12 +42,31 @@ def _generic_403() -> HTTPException:
 
 class ProfileSwitchService:
     @staticmethod
+    def share(user: User, access_token: str) -> str:
+        """Mint the home token for a parent who shares this device.
+
+        `user` comes from get_current_user (valid ACCESS token, active, not
+        deleted, family active; it does NOT check approval, so that is checked
+        here, as resolve_home does on every later use). A switched (`sw`)
+        session is refused even if it somehow carried a parent role: a kid
+        session must never produce anything that leads back to a parent."""
+        payload = decode_token(access_token, expected_type="access")
+        if (
+            payload.get("sw")
+            or user.role != UserRole.PARENT
+            or user.approval_status != APPROVAL_APPROVED
+        ):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+        return create_home_token(str(user.id), user.token_version)
+
+    @staticmethod
     async def resolve_home(db: AsyncSession, token: str) -> User:
-        """Validate a parent's (non-switched) refresh token and load the user."""
-        payload = decode_token(token, expected_type="refresh")
+        """Validate a home token (type "home", never refresh/access) and load
+        the parent it belongs to."""
+        payload = decode_token(token, expected_type="home")
         unauthorized = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token is no longer valid",
+            detail="Home session is no longer valid",
             headers={"WWW-Authenticate": "Bearer"},
         )
         row = (
@@ -70,7 +94,7 @@ class ProfileSwitchService:
 
     @staticmethod
     def new_home_token(home: User) -> str:
-        return create_refresh_token(str(home.id), home.token_version)
+        return create_home_token(str(home.id), home.token_version)
 
     @staticmethod
     def _eligible_filters(home: User):
@@ -100,7 +124,8 @@ class ProfileSwitchService:
                     id=u.id,
                     name=u.name,
                     role=u.role.value,
-                    color=resolve_color_name(u.id, entry),
+                    # Hex, not the palette name: the picker paints it directly.
+                    color=color_hex(resolve_color_name(u.id, entry)),
                     has_pin=bool(entry.get("pin_hash")),
                 )
             )
@@ -121,8 +146,13 @@ class ProfileSwitchService:
         if target is None:
             raise _generic_403()
 
-        fails = await MemberPrefsService.switch_failures(home.id, target.id)
-        if fails >= PIN_MAX_FAILURES:
+        # Reserve first: this attempt is counted before bcrypt runs, so
+        # concurrent guesses cannot all slip past the cap (see
+        # MemberPrefsService.reserve_switch_attempt).
+        member_count, pair_count = await MemberPrefsService.reserve_switch_attempt(
+            home.id, target.id
+        )
+        if member_count > PIN_MAX_FAILURES or pair_count > PIN_MAX_FAILURES:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Too many attempts. Try again in a few minutes.",
@@ -132,9 +162,8 @@ class ProfileSwitchService:
             home.family_id, target.id, pin
         )
         if verdict is not True:  # None (no PIN set) or False (wrong)
-            await MemberPrefsService.record_switch_failure(home.id, target.id)
-            raise _generic_403()
-        await MemberPrefsService.clear_switch_failures(home.id, target.id)
+            raise _generic_403()  # already counted by the reservation
+        await MemberPrefsService.refund_switch_attempt(home.id, target.id)
 
         access = create_access_token(
             {

@@ -70,6 +70,27 @@ def create_refresh_token(sub: str, version: int, switched: bool = False) -> str:
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
+def create_home_token(sub: str, version: int) -> str:
+    """The shared-device "home" token (profile switcher, UX-E4).
+
+    It sits in the httpOnly `ftm_home` cookie, which anyone holding the
+    device can still copy out of DevTools. So it is its OWN type, never a
+    refresh token: `decode_token` rejects it at /api/auth/refresh and at every
+    access-token route, and only the profile/* endpoints accept it (list and
+    switch can never mint a parent session; return needs the parent's
+    password). Same 30-day lifetime and `ver` check as a refresh token, so a
+    token_version bump revokes it."""
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode = {
+        "sub": sub,
+        "ver": version,
+        "type": "home",
+        "jti": uuid.uuid4().hex,
+        "exp": expire,
+    }
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
 def decode_token(token: str, expected_type: Optional[str] = None) -> dict:
     """Decode a JWT. When expected_type is set, enforce the `type` claim,
     treating a missing type as 'access' (legacy 7-day tokens)."""
