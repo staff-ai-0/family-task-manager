@@ -577,13 +577,14 @@ const PC = profileCopy(lang);
         try {
             const r = await fetch("/api/auth/profile/share", { method: "POST" });
             if (r.ok) {
-                location.href = "/profiles";
+                // replace: Back must not reopen this parent page (I4).
+                location.replace("/profiles");
                 return;
             }
             if (r.status === 401) {
                 // share is excluded from transparent refresh: a stale tab ends here.
                 queueToast(L.sessionExpired, "error");
-                location.href = "/login";
+                location.replace("/login");
                 return;
             }
             showToast(L.error, "error");

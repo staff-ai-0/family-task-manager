@@ -253,7 +253,8 @@ const links = isParent ? parentLinks : kidLinks;
                     body: JSON.stringify({ password }),
                 });
                 if (r.ok) {
-                    location.href = "/parent";
+                    // replace: Back must not reopen the kid's page (I4).
+                    location.replace("/parent");
                     return;
                 }
                 showToast(r.status === 401 || r.status === 403 ? L.wrongPassword : L.error, "error");

@@ -5,6 +5,8 @@ import {
     clearHomeCookie,
     switchedMarker,
     clearSwitchedMarker,
+    sharedHintCookie,
+    clearSharedHint,
     uiRoleCookie,
 } from "../src/lib/auth-cookies";
 
@@ -66,6 +68,29 @@ describe("ftm_sw marker", () => {
         const cl = clearSwitchedMarker();
         expect(cl.length).toBe(2);
         for (const x of cl) expect(x).toContain("Max-Age=0");
+    });
+});
+
+describe("ftm_shared hint (I1)", () => {
+    it("is a readable 30-day hint on Path=/", () => {
+        const c = sharedHintCookie(true);
+        expect(c).toContain("ftm_shared=1");
+        expect(c).not.toContain("HttpOnly");
+        expect(c).toContain("Secure");
+        expect(c).toContain("SameSite=Lax");
+        expect(attr(c, "Path")).toBe("/");
+        expect(attr(c, "Max-Age")).toBe(String(60 * 60 * 24 * 30));
+        expect(sharedHintCookie(false)).not.toContain("Secure");
+    });
+    it("clear variants (HTTP + HTTPS) use the same path", () => {
+        const cs = clearSharedHint();
+        expect(cs.length).toBe(2);
+        for (const c of cs) {
+            expect(c).toContain("ftm_shared=;");
+            expect(attr(c, "Path")).toBe("/");
+            expect(c).toContain("Max-Age=0");
+        }
+        expect(cs.some((c) => c.includes("Secure"))).toBe(true);
     });
 });
 

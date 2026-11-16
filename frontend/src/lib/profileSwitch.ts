@@ -20,8 +20,8 @@ const COPY = {
     wrongPassword: { es: "Contraseña incorrecta.", en: "Wrong password." },
     shareTitle: { es: "Compartir este dispositivo", en: "Share this device" },
     shareBody: {
-        es: "Los niños y adolescentes eligen su perfil y entran con su PIN. Para volver al perfil de adulto se pide tu contraseña.",
-        en: "Kids and teens pick their profile and sign in with a PIN. Returning to the parent profile asks for your password.",
+        es: "Los niños y adolescentes eligen su perfil y entran con su PIN. Para volver al perfil de adulto se pide tu contraseña. No guardes tu contraseña en este navegador y cierra tu sesión de Google en este dispositivo.",
+        en: "Kids and teens pick their profile and sign in with a PIN. Returning to the parent profile asks for your password. Don't save your password in this browser, and sign out of your Google account on this device.",
     },
     shareCta: { es: "Compartir este dispositivo", en: "Share this device" },
     error: { es: "Algo salió mal. Intenta de nuevo.", en: "Something went wrong. Try again." },
@@ -51,6 +51,16 @@ export function errorKey(status: number): "wrongPin" | "locked" | "error" {
     if (status === 403) return "wrongPin";
     if (status === 429) return "locked";
     return "error";
+}
+
+/** What the picker does with a failed switch. A 401 means ftm_home is gone
+ *  or expired (the device is no longer shared), so a PIN can never work:
+ *  go to /login instead of showing a generic error. */
+export function switchFailureAction(
+    status: number,
+): { redirect: "/login" } | { message: "wrongPin" | "locked" | "error" } {
+    if (status === 401) return { redirect: "/login" };
+    return { message: errorKey(status) };
 }
 
 /** Append one digit to the PIN being typed: digits only, max 4. */

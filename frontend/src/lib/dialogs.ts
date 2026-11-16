@@ -68,6 +68,21 @@ export function isPromptValueValid(
     return true;
 }
 
+/**
+ * The prompt input's attributes. A password field uses
+ * autocomplete="new-password": "current-password" would offer the saved
+ * password to whoever holds the device (the profile switcher's return prompt
+ * runs inside a kid session) and can trigger a "Save password?" prompt.
+ */
+export function promptInputAttrs(inputType: PromptOptions["inputType"]): {
+    type: "password" | "text";
+    autocomplete: "new-password" | "off";
+    inputMode: "decimal" | "text";
+} {
+    if (inputType === "password") return { type: "password", autocomplete: "new-password", inputMode: "text" };
+    return { type: "text", autocomplete: "off", inputMode: inputType === "number" ? "decimal" : "text" };
+}
+
 export function normalizePromptValue(value: string, opts: Pick<PromptOptions, "inputType">): string {
     return opts.inputType === "number" ? value.replace(",", ".") : value;
 }

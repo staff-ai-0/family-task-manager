@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import type { LoginResponse, ApiError } from "../../../types/api";
-import { authCookies, clearHomeCookie, clearSwitchedMarker } from "../../../lib/auth-cookies";
+import { authCookies, clearHomeCookie, clearSharedHint, clearSwitchedMarker } from "../../../lib/auth-cookies";
 import { clientIpHeaders } from "../../../lib/client-ip";
 
 /**
@@ -39,6 +39,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
             const authCks = [
                 ...authCookies(result.access_token, result.refresh_token, !import.meta.env.DEV),
                 ...clearHomeCookie(),
+                ...clearSharedHint(),
                 ...clearSwitchedMarker(),
             ];
 

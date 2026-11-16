@@ -38,11 +38,14 @@ export function clearAuthCookies(): string[] {
     ];
 }
 
-/** The parent's "home" refresh token for the shared-device profile switcher.
- *  SECURITY: this is an ordinary PARENT refresh token. It must stay httpOnly and
- *  scoped to Path=/api/auth/profile (RFC 6265: matches /api/auth/profile/switch,
- *  NOT /api/auth/profile-switch or /api/auth/refresh), so it never rides on
- *  normal requests or kid sessions. Nothing else may read or forward it. */
+/** The parent's "home" token for the shared-device profile switcher.
+ *  It is its own JWT type ("home", minted by backend profile/share), NOT a
+ *  refresh token: the backend refuses it at /api/auth/refresh and on every
+ *  access-token route, because httpOnly hides a cookie from page JS but not
+ *  from a person with DevTools. It stays httpOnly and scoped to
+ *  Path=/api/auth/profile (RFC 6265: matches /api/auth/profile/switch, NOT
+ *  /api/auth/profile-switch or /api/auth/refresh), so it never rides on normal
+ *  requests or kid sessions. Only the profile routes read or forward it. */
 export function homeCookie(value: string, secure: boolean): string {
     return buildCookie("ftm_home", value, { maxAge: HOME_MAX_AGE, httpOnly: true, secure, path: HOME_PATH });
 }
@@ -72,5 +75,23 @@ export function clearSwitchedMarker(): string[] {
     return [
         "ftm_sw=; Path=/; SameSite=Lax; Max-Age=0",
         "ftm_sw=; Path=/; SameSite=Lax; Max-Age=0; Secure",
+    ];
+}
+
+/** UX hint that this browser is a shared family device (set by profile
+ *  share/list/switch, so it renews with use). When no session is left, the
+ *  middleware sends `/` and protected pages to the picker instead of /login,
+ *  where a kid would meet the parent's saved password and Google account.
+ *  NOT httpOnly and never an authorization input: the picker still needs
+ *  ftm_home. Cleared wherever ftm_home is cleared. */
+export function sharedHintCookie(secure: boolean): string {
+    return buildCookie("ftm_shared", "1", { maxAge: HOME_MAX_AGE, secure });
+}
+
+/** Set-Cookie values that clear ftm_shared (HTTP + HTTPS). */
+export function clearSharedHint(): string[] {
+    return [
+        "ftm_shared=; Path=/; SameSite=Lax; Max-Age=0",
+        "ftm_shared=; Path=/; SameSite=Lax; Max-Age=0; Secure",
     ];
 }

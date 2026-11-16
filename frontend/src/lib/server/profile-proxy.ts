@@ -21,16 +21,17 @@ export async function errorFrom(resp: Response, fallback: string): Promise<Respo
     return json(resp.status || 500, { success: false, error });
 }
 
-/** Call a backend profile/* endpoint authenticated by the home token. */
+/** Call a backend profile/* endpoint. The Bearer is the home token for
+ *  list/switch/return, and the parent's access token for share only. */
 export async function callProfile(
     request: Request,
-    homeToken: string,
+    bearerToken: string,
     path: string,
     method: "GET" | "POST",
     body?: unknown
 ): Promise<Response> {
     const headers: Record<string, string> = {
-        Authorization: `Bearer ${homeToken}`,
+        Authorization: `Bearer ${bearerToken}`,
         ...clientIpHeaders(request),
     };
     if (body !== undefined) headers["Content-Type"] = "application/json";

@@ -12,6 +12,7 @@ import {
     moduleForPath,
     moduleRedirectTarget,
     requiresCsrfCheck,
+    sharedDeviceRedirect,
     shouldAttemptRefresh,
 } from "./lib/security/request-guards";
 // CSP string + rationale: lib/security/csp.ts (unit-tested).
@@ -166,9 +167,21 @@ export const onRequest = defineMiddleware(async (context, next) => {
         }
     }
 
+    // Profile switcher (UX-E4): on a shared family device (ftm_shared hint)
+    // with no session left, "/" and protected pages land on the picker, not
+    // /login. Hint only; the picker still needs ftm_home. Computed after the
+    // refresh above, so a resumable session is never sent away.
+    const sharedTarget = sharedDeviceRedirect(
+        path,
+        Boolean(accessToken),
+        Boolean(cookies.get("ftm_shared")?.value),
+    );
+
     // Public routes that don't require authentication (list in
     // lib/security/request-guards.ts).
     if (isPublicRoutePath(path)) {
+        // Only "/" can match here: every other public page stays reachable.
+        if (sharedTarget) return withSecurityHeaders(redirect(sharedTarget, 302));
         const response = await next();
         // A public page that resumed a session (e.g. "/" 302ing an installed
         // PWA to /dashboard) must still hand the rotated pair to the browser,
@@ -247,9 +260,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
         // ?next= so login can resume there after auth (e.g. the kiosk wall
         // tablet's "Scan a flyer" button → /calendar/scan). login.astro
         // validates it as a same-origin relative path before honoring it.
+        // A shared device goes to the picker instead (see sharedTarget above).
         if (!path.startsWith("/api/")) {
             const next = encodeURIComponent(path + url.search);
-            const response = redirect(`/login?next=${next}`, 302);
+            const response = redirect(sharedTarget ?? `/login?next=${next}`, 302);
             for (const c of clearAuthCookies()) response.headers.append("Set-Cookie", c);
             return withSecurityHeaders(response);
         }

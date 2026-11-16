@@ -1,11 +1,18 @@
 import type { APIRoute } from "astro";
-import { authCookies, homeCookie, switchedMarker, uiRoleCookie } from "../../../../lib/auth-cookies";
+import {
+    authCookies,
+    homeCookie,
+    sharedHintCookie,
+    switchedMarker,
+    uiRoleCookie,
+} from "../../../../lib/auth-cookies";
 import { callProfile, errorFrom, json } from "../../../../lib/server/profile-proxy";
 
 /**
  * POST /api/auth/profile/switch  { user_id, pin }
  * On success sets the kid's session cookies (2 h refresh), the ftm_sw UX
- * marker and the rotated ftm_home. Backend 403/429/401 pass through.
+ * marker, the rotated ftm_home and a renewed ftm_shared hint. Backend
+ * 403/429/401 pass through.
  */
 export const POST: APIRoute = async ({ request, cookies }) => {
     const home = cookies.get("ftm_home")?.value;
@@ -28,9 +35,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         const setCookies = [
             ...authCookies(d.access_token, d.refresh_token, secure, true),
             switchedMarker(secure),
+            sharedHintCookie(secure),
             ...uiRoleCookie(d.user?.role, secure),
         ];
-        if (d.home_refresh_token) setCookies.push(homeCookie(d.home_refresh_token, secure));
+        if (d.home_token) setCookies.push(homeCookie(d.home_token, secure));
         return json(200, { success: true }, setCookies);
     } catch {
         return json(500, { success: false, error: "An error occurred connecting to the server" });

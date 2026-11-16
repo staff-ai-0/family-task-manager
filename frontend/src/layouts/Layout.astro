@@ -144,6 +144,17 @@ const hasSession = Astro.cookies.has("access_token") || Astro.cookies.has("refre
     </script>
 
     <script is:inline>
+        // Profile switcher (UX-E4): a page restored from the back-forward
+        // cache shows whoever was signed in when it was left, so Back after
+        // "Share this device" or a profile switch could show the previous
+        // person's page. Reload it so the server decides again with the
+        // current cookies.
+        window.addEventListener('pageshow', function (e) {
+            if (e.persisted) location.reload();
+        });
+    </script>
+
+    <script is:inline>
         // Register the service worker for everyone — offline fallback,
         // asset caching, and notification-click routing live in sw.js.
         // (Previously only EnablePushButton registered it, so the PWA the

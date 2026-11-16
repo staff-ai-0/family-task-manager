@@ -1,6 +1,60 @@
 import { describe, expect, it } from "vitest";
-import { errorKey, isSwitchedSession, pinPadAppend, profileCopy } from "../src/lib/profileSwitch";
-import { isPublicRoute } from "../src/lib/security/request-guards";
+import {
+    errorKey,
+    isSwitchedSession,
+    pinPadAppend,
+    profileCopy,
+    switchFailureAction,
+} from "../src/lib/profileSwitch";
+import { isPublicRoute, sharedDeviceRedirect } from "../src/lib/security/request-guards";
+
+describe("sharedDeviceRedirect (I1: a shared device falls back to the picker, not /login)", () => {
+    it("does nothing without the ftm_shared hint", () => {
+        expect(sharedDeviceRedirect("/", false, false)).toBeNull();
+        expect(sharedDeviceRedirect("/dashboard", false, false)).toBeNull();
+    });
+    it("does nothing while a session is live", () => {
+        expect(sharedDeviceRedirect("/", true, true)).toBeNull();
+        expect(sharedDeviceRedirect("/dashboard", true, true)).toBeNull();
+    });
+    it("sends the landing page and protected pages to /profiles", () => {
+        for (const p of ["/", "/dashboard", "/dashboard/", "/parent", "/parent/settings/family", "/pet"]) {
+            expect(sharedDeviceRedirect(p, false, true)).toBe("/profiles");
+        }
+    });
+    it("leaves public pages other than / reachable (login, legal, marketing, the picker itself)", () => {
+        for (const p of ["/login", "/login/", "/register", "/privacidad", "/terminos", "/tdah", "/help", "/kiosk", "/profiles"]) {
+            expect(sharedDeviceRedirect(p, false, true)).toBeNull();
+        }
+    });
+    it("never redirects API routes (they keep their JSON 401)", () => {
+        for (const p of ["/api/tasks", "/api/auth/me", "/api/auth/profile/list", "/api/auth/profile/share"]) {
+            expect(sharedDeviceRedirect(p, false, true)).toBeNull();
+        }
+    });
+});
+
+describe("switchFailureAction (picker)", () => {
+    it("a 401 means ftm_home is gone: go to /login", () => {
+        expect(switchFailureAction(401)).toEqual({ redirect: "/login" });
+    });
+    it("other failures show a message and stay on the pad", () => {
+        expect(switchFailureAction(403)).toEqual({ message: "wrongPin" });
+        expect(switchFailureAction(429)).toEqual({ message: "locked" });
+        expect(switchFailureAction(500)).toEqual({ message: "error" });
+    });
+});
+
+describe("share copy warns about the parent's saved credentials (I3)", () => {
+    it("ES and EN tell the parent not to save the password and to sign out of Google", () => {
+        const es = profileCopy("es").shareBody;
+        const en = profileCopy("en").shareBody;
+        expect(es).toMatch(/no guardes tu contraseña/i);
+        expect(es).toMatch(/Google/);
+        expect(en).toMatch(/don't save your password/i);
+        expect(en).toMatch(/Google/);
+    });
+});
 
 describe("profileSwitch helpers", () => {
     it("errorKey maps statuses", () => {
