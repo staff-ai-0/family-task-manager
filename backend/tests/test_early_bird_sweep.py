@@ -157,10 +157,6 @@ async def test_child_and_exempt_ignored(ctx):
     assert await _rows(db, teen, "deadline_soon") == []
 
 
-
-
-
-
 async def test_disabled_or_inactive_day_noop(ctx):
     db, fam, teen, tpl, a, day = ctx
     fam.early_bird_days = [(day.weekday() + 1) % 7]
@@ -232,8 +228,6 @@ def test_deadline_reminders_promise_the_bonus_not_grabs():
             assert "{deadline}" in body and bonus in body, (key, lang, body)
             assert not any(w in body.lower() for w in _GRAB_WORDS), (key, lang, body)
             assert ("{n}" in body) == (not key.endswith("_one")), (key, lang, body)
-
-
 
 
 async def test_alarm_step_failure_still_settles_weeks(ctx):

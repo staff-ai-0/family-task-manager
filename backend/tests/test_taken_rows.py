@@ -94,32 +94,6 @@ async def ctx(db_session, test_family, test_teen_user):
     return db_session, test_family, test_teen_user, taker, tpl, a, day
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 async def test_owner_cannot_complete_after_take(ctx):
     db, fam, owner, taker, tpl, a, day = ctx
     await _take(db, a, taker, day)
@@ -244,8 +218,6 @@ async def test_taken_row_cannot_be_deleted(ctx):
     assert (await db.get(TaskAssignment, a_id)) is not None
     row = await db.get(TaskAssignment, row_id, populate_existing=True)
     assert row.taken_from_id == a_id
-
-
 
 
 async def test_takers_row_cannot_be_moved_cancelled_or_deleted(ctx):

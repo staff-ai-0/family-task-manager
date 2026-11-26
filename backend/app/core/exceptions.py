@@ -17,8 +17,8 @@ class ConflictException(FamilyAppException):
 
 
 class ChoreExpiredException(ConflictException):
-    """Owner tried to complete a chore after its cutoff (HTTP 409, code
-    ``chore_expired``): it is open to the family instead."""
+    """Owner tried to complete a chore after its due day ended (HTTP 409, code
+    ``chore_expired``). A parent can still record it with mark-done-for-kid."""
     pass
 
 

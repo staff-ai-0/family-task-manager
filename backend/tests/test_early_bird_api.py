@@ -135,20 +135,6 @@ async def test_grab_endpoints_are_gone(
     assert a.status == AssignmentStatus.PENDING and a.assigned_to == test_teen_user.id
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 async def test_family_overview_parent_only(client, db_session, test_family, test_parent_user,
                                            test_teen_user, test_child_user):
     await _enable(db_session, test_family)
@@ -215,8 +201,6 @@ async def test_family_overview_excludes_other_family_teens(
     assert str(stranger.id) not in ids and str(test_teen_user.id) in ids
 
 
-
-
 # ---------------------------------------------------------------- task 6b
 
 async def test_me_times_ladder_and_config(client, db_session, test_family, test_teen_user):
@@ -257,12 +241,6 @@ async def test_me_week_ladder_counts(db_session, test_family, test_teen_user):
     mom = await _user(db_session, test_family, "Mom2", UserRole.PARENT)
     fam = await EarlyBirdService.family_overview(db_session, mom, now=now)
     assert fam[0]["week_ladder"] == w
-
-
-
-
-
-
 
 
 def test_early_bird_proxy_is_a_catch_all():
