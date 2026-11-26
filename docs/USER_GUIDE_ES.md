@@ -466,10 +466,9 @@ graph TD
 Una forma de premiar a los adolescentes por hacer sus tareas temprano, y de ponerle un final claro al día de tareas. Se activa en **Configuración > Familia > Madrugador** (viene apagado).
 
 - **Una sola hora "temprana"**: la **hora madrugadora** que tú eliges (por defecto 11:00, entre 07:00 y 22:00), en los días que elijas (por defecto todos). Es la única hora que cuenta como temprano: para los puntos extra por tarea, para el bono semanal y para el premio de 3 semanas. Tus adolescentes reciben un aviso 1 hora y 30 minutos antes, mientras les queden tareas abiertas.
-- **Hora de corte de la tarde**: una tarea sigue siendo de quien la tiene hasta la **hora de corte** (por defecto 20:30). Después ya no puede terminarla y no cuenta como hecha.
-- **Para tomar**: desde la hora de corte hasta el **fin de "para tomar"** (por defecto 22:30), las tareas de ese día que sigan abiertas quedan libres para cualquier miembro de la familia, hijos y padres. Quien la toma gana los puntos; quien la dejó los pierde (aparece como "Tomada"). Al cerrar ese horario, la tarea que nadie tomó queda como no hecha.
-- **Alarmas para adolescentes**: dos avisos al día (por defecto 15:00 y 19:00, siempre antes de la hora de corte) a los adolescentes que aún tengan tareas pendientes ese día.
-- **Escalera de pago semanal** para adolescentes (en el cheque semanal de tareas, en todos los modos salvo la mesada fija), según las tareas de la semana (lunes a domingo) hechas antes de la hora de corte:
+- **Fin del día**: una tarea es de quien la tiene todo el día y nunca se libera a otra persona. Puede marcarla como hecha hasta las **23:59**. Después de la medianoche ya no puede terminarla y cuenta como no hecha; tú aún puedes registrarla con "Marcar hecha".
+- **Alarmas para adolescentes**: dos avisos al día (por defecto 15:00 y 19:00, entre 06:00 y 23:00) a los adolescentes que aún tengan tareas pendientes ese día.
+- **Escalera de pago semanal** para adolescentes (en el cheque semanal de tareas, en todos los modos salvo la mesada fija), según las tareas de la semana (lunes a domingo) hechas en su día:
   - **Menos de 60 %**: sin pago base esa semana.
   - **De 60 a 99 %**: cada tarea completada paga su propio valor.
   - **100 %**: todas las tareas pagan **y además** un bono según cuántas se hicieron antes de la hora madrugadora: 80 % o más temprano +5 %, 90 % o más +10 %, 100 % +15 %. Con menos de 80 % temprano no hay bono.
@@ -478,8 +477,8 @@ Una forma de premiar a los adolescentes por hacer sus tareas temprano, y de pone
 - **Dos premios más**, cada uno ajustable (0 lo apaga):
   1. **Más puntos por tarea temprana**: +20 % de los puntos de la tarea si se hace antes de la hora madrugadora.
   2. **Tres semanas seguidas**: cada 3ª semana temprana consecutiva (todos los días con tareas hechos antes de la hora madrugadora) paga un premio, $380 MXN por defecto en familias nuevas.
-- **Tareas de la tarde**: marca **"Tarea de la tarde — sin hora límite"** en la plantilla (por ejemplo "lavar los platos de la cena") y queda fuera de la hora madrugadora, de la hora de corte y de la escalera. Las tareas bonus nunca cuentan.
-- **"Marcar hecha" por un padre**: una tarea que marcas como hecha cuenta como hecha para la semana (aunque sea después de la hora de corte), pero nunca como temprana.
+- **Tareas de la tarde**: marca **"Tarea de la tarde — sin hora límite"** en la plantilla (por ejemplo "lavar los platos de la cena") y queda fuera de la hora madrugadora, del fin del día y de la escalera. Las tareas bonus nunca cuentan.
+- **"Marcar hecha" por un padre**: una tarea que marcas como hecha cuenta como hecha para la semana (aunque su día ya haya terminado), pero nunca como temprana.
 - Una calificación parcial o fallida cuenta como no hecha para la escalera y rompe el día temprano; una tarea en espera de tu revisión aparece como pendiente hasta que la califiques.
 
 **Reglas para todos.** Cuando cambian las reglas, se les vuelve a pedir a todos: cada miembro recibe un aviso y una hoja con las reglas en los números de tu familia, con una casilla para aceptarlas. **Enviar reglas a quienes faltan**, en el inicio de padres, avisa a todos los que todavía no aceptan (a quien ya aceptó no se le molesta). El bono por tarea y el premio de racha aparecen marcados como solo para adolescentes, porque solo ellos los ganan. Cada persona acepta por sí misma, y el inicio de padres muestra quién ya aceptó (la tarjeta aparece mientras Madrugador está activo). Es un acuerdo familiar, no un bloqueo: si alguien toca **Más tarde**, la app sigue funcionando y la hoja vuelve en su próxima visita.

@@ -130,6 +130,8 @@ exact mirror of the real family (4 members) per repo convention.
 
 ## As built — deviations from this design
 
+- **SUPERSEDED 2026-11-25: the evening cutoff and "up for grabs" are gone.** A chore stays its owner's until midnight and is never released; R6's expiry now happens at the end of the due day. See `2026-11-25-remove-evening-release-design.md`. The ladder, alarms and rulings below still stand.
+
 - **11:00 is the one early time** (user ruling 2026-11-12): the family's early deadline defines "early" for the weekly ladder, the per-chore bonus and the streak week. Supersedes any R1 (deadline − 60 min) note above; R1 survives only as the first reminder's time.
 - **Week stays provisional while unreviewed work is inside the grace**: `week_metrics.final` is False while any covered row is completed + approval PENDING and the 7-day PENDING grace has not passed, so a review lag can never floor a teen to $0.
 - **`task_assignments.marked_done_by_parent`** column added (own migration; set by `mark_done_for_kid`, cleared on reopen/proof rejection). Exempts a parent's retroactive completion from the cutoff; never counts as early.
