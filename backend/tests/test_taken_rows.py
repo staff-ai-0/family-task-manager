@@ -1,5 +1,7 @@
-"""Early Bird: up-for-grabs list and take-over."""
-import asyncio
+"""Rows a past take left behind. "Up for grabs" was removed 2026-11-25, but a
+take that already happened stays in the table: the owner's row is TAKEN (a
+miss, locked) and the taker's row (taken_from_id) carries the chore. These
+invariants must keep holding for those rows."""
 from datetime import date, datetime, time, timedelta, timezone
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -7,18 +9,13 @@ from zoneinfo import ZoneInfo
 import pytest
 from sqlalchemy import select
 
-from app.core.exceptions import (
-    ConflictException, ForbiddenException, NotFoundException, ValidationException,
-)
+from app.core.exceptions import ValidationException
 from app.core.security import get_password_hash
-from app.models.family import Family
-from app.models.notification import Notification
 from app.models.point_transaction import PointTransaction, TransactionType
 from app.models.task_assignment import AssignmentStatus, TaskAssignment
 from app.models.task_template import AssignmentType, TaskTemplate
 from app.models.user import User, UserRole
 from app.services.bank_service import BankService
-from app.services.early_bird_service import EarlyBirdService
 from app.services.progress_service import DayState, ProgressService
 from app.services.task_assignment_service import TaskAssignmentService
 
@@ -70,6 +67,23 @@ async def _assign(db, kid, tpl, day, status=AssignmentStatus.PENDING):
     return a
 
 
+async def _take(db, owner_row, taker, day):
+    """What a take left in the table: the owner's row TAKEN + the taker's own
+    row pointing back at it (same template, day and week)."""
+    row = TaskAssignment(
+        family_id=owner_row.family_id, template_id=owner_row.template_id,
+        assigned_to=taker.id, status=AssignmentStatus.PENDING,
+        assigned_date=owner_row.assigned_date, week_of=owner_row.week_of,
+        taken_from_id=owner_row.id)
+    db.add(row)
+    owner_row.status = AssignmentStatus.TAKEN
+    owner_row.taken_by = taker.id
+    owner_row.taken_at = _at(day, 21, 0)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
 @pytest.fixture
 async def ctx(db_session, test_family, test_teen_user):
     await _setup(db_session, test_family)
@@ -80,126 +94,42 @@ async def ctx(db_session, test_family, test_teen_user):
     return db_session, test_family, test_teen_user, taker, tpl, a, day
 
 
-async def test_grabbable_after_deadline_only(ctx):
-    db, fam, owner, taker, tpl, a, day = ctx
-    assert await EarlyBirdService.grabbable(db, fam.id, now=_at(day, 10, 59)) == []
-    rows = await EarlyBirdService.grabbable(db, fam.id, now=_at(day, 21, 0))
-    assert [r.assignment_id for r in rows] == [a.id]
-    assert rows[0].owner_id == owner.id and rows[0].points == 10
 
 
-async def test_take_moves_chore(ctx):
-    db, fam, owner, taker, tpl, a, day = ctx
-    row = await EarlyBirdService.take(db, fam.id, taker, a.id, now=_at(day, 21, 0))
-    await db.refresh(a)
-    assert a.status == AssignmentStatus.TAKEN and a.taken_by == taker.id and a.taken_at
-    assert row.status == AssignmentStatus.PENDING and row.assigned_to == taker.id
-    assert row.taken_from_id == a.id and row.template_id == tpl.id
-    assert row.assigned_date == a.assigned_date and row.week_of == a.week_of
-    notes = (await db.execute(select(Notification).where(
-        Notification.user_id == owner.id, Notification.type == "chore_taken"))).scalars().all()
-    assert len(notes) == 1
-    assert await EarlyBirdService.grabbable(db, fam.id, now=_at(day, 21, 1)) == []
 
 
-async def test_second_take_409(ctx):
-    db, fam, owner, taker, tpl, a, day = ctx
-    other = await _user(db, fam, "Other")
-    await EarlyBirdService.take(db, fam.id, taker, a.id, now=_at(day, 21, 0))
-    with pytest.raises(ConflictException, match="already_taken"):
-        await EarlyBirdService.take(db, fam.id, other, a.id, now=_at(day, 21, 1))
 
 
-async def test_take_own_chore_403(ctx):
-    db, fam, owner, taker, tpl, a, day = ctx
-    with pytest.raises(ForbiddenException, match="own_chore"):
-        await EarlyBirdService.take(db, fam.id, owner, a.id, now=_at(day, 21, 0))
 
 
-async def test_taker_with_open_chores_may_still_take(ctx):
-    # was finish_yours_first (403): dropped by chore rules v2
-    db, fam, owner, taker, tpl, a, day = ctx
-    await _assign(db, taker, await _tpl(db, fam, title="Own"), day)
-    row = await EarlyBirdService.take(db, fam.id, taker, a.id, now=_at(day, 21, 0))
-    assert row.assigned_to == taker.id
 
 
-async def test_allowed_roles_blocks_child(db_session, test_family, test_teen_user, test_child_user):
-    await _setup(db_session, test_family)
-    day = _today()
-    tpl = await _tpl(db_session, test_family, allowed_roles=["teen"])
-    a = await _assign(db_session, test_teen_user, tpl, day)
-    with pytest.raises(ForbiddenException, match="role_not_allowed"):
-        await EarlyBirdService.take(db_session, test_family.id, test_child_user, a.id,
-                                    now=_at(day, 21, 0))
 
 
-async def test_child_can_take(db_session, test_family, test_teen_user, test_child_user):
-    await _setup(db_session, test_family)
-    day = _today()
-    a = await _assign(db_session, test_teen_user, await _tpl(db_session, test_family), day)
-    row = await EarlyBirdService.take(db_session, test_family.id, test_child_user, a.id,
-                                      now=_at(day, 21, 0))
-    assert row.assigned_to == test_child_user.id
 
 
-async def test_parent_can_take(ctx, test_parent_user):
-    # was not_kid (403): any active member may take under chore rules v2
-    db, fam, owner, taker, tpl, a, day = ctx
-    row = await EarlyBirdService.take(db, fam.id, test_parent_user, a.id, now=_at(day, 21, 0))
-    assert row.assigned_to == test_parent_user.id
 
 
-async def test_other_family_404(ctx):
-    db, fam, owner, taker, tpl, a, day = ctx
-    with pytest.raises(NotFoundException):
-        await EarlyBirdService.take(db, uuid4(), taker, a.id, now=_at(day, 21, 0))
 
 
-async def test_before_cutoff_take_409_window_closed(ctx):
-    # was a 400 not_grabbable before 11:00; now a distinct 409 outside the window
-    db, fam, owner, taker, tpl, a, day = ctx
-    with pytest.raises(ConflictException, match="grab_window_closed"):
-        await EarlyBirdService.take(db, fam.id, taker, a.id, now=_at(day, 20, 29))
 
 
-async def test_exempt_not_grabbable_422(db_session, test_family, test_teen_user):
-    await _setup(db_session, test_family)
-    taker = await _user(db_session, test_family, "Taker")
-    day = _today()
-    a = await _assign(db_session, test_teen_user, await _tpl(db_session, test_family, exempt=True), day)
-    with pytest.raises(ValidationException, match="not_grabbable"):
-        await EarlyBirdService.take(db_session, test_family.id, taker, a.id, now=_at(day, 21, 0))
 
 
-async def test_yesterday_not_grabbable_422(db_session, test_family, test_teen_user):
-    await _setup(db_session, test_family)
-    taker = await _user(db_session, test_family, "Taker")
-    day = _today()
-    a = await _assign(db_session, test_teen_user, await _tpl(db_session, test_family),
-                      day - timedelta(days=1), status=AssignmentStatus.OVERDUE)
-    with pytest.raises(ValidationException, match="not_grabbable"):
-        await EarlyBirdService.take(db_session, test_family.id, taker, a.id, now=_at(day, 21, 0))
 
 
-async def test_completed_not_grabbable_422(ctx):
-    db, fam, owner, taker, tpl, a, day = ctx
-    a.status = AssignmentStatus.COMPLETED
-    await db.commit()
-    with pytest.raises(ValidationException, match="not_grabbable"):
-        await EarlyBirdService.take(db, fam.id, taker, a.id, now=_at(day, 21, 0))
 
 
 async def test_owner_cannot_complete_after_take(ctx):
     db, fam, owner, taker, tpl, a, day = ctx
-    await EarlyBirdService.take(db, fam.id, taker, a.id, now=_at(day, 21, 0))
+    await _take(db, a, taker, day)
     with pytest.raises(ValidationException):
         await TaskAssignmentService.complete_assignment(db, a.id, fam.id, owner.id)
 
 
 async def test_mark_done_for_kid_rejects_taken(ctx, test_parent_user):
     db, fam, owner, taker, tpl, a, day = ctx
-    await EarlyBirdService.take(db, fam.id, taker, a.id, now=_at(day, 21, 0))
+    await _take(db, a, taker, day)
     with pytest.raises(ValidationException):
         await TaskAssignmentService.mark_done_for_kid(
             db, a.id, fam.id, test_parent_user.id, note="she did it")
@@ -207,7 +137,7 @@ async def test_mark_done_for_kid_rejects_taken(ctx, test_parent_user):
 
 async def test_reshuffle_keeps_taken_rows(ctx):
     db, fam, owner, taker, tpl, a, day = ctx
-    row = await EarlyBirdService.take(db, fam.id, taker, a.id, now=_at(day, 21, 0))
+    row = await _take(db, a, taker, day)
     row_id, a_id, week = row.id, a.id, a.week_of
     await TaskAssignmentService.shuffle_tasks(db, fam.id, week_of=week, today=day)
     db.expire_all()
@@ -217,7 +147,7 @@ async def test_reshuffle_keeps_taken_rows(ctx):
 
 async def test_taken_counts_as_miss(ctx):
     db, fam, owner, taker, tpl, a, day = ctx
-    await EarlyBirdService.take(db, fam.id, taker, a.id, now=_at(day, 21, 0))
+    await _take(db, a, taker, day)
     states = await ProgressService.day_states(db, fam.id, owner.id, day, MX)
     assert states[day] == DayState.missed
     done, assigned, lost = await BankService._chore_units(db, fam.id, owner.id, a.week_of)
@@ -226,9 +156,19 @@ async def test_taken_counts_as_miss(ctx):
     assert [(t["status"], t["earned_points"]) for t in tasks] == [("taken", 0)]
 
 
+async def test_takers_row_never_expires(ctx):
+    """The taker's row is not a covered chore: it can be finished after the
+    day ended (the owner's own rows expire at midnight)."""
+    db, fam, owner, taker, tpl, a, day = ctx
+    row = await _take(db, a, taker, day)
+    done = await TaskAssignmentService.complete_assignment(
+        db, row.id, fam.id, taker.id, now=_at(day + timedelta(days=1), 8, 0))
+    assert done.status == AssignmentStatus.COMPLETED
+
+
 async def test_taker_completes_earns_points(ctx):
     db, fam, owner, taker, tpl, a, day = ctx
-    row = await EarlyBirdService.take(db, fam.id, taker, a.id, now=_at(day, 21, 0))
+    row = await _take(db, a, taker, day)
     await TaskAssignmentService.complete_assignment(db, row.id, fam.id, taker.id)
     await db.refresh(taker)
     assert taker.points == 10
@@ -252,7 +192,7 @@ async def test_taken_task_status_serializes_on_payout_endpoints(
     acct.allowance_mode = "chore_proportional"
     acct.allowance_cents = 20000
     await db.commit()
-    await EarlyBirdService.take(db, fam.id, taker, a.id, now=_at(day, 21, 0))
+    await _take(db, a, taker, day)
     # A taken chore in last week too, so the outstanding list contains it.
     last = day - timedelta(days=7)
     t2 = await _tpl(db, fam, title="Last week")
@@ -280,7 +220,7 @@ async def test_taken_row_cannot_be_patched(ctx):
     """I4: reopening / moving a TAKEN row would pay the chore twice."""
     db, fam, owner, taker, tpl, a, day = ctx
     a_id, fam_id, owner_id, taker_id = a.id, fam.id, owner.id, taker.id
-    await EarlyBirdService.take(db, fam_id, taker, a_id, now=_at(day, 21, 0))
+    await _take(db, await db.get(TaskAssignment, a_id), taker, day)
     for kw in ({"status": AssignmentStatus.PENDING}, {"status": AssignmentStatus.CANCELLED},
                {"assigned_to": taker_id}, {"assigned_date": day + timedelta(days=1)}):
         with pytest.raises(ValidationException, match="Madrugador"):
@@ -293,10 +233,10 @@ async def test_taken_row_cannot_be_patched(ctx):
 
 async def test_taken_row_cannot_be_deleted(ctx):
     """I4: taken_from_id is ON DELETE SET NULL — deleting the owner's row would
-    turn the taker's row into an ordinary grabbable chore."""
+    turn the taker's row into an ordinary covered chore."""
     db, fam, owner, taker, tpl, a, day = ctx
     a_id, fam_id = a.id, fam.id
-    row = await EarlyBirdService.take(db, fam_id, taker, a_id, now=_at(day, 21, 0))
+    row = await _take(db, await db.get(TaskAssignment, a_id), taker, day)
     row_id = row.id
     with pytest.raises(ValidationException, match="Madrugador"):
         await TaskAssignmentService.delete_by_id(db, a_id, fam_id)
@@ -306,16 +246,6 @@ async def test_taken_row_cannot_be_deleted(ctx):
     assert row.taken_from_id == a_id
 
 
-async def test_chore_taken_notification_uses_owner_language(ctx):
-    """m4: the title is rendered in the owner's language."""
-    db, fam, owner, taker, tpl, a, day = ctx
-    tpl.title_es = "Lavar platos"
-    owner.preferred_lang = "es"
-    await db.commit()
-    await EarlyBirdService.take(db, fam.id, taker, a.id, now=_at(day, 21, 0))
-    n = (await db.execute(select(Notification).where(
-        Notification.user_id == owner.id, Notification.type == "chore_taken"))).scalars().one()
-    assert "Lavar platos" in (n.title + (n.body or ""))
 
 
 async def test_takers_row_cannot_be_moved_cancelled_or_deleted(ctx):
@@ -323,7 +253,7 @@ async def test_takers_row_cannot_be_moved_cancelled_or_deleted(ctx):
     would leave the owner's row TAKEN with nobody doing the chore."""
     db, fam, owner, taker, tpl, a, day = ctx
     fam_id, owner_id = fam.id, owner.id
-    row = await EarlyBirdService.take(db, fam_id, taker, a.id, now=_at(day, 21, 0))
+    row = await _take(db, a, taker, day)
     row_id = row.id
     for kw in ({"status": AssignmentStatus.CANCELLED}, {"assigned_to": owner_id},
                {"assigned_date": day + timedelta(days=1)}):
@@ -341,7 +271,7 @@ async def test_takers_completed_row_can_still_be_reopened(ctx):
     """Sending the taker's own work back for a redo keeps the chore with them."""
     db, fam, owner, taker, tpl, a, day = ctx
     fam_id = fam.id
-    row = await EarlyBirdService.take(db, fam_id, taker, a.id, now=_at(day, 21, 0))
+    row = await _take(db, a, taker, day)
     row_id = row.id
     row.status = AssignmentStatus.COMPLETED
     row.completed_at = _at(day, 12, 0)
@@ -350,27 +280,3 @@ async def test_takers_completed_row_can_still_be_reopened(ctx):
         db, row_id, fam_id, status=AssignmentStatus.PENDING)
     assert out.status == AssignmentStatus.PENDING
 
-
-async def test_two_takes_at_once_both_succeed_serialized(ctx, test_engine):
-    """A double tap on two grabs by one member serializes on the per-member
-    lock; with "finish yours first" dropped (chore rules v2) both succeed."""
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-    db, fam, owner, taker, tpl, a, day = ctx
-    tpl2 = await _tpl(db, fam, title="Trash")
-    b = await _assign(db, owner, tpl2, day)
-    fam_id, taker_id, ids = fam.id, taker.id, (a.id, b.id)
-    factory = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
-
-    async def one(aid):
-        async with factory() as s:
-            kid = (await s.execute(select(User).where(User.id == taker_id))).scalar_one()
-            return await EarlyBirdService.take(s, fam_id, kid, aid, now=_at(day, 21, 0))
-
-    results = await asyncio.gather(*(one(i) for i in ids), return_exceptions=True)
-    taken = [r for r in results if isinstance(r, TaskAssignment)]
-    assert len(taken) == 2, results
-    held = (await db.execute(select(TaskAssignment).where(
-        TaskAssignment.assigned_to == taker_id,
-        TaskAssignment.taken_from_id.is_not(None)))).scalars().all()
-    assert len(held) == 2

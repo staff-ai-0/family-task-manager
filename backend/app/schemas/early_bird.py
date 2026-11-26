@@ -21,30 +21,13 @@ class WeekLadder(BaseModel):
     final: bool
 
 
-class GrabListItem(BaseModel):
-    assignment_id: UUID
-    title: str
-    title_es: Optional[str] = None
-    points: int
-    owner_id: UUID
-    owner_name: str
-    can_take: bool
-
-
-class GrabItem(BaseModel):
-    assignment_id: UUID
-    title: str
-    points: int
-    owner_name: str
-
-
 class EarlyBirdMe(BaseModel):
     enabled: bool
     applies: bool
     deadline: str
+    # End of the day (next family-local midnight): the kid can report until then.
     cutoff_at: Optional[datetime] = None
     deadline_at: Optional[datetime] = None
-    grab_end_at: Optional[datetime] = None
     rules_version: int = 1
     teen_alarm_1: str = "15:00"
     teen_alarm_2: str = "19:00"
@@ -57,8 +40,6 @@ class EarlyBirdMe(BaseModel):
     streak_weeks: int
     streak_cents: int
     bonus_pct: int
-    grabs: list[GrabItem]
-    take_block: Optional[str] = None
     open_today: int = 0
 
 

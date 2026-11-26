@@ -18,7 +18,6 @@ from tests.test_early_bird_sweep import (
 def _cfg(**kw):
     base = dict(enabled=True, enabled_at=datetime(2026, 10, 1, tzinfo=MX), deadline=time(11, 0),
                 days=None, bonus_pct=20, week_pct=5, streak_cents=5000, tz=MX,
-                cutoff=time(20, 30), grab_end=time(22, 30),
                 alarm_1=time(15, 0), alarm_2=time(19, 0))
     base.update(kw)
     return EarlyBirdConfig(**base)
@@ -42,13 +41,15 @@ def test_slot_windows():
     assert alarm_slot(c, _local(19, 30, 0)) is None
 
 
-def test_slot_window_never_runs_past_the_cutoff():
-    """An alarm 15 min before the cutoff must not fire after it: by then the
-    chores are no longer the teen's ("due by 20:30" would be false)."""
-    c = _cfg(alarm_2=time(20, 15))
-    assert alarm_slot(c, _local(20, 29, 59)) == "a2"
-    assert alarm_slot(c, _local(20, 30, 0)) is None
-    assert alarm_slot(c, _local(20, 40, 0)) is None
+def test_late_alarm_fires_inside_its_day():
+    """The latest alarm a family can set is 23:00. It was refused while the
+    day ended at 20:30; now it fires for its whole 30-minute window, which
+    still ends before midnight."""
+    c = _cfg(alarm_1=time(21, 0), alarm_2=time(23, 0))
+    assert alarm_slot(c, _local(21, 10, 0)) == "a1"
+    assert alarm_slot(c, _local(23, 0, 0)) == "a2"
+    assert alarm_slot(c, _local(23, 29, 59)) == "a2"
+    assert alarm_slot(c, _local(23, 30, 0)) is None
 
 
 def test_overlapping_windows_pick_the_later_alarm():
@@ -87,8 +88,10 @@ async def test_teen_with_pending_gets_alarm(ctx):
     assert res["alarms"] == 1
     rows = await _rows(db, teen, "chore_alarm")
     assert len(rows) == 1
-    assert rows[0].expires_at.astimezone(MX) == datetime.combine(day, time(20, 30), tzinfo=MX)
-    assert "20:30" in rows[0].body
+    # The notice lives until the day ends and names the last minute to report.
+    assert rows[0].expires_at.astimezone(MX) == datetime.combine(
+        day + timedelta(days=1), time(0, 0), tzinfo=MX)
+    assert "23:59" in rows[0].body and "20:30" not in rows[0].body
     assert "1 tarea" in rows[0].body or "1 chore" in rows[0].body
 
 

@@ -1,5 +1,5 @@
-"""Chore rules v2 pure rules: cutoff + weekly ladder."""
-from datetime import date, datetime, time
+"""Chore rules pure rules: the day's cutoff (midnight) + weekly ladder."""
+from datetime import date, datetime, time, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -19,7 +19,7 @@ def cfg():
     return EarlyBirdConfig(
         enabled=True, enabled_at=datetime(2026, 10, 1, tzinfo=MX), deadline=time(11, 0),
         days=None, bonus_pct=20, week_pct=5, streak_cents=5000, tz=MX,
-        cutoff=time(20, 30), grab_end=time(22, 30), alarm_1=time(15, 0), alarm_2=time(19, 0),
+        alarm_1=time(15, 0), alarm_2=time(19, 0),
     )
 
 
@@ -32,15 +32,21 @@ def row(completed_at, status=AS.COMPLETED, approval=AP.NONE, grade=None, parent_
                       parent_marked=parent_marked)
 
 
-def test_day_times_has_cutoff_and_grab_end():
+NEXT_MIDNIGHT = datetime.combine(MON + timedelta(days=1), time(0, 0), tzinfo=MX)
+
+
+def test_day_times_cutoff_is_the_midnight_ending_the_day():
+    """The owner has the whole due day: the cutoff is 00:00 of the next
+    family-local day, not a setting (the evening release is gone)."""
     t = day_times(cfg(), MON)
-    assert t.cutoff == at(20, 30)
-    assert t.grab_end == at(22, 30)
+    assert t.cutoff == NEXT_MIDNIGHT
+    assert not hasattr(t, "grab_end")
 
 
 def test_completed_in_time_boundary():
-    assert completed_in_time(row(at(20, 29, 59)), cfg())
-    assert not completed_in_time(row(at(20, 30)), cfg())
+    assert completed_in_time(row(at(20, 30)), cfg())      # the old cutoff: still in time
+    assert completed_in_time(row(at(23, 59, 59)), cfg())
+    assert not completed_in_time(row(NEXT_MIDNIGHT), cfg())
     assert not completed_in_time(row(None), cfg())
 
 
@@ -54,8 +60,8 @@ def test_completed_in_time_grade_and_approval():
     assert not completed_in_time(row(at(9), approval=AP.REJECTED), cfg())
 
 
-def test_parent_marked_counts_after_cutoff():
-    late = at(23, 0)
+def test_parent_marked_counts_after_the_day_ended():
+    late = NEXT_MIDNIGHT + timedelta(hours=8)
     assert completed_in_time(row(late, approval=AP.APPROVED, parent_marked=True), cfg())
     assert not completed_in_time(row(late, approval=AP.APPROVED, parent_marked=False), cfg())
     # still subject to approval and grade

@@ -145,8 +145,8 @@ class PingService:
                     TaskAssignment.assigned_date <= today,
                 )
             )).scalars().all())
-            # Chores expired for their owner (Early Bird cutoff) are the
-            # family's now: not waiting on this kid any more.
+            # Chores expired for their owner (their due day is over) are
+            # not waiting on this kid any more.
             return len(await TaskAssignmentService.drop_expired(db, family_id, open_rows))
         if user.role != UserRole.PARENT:
             return 0

@@ -1,5 +1,6 @@
 """Early Bird pure rules (no DB): deadline instants, per-chore / day / week
-results, streak and bonus arithmetic. See the 2026-11-07 early-bird spec."""
+results, streak and bonus arithmetic. See the 2026-11-07 early-bird spec and,
+for the day's cutoff, 2026-11-25-remove-evening-release-design.md."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -21,7 +22,10 @@ LADDER_BONUS_TIERS = ((80, 5), (90, 10), (100, 15))  # (early_pct, bonus_pct) as
 # cutoff everywhere is the deadline itself.
 R1_BEFORE = timedelta(minutes=60)
 R2_BEFORE = timedelta(minutes=30)
-GRABS_PUSH_WINDOW = timedelta(minutes=60)
+# A chore is its owner's for its whole due day: the day's cutoff is the
+# midnight that ends it (day_times). This is that rule as members read it —
+# the last minute they can report — and the ONLY place the display value lives.
+DAY_END_LABEL = "23:59"
 SETTLE_LOOKBACK_WEEKS = 3
 PENDING_GRACE_DAYS = 7
 # Settlement stops at the first week still "pending" and resumes next sweep.
@@ -43,8 +47,6 @@ class EarlyBirdConfig:
     week_pct: int
     streak_cents: int
     tz: ZoneInfo
-    cutoff: time  # chores must be done before this to count as completed
-    grab_end: time  # end of the up-for-grabs window
     alarm_1: time  # first teen chore alarm (family-local)
     alarm_2: time  # second teen chore alarm
     # Earlier on-periods, closed by a switch-off: ((start, end), ...). The
@@ -65,8 +67,6 @@ class EarlyBirdConfig:
             week_pct=fam.early_bird_week_pct,
             streak_cents=fam.early_bird_streak_cents,
             tz=safe_zoneinfo(fam.timezone),
-            cutoff=fam.chore_cutoff,
-            grab_end=fam.grab_window_end,
             alarm_1=fam.teen_alarm_1,
             alarm_2=fam.teen_alarm_2,
             rules_version=int(getattr(fam, "rules_version", None) or 1),
@@ -82,8 +82,10 @@ class DayTimes:
     r1: datetime
     r2: datetime
     deadline: datetime
+    # The day's end: 00:00 family-local of the NEXT day. Not a setting. A
+    # chore reported before it counts as completed; from it on, the chore is
+    # expired for its owner (families.chore_cutoff is retired and unread).
     cutoff: datetime
-    grab_end: datetime
 
 
 def day_times(cfg: EarlyBirdConfig, day: date) -> DayTimes:
@@ -92,8 +94,7 @@ def day_times(cfg: EarlyBirdConfig, day: date) -> DayTimes:
         r1=deadline - R1_BEFORE,
         r2=deadline - R2_BEFORE,
         deadline=deadline,
-        cutoff=datetime.combine(day, cfg.cutoff, tzinfo=cfg.tz),
-        grab_end=datetime.combine(day, cfg.grab_end, tzinfo=cfg.tz),
+        cutoff=datetime.combine(day + timedelta(days=1), time(0, 0), tzinfo=cfg.tz),
     )
 
 
@@ -110,17 +111,16 @@ def alarm_slot_start(cfg: EarlyBirdConfig, day: date, slot: str) -> datetime:
 
 def alarm_slot(cfg: EarlyBirdConfig, now: datetime) -> Optional[Literal["a1", "a2"]]:
     """"a1"/"a2" during the ALARM_WINDOW starting at ``alarm_1``/``alarm_2``
-    family-local on an active day, else None. A window never runs past the
-    day's cutoff (the chores are no longer the teen's after it), and when two
+    family-local on an active day, else None. An alarm is at most 23:00
+    (FamilyUpdate), so its window always ends inside its own day; when two
     windows overlap the later alarm is the live one."""
     local = now.astimezone(cfg.tz)
     day = local.date()
     if not is_active_day(cfg, day):
         return None
-    cutoff = day_times(cfg, day).cutoff
     for slot in ("a2", "a1"):
         start = alarm_slot_start(cfg, day, slot)
-        if start <= local < min(start + ALARM_WINDOW, cutoff):
+        if start <= local < start + ALARM_WINDOW:
             return slot
     return None
 
@@ -209,8 +209,9 @@ def chore_state(row: CoveredRow, cfg: EarlyBirdConfig, now: datetime, *, grace: 
 
 
 def completed_in_time(row: CoveredRow, cfg: EarlyBirdConfig, *, grace: bool = False) -> bool:
-    """Counts as completed for the weekly ladder: done before the day's cutoff
-    (a parent-marked row is exempt from the time test), not graded
+    """Counts as completed for the weekly ladder: done on its due day, before
+    the midnight that ends it (a parent-marked row is exempt from the time
+    test), not graded
     missed/partial, and approved (or pending review when ``grace``)."""
     if row.status != AssignmentStatus.COMPLETED or row.completed_at is None:
         return False
@@ -239,7 +240,7 @@ class LadderResult:
     completed: int
     early: int
     total: int
-    # True once the week can no longer change (Sunday's cutoff has passed);
+    # True once the week can no longer change (Sunday is over);
     # filled by the service, never by week_ladder.
     final: bool = False
 
@@ -312,32 +313,22 @@ def pays_streak(result: str, run: int) -> bool:
     return result == "early" and run > 0 and run % STREAK_WEEKS == 0
 
 
-def role_may_take(allowed_roles, role_value: str) -> bool:
-    """A template's ``allowed_roles`` (empty/None = everyone) admits the role."""
-    return not allowed_roles or role_value in allowed_roles
-
-
 def early_bonus_points(effective_points: int, pct: int) -> int:
     if effective_points <= 0 or pct <= 0:
         return 0
     return max(1, (effective_points * pct + 50) // 100)
 
 
-def reminder_stage(now: datetime, t: DayTimes) -> Optional[Literal["r1", "r2", "grabs"]]:
+def reminder_stage(now: datetime, t: DayTimes) -> Optional[Literal["r1", "r2"]]:
+    """The two reminders before the early deadline. Nothing fires later in the
+    day: a chore is never released to the family."""
     if t.r1 <= now < t.r2:
         return "r1"
     if t.r2 <= now < t.deadline:
         return "r2"
-    if t.cutoff <= now < min(t.grab_end, t.cutoff + GRABS_PUSH_WINDOW):
-        return "grabs"
     return None
 
 
-def grab_window_open(now: datetime, t: DayTimes) -> bool:
-    """The up-for-grabs window: cutoff <= now < grab_end (family-local day)."""
-    return t.cutoff <= now < t.grab_end
-
-
 def chore_expired(now: datetime, t: DayTimes) -> bool:
-    """True once the day's cutoff has passed: the owner can no longer complete."""
+    """True once the chore's due day is over: the owner can no longer complete."""
     return now >= t.cutoff

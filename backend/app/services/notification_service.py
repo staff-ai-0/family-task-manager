@@ -27,7 +27,7 @@ from app.models.notification import Notification, NotificationType as NT
 # The UX-D4a smart reminders (streak at risk / quest nudge) supersede too.
 SUPERSEDING_TYPES = frozenset({
     NT.TASK_DUE, NT.TASK_ASSIGNED, NT.PARENT_NUDGE, NT.STREAK_AT_RISK, NT.QUEST_NUDGE,
-    NT.DEADLINE_SOON, NT.UP_FOR_GRABS, NT.CHORE_ALARM, NT.RULES_UPDATE,
+    NT.DEADLINE_SOON, NT.CHORE_ALARM, NT.RULES_UPDATE,
     NT.SHOW_AND_TELL,
 })
 
@@ -152,26 +152,6 @@ _COPY = {
         "title": {"es": "⚠️ Faltan 30 minutos", "en": "⚠️ 30 minutes left"},
         "body": {"es": "Aún llegas al bono madrugador: termina tu tarea antes de las {deadline}.", "en": "There's still time for the early bird bonus: finish your chore before {deadline}."},
     },
-    "grabs_owner": {
-        "type": NT.UP_FOR_GRABS,
-        "title": {"es": "⏰ Se acabó el tiempo", "en": "⏰ Time's up"},
-        "body": {"es": "{n} de tus tareas ya quedaron libres para la familia.", "en": "{n} of your chores are open to the family now."},
-    },
-    "grabs_owner_one": {
-        "type": NT.UP_FOR_GRABS,
-        "title": {"es": "⏰ Se acabó el tiempo", "en": "⏰ Time's up"},
-        "body": {"es": "Tu tarea ya quedó libre para la familia.", "en": "Your chore is open to the family now."},
-    },
-    "grabs_open": {
-        "type": NT.UP_FOR_GRABS,
-        "title": {"es": "🙌 {n} tareas libres", "en": "🙌 {n} chores up for grabs"},
-        "body": {"es": "Tómalas y gana sus puntos.", "en": "Take them and earn their points."},
-    },
-    "grabs_open_one": {
-        "type": NT.UP_FOR_GRABS,
-        "title": {"es": "🙌 1 tarea libre", "en": "🙌 1 chore up for grabs"},
-        "body": {"es": "Tómala y gana sus puntos.", "en": "Take it and earn its points."},
-    },
     "early_bird_payout_kid": {
         "type": NT.EARLY_BIRD_PAYOUT,
         "title": {"es": "🏆 ¡{weeks} semanas madrugador!", "en": "🏆 {weeks} early-bird weeks!"},
@@ -181,11 +161,6 @@ _COPY = {
         "type": NT.EARLY_BIRD_PAYOUT,
         "title": {"es": "🏆 {kid}: {weeks} semanas madrugador", "en": "🏆 {kid}: {weeks} early-bird weeks"},
         "body": {"es": "Se acreditaron {amount} a su saldo.", "en": "{amount} was credited to their balance."},
-    },
-    "chore_taken": {
-        "type": NT.CHORE_TAKEN,
-        "title": {"es": "🙋 {taker} tomó tu tarea", "en": "🙋 {taker} took your chore"},
-        "body": {"es": "'{title}' ya no es tuya — se acabó el tiempo.", "en": "'{title}' is no longer yours — time ran out."},
     },
     "task_due_today_one": {
         "type": NT.TASK_DUE,

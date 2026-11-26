@@ -3,7 +3,7 @@
 < 60 % of the teen's covered chores completed → no pay for the week; 60–99 % →
 the mode's existing per-task amount; 100 % → that amount plus +5/+10/+15 % by
 early share (≥ 80/90/100 % before the 11:00 deadline). Applied only once the
-week is final (Sunday's cutoff) and only in the parent-released modes.
+week is final (Sunday is over) and only in the parent-released modes.
 
 Money: every expected amount below is a literal integer worked out by hand
 (odd cap / point value so the integer floors actually bite), never re-derived
@@ -58,7 +58,7 @@ def _this_monday() -> date:
     return today - timedelta(days=today.weekday())
 
 
-LAST = _this_monday() - timedelta(days=7)  # always final: its Sunday cutoff is past
+LAST = _this_monday() - timedelta(days=7)  # always final: its Sunday is over
 LAST_SUN = LAST + timedelta(days=6)
 
 
@@ -106,7 +106,7 @@ async def _chore(db, family, kid, day, *, hh=None, grade=None, exempt=False,
 
 async def _week(db, family, kid, monday, *, early, late=0, partial=0, pending=0):
     """10 chores: `early` done 09:00 (before the 11:00 deadline), `late` done
-    15:00 (after the deadline, before the 20:30 cutoff), `partial` done early
+    15:00 (after the deadline, same day), `partial` done early
     but graded partial, `pending` done early but still awaiting the parent's
     review, the rest left open."""
     kinds = ["early"] * early + ["late"] * late + ["partial"] * partial
@@ -261,17 +261,18 @@ async def test_early_bird_off_pays_legacy_amounts(db_session, test_family, test_
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode", MODES)
 async def test_non_final_week_is_not_zeroed_and_has_no_bonus(ctx, mode):
-    """Before Sunday's 20:30 cutoff the week can still change: the amount is the
-    per-task one, the tier is exposed so the UI can show 'at risk'."""
+    """Until Sunday is over the week can still change (the kid can report a
+    chore up to 23:59): the amount is the per-task one, the tier is exposed so
+    the UI can show 'at risk'. It is floored only from Monday 00:00."""
     db, fam, kid = ctx
     await _account(db, kid, mode)
     await _week(db, fam, kid, LAST, early=5)
-    before = datetime.combine(LAST_SUN, time(20, 29), tzinfo=MX)
-    at_cutoff = datetime.combine(LAST_SUN, time(20, 30), tzinfo=MX)
-    p = await _project(db, kid, fam, now=before)
-    assert p["amount_cents"] == FIVE[mode]
-    assert (p["ladder_tier"], p["ladder_final"], p["completed_pct"]) == ("no_pay", False, 50)
-    p = await _project(db, kid, fam, now=at_cutoff)
+    for hh, mm in ((20, 30), (21, 0), (23, 59)):   # 20:30 was the old cutoff
+        p = await _project(db, kid, fam, now=datetime.combine(LAST_SUN, time(hh, mm), tzinfo=MX))
+        assert p["amount_cents"] == FIVE[mode], (hh, mm)
+        assert (p["ladder_tier"], p["ladder_final"], p["completed_pct"]) == ("no_pay", False, 50)
+    monday = datetime.combine(LAST_SUN + timedelta(days=1), time(0, 0), tzinfo=MX)
+    p = await _project(db, kid, fam, now=monday)
     assert p["amount_cents"] == 0 and p["ladder_final"] is True
 
 
@@ -281,7 +282,7 @@ async def test_non_final_week_is_not_zeroed_and_has_no_bonus(ctx, mode):
     ("points_rate", 3955, 6328),          # 5 * 791, then 8 * 791
 ])
 async def test_unreviewed_work_keeps_the_week_provisional(ctx, mode, unreviewed, reviewed):
-    """R5: 5 approved + 3 awaiting review, past Sunday's cutoff. Not floored
+    """R5: 5 approved + 3 awaiting review, past Sunday's end. Not floored
     (5/10 would be no_pay) while the parent has not reviewed; once the three
     are approved, 8/10 is final and pays per task."""
     db, fam, kid = ctx

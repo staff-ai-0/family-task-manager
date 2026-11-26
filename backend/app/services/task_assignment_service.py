@@ -1579,8 +1579,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             .where(open_filter)
         )).scalars().all()
         now = now if now is not None else datetime.now(timezone.utc)
-        # Rows expired for their owner (Early Bird cutoff passed) are the
-        # family's now, not blockers.
+        # Rows expired for their owner (their due day is over) are not
+        # blockers any more.
         return any(
             not TaskAssignmentService.expired_for_owner(cfg, r, r.template, now)
             for r in open_rows
@@ -1626,17 +1626,18 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
     @staticmethod
     def expired_for_owner(cfg, assignment, template, now: datetime) -> bool:
-        """Chore rules v2 (R6): THE predicate "expired for its owner". A covered
+        """Chore rules (R6): THE predicate "expired for its owner". A covered
         chore (mandatory, non-bonus, not early_bird_exempt), not a taker's row,
-        in a family with Early Bird on, on an active day, once the cutoff of its
-        due day has passed. Such a row is the family's: the owner can no longer
-        complete it and it no longer counts as open for them.
+        in a family with Early Bird on, on an active day, once its due day is
+        over (the family-local midnight that ends it — day_times().cutoff).
+        The owner can no longer complete such a row and it no longer counts
+        as open for them. It is never released to anyone else.
 
         A parent send-back (proof rejected → reopened as PENDING + approval
         REJECTED) never expires (ruling R9): the rejection notice tells the kid
         to redo it, so it stays theirs to finish — still open in the gates and
-        lists, and never up for grabs. The redo still counts late for the
-        ladder (completed_in_time compares completed_at with the cutoff)."""
+        lists. A redo after the due day still counts late for the ladder
+        (completed_in_time compares completed_at with the day's cutoff)."""
         from app.services.early_bird_rules import chore_expired, day_times, is_active_day
 
         if template.is_bonus or template.early_bird_exempt or assignment.taken_from_id:
@@ -1700,7 +1701,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         # requires a photo" branches below still give their own message.
         proof_image_url = clean_proof_url(proof_image_url)
         # ONE instant for the expiry check and every completed_at stamp below,
-        # so a row cannot pass the cutoff test and be stamped after it.
+        # so a row cannot pass the end-of-day test and be stamped after it.
         now = now if now is not None else datetime.now(timezone.utc)
         # Row-lock the assignment: the mandatory path now awards points, so a
         # concurrent double-submit (kid double-tapping "complete") must not pass
@@ -2770,7 +2771,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
     def _check_deletable(cls, entity: TaskAssignment) -> None:
         """Neither half of an Early Bird take can be hard-deleted. The owner's
         TAKEN row: ``taken_from_id`` is ON DELETE SET NULL, so the taker's row
-        would turn into an ordinary (grabbable/covered) chore. The taker's
+        would turn into an ordinary covered chore. The taker's
         row: the owner's row would stay TAKEN with nobody doing the chore."""
         if entity.status == AssignmentStatus.TAKEN or entity.taken_from_id is not None:
             raise ValidationException(TAKEN_ROW_LOCKED)
