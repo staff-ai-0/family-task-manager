@@ -95,7 +95,7 @@ async def test_version_bump_auto_announces_ignoring_cap(
 ):
     await _eb(db_session, test_family)
     assert (await client.post("/api/rules/announce", headers=auth_headers)).status_code == 200
-    r = await _patch(client, auth_headers, chore_cutoff="21:00")
+    r = await _patch(client, auth_headers, teen_alarm_2="19:30")
     assert r.status_code == 200, r.text
     assert len(await _rules_notes(db_session, test_family.id)) == 4  # 2 + 2 (cap ignored)
 
@@ -129,7 +129,7 @@ async def test_bonus_pct_change_re_asks(
 
 async def test_bump_with_eb_off_sends_nothing(client, db_session, test_family, test_parent_user, auth_headers):
     await _eb(db_session, test_family, on=False)
-    r = await _patch(client, auth_headers, chore_cutoff="21:00")
+    r = await _patch(client, auth_headers, teen_alarm_2="19:30")
     assert r.status_code == 200
     assert await _rules_notes(db_session) == []
 
@@ -187,7 +187,7 @@ async def test_bump_after_everyone_accepted_notifies_everyone(
     v = test_family.rules_version
     await _accept(db_session, test_parent_user, test_family.id, v)
     await _accept(db_session, test_teen_user, test_family.id, v)
-    r = await _patch(client, auth_headers, chore_cutoff="21:00")
+    r = await _patch(client, auth_headers, teen_alarm_2="19:30")
     assert r.status_code == 200 and r.json()["rules_version"] == v + 1
     notes = await _rules_notes(db_session)
     assert sorted(str(n.user_id) for n in notes) == sorted(
@@ -198,7 +198,7 @@ async def test_bump_and_enable_in_one_save_announces_once(
     client, db_session, test_family, test_parent_user, test_teen_user, auth_headers
 ):
     await _eb(db_session, test_family, on=False)
-    r = await _patch(client, auth_headers, early_bird_enabled=True, chore_cutoff="21:00")
+    r = await _patch(client, auth_headers, early_bird_enabled=True, teen_alarm_2="19:30")
     assert r.status_code == 200, r.text
     assert r.json()["rules_version"] == 2 and r.json()["early_bird_enabled"] is True
     notes = await _rules_notes(db_session)
@@ -219,9 +219,9 @@ async def test_announce_failure_with_failing_rollback_does_not_fail_save(
 
     monkeypatch.setattr(RulesService, "announce", boom)
     monkeypatch.setattr(db_session, "rollback", rollback_boom)
-    r = await _patch(client, auth_headers, chore_cutoff="21:00")
+    r = await _patch(client, auth_headers, teen_alarm_2="19:30")
     assert r.status_code == 200, r.text
-    assert r.json()["chore_cutoff"] == "21:00" and r.json()["rules_version"] == 2
+    assert r.json()["teen_alarm_2"] == "19:30" and r.json()["rules_version"] == 2
 
 
 async def test_announce_failure_does_not_fail_save(
@@ -233,8 +233,8 @@ async def test_announce_failure_does_not_fail_save(
         raise RuntimeError("push down")
 
     monkeypatch.setattr(RulesService, "announce", boom)
-    r = await _patch(client, auth_headers, chore_cutoff="21:00")
+    r = await _patch(client, auth_headers, teen_alarm_2="19:30")
     assert r.status_code == 200, r.text
-    assert r.json()["chore_cutoff"] == "21:00"
+    assert r.json()["teen_alarm_2"] == "19:30"
     await db_session.refresh(test_family)
     assert test_family.rules_version == 2

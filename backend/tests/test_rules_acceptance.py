@@ -42,12 +42,11 @@ async def test_status_required_every_role(client, db_session, test_family, test_
     assert b["required"] is True and b["accepted_at"] is None
     assert b["version"] == test_family.rules_version
     rules = b["rules"]
-    assert set(rules) == {"version", "deadline", "cutoff", "grab_end", "alarm_1", "alarm_2",
+    assert set(rules) == {"version", "deadline", "day_end", "alarm_1", "alarm_2",
                           "streak_cents", "chore_bonus_pct", "floor_pct", "bonus_tiers"}
     assert rules["version"] == test_family.rules_version
     assert rules["deadline"] == test_family.early_bird_deadline.strftime("%H:%M")
-    assert rules["cutoff"] == test_family.chore_cutoff.strftime("%H:%M")
-    assert rules["grab_end"] == test_family.grab_window_end.strftime("%H:%M")
+    assert rules["day_end"] == "23:59"  # the last minute to report, not a setting
     assert rules["alarm_1"] == test_family.teen_alarm_1.strftime("%H:%M")
     assert rules["alarm_2"] == test_family.teen_alarm_2.strftime("%H:%M")
     assert rules["streak_cents"] == test_family.early_bird_streak_cents
@@ -216,7 +215,7 @@ async def test_export_carries_acceptance_with_snapshot(client, db_session, test_
     assert len(rows) == 1
     row = rows[0]
     assert row["user_id"] == str(test_teen_user.id) and row["rules_version"] == v
-    assert set(row["snapshot"]) == {"version", "deadline", "cutoff", "grab_end", "alarm_1", "alarm_2",
+    assert set(row["snapshot"]) == {"version", "deadline", "day_end", "alarm_1", "alarm_2",
                                     "streak_cents", "chore_bonus_pct", "floor_pct", "bonus_tiers"}
     assert row["snapshot"]["version"] == v
 

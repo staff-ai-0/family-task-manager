@@ -124,7 +124,7 @@ def test_chore_rules_v2_round_trip(scratch_dsn):
     dsn = scratch_dsn
     _alembic(dsn, "upgrade", "early_bird_past_periods")
     _insert(dsn, "families", id=uuid.uuid4(), name="Old")
-    _alembic(dsn, "upgrade", "head")
+    _alembic(dsn, "upgrade", "chore_rules_v2")  # this revision, not head
     new = {"chore_cutoff", "grab_window_end", "teen_alarm_1", "teen_alarm_2", "rules_version"}
     assert new <= _cols(dsn, "families")
     row = _sql(dsn, "SELECT chore_cutoff::text AS c, grab_window_end::text AS g, "
@@ -201,3 +201,30 @@ def test_chore_baselines_round_trip(scratch_dsn):
     assert not _cols(dsn, "chore_baselines")
     _alembic(dsn, "upgrade", "head")
     assert _cols(dsn, "chore_baselines")
+
+
+def test_remove_evening_release_reasks_every_family(scratch_dsn):
+    """Data-only: every family's rules_version moves up one so each member
+    re-reads the changed rules; the two retired columns are left in place."""
+    dsn = scratch_dsn
+    _alembic(dsn, "upgrade", "chore_baselines")
+    accepted, fresh = uuid.uuid4(), uuid.uuid4()
+    _insert(dsn, "families", id=accepted, name="Had accepted v3")
+    _insert(dsn, "families", id=fresh, name="Never touched")
+    _sql(dsn, "UPDATE families SET rules_version = 3 WHERE id = $1", accepted)
+
+    def version(fid):
+        return _sql(dsn, "SELECT rules_version AS v FROM families WHERE id = $1", fid)[0]["v"]
+
+    _alembic(dsn, "upgrade", "remove_evening_release")
+    assert (version(accepted), version(fresh)) == (4, 2)
+    assert {"chore_cutoff", "grab_window_end"} <= _cols(dsn, "families")
+    # A family created after the upgrade starts at 1: the downgrade floors there.
+    late = uuid.uuid4()
+    _insert(dsn, "families", id=late, name="Created later")
+    assert version(late) == 1
+
+    _alembic(dsn, "downgrade", "chore_baselines")
+    assert (version(accepted), version(fresh), version(late)) == (3, 1, 1)
+    _alembic(dsn, "upgrade", "head")
+    assert (version(accepted), version(fresh), version(late)) == (4, 2, 2)

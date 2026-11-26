@@ -16,7 +16,7 @@ from app.models.family import Family
 from app.models.notification import Notification, NotificationType
 from app.models.rules_acceptance import RulesAcceptance
 from app.models.user import APPROVAL_APPROVED, User
-from app.services.early_bird_rules import LADDER_BONUS_TIERS, LADDER_FLOOR_PCT
+from app.services.early_bird_rules import DAY_END_LABEL, LADDER_BONUS_TIERS, LADDER_FLOOR_PCT
 
 
 def _hhmm(t: time) -> str:
@@ -33,8 +33,9 @@ class RulesService:
         return {
             "version": RulesService._version(family),
             "deadline": _hhmm(family.early_bird_deadline),
-            "cutoff": _hhmm(family.chore_cutoff),
-            "grab_end": _hhmm(family.grab_window_end),
+            # The last minute a chore can be reported on its day. A constant,
+            # shown and snapshotted like the family's own values.
+            "day_end": DAY_END_LABEL,
             "alarm_1": _hhmm(family.teen_alarm_1),
             "alarm_2": _hhmm(family.teen_alarm_2),
             "streak_cents": int(family.early_bird_streak_cents),

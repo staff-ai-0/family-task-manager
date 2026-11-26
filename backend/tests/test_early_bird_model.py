@@ -123,7 +123,7 @@ async def test_family_update_validation(client, auth_headers, db_session, test_f
     assert (await patch(early_bird_deadline="nope")).status_code == 422
     r = await patch(early_bird_deadline="11:00")
     assert r.status_code == 200 and r.json()["early_bird_deadline"] == "11:00"
-    r = await patch(early_bird_deadline="22:00", chore_cutoff="23:00", grab_window_end="23:30")
+    r = await patch(early_bird_deadline="22:00")
     assert r.status_code == 200 and r.json()["early_bird_deadline"] == "22:00"
     assert (await patch(early_bird_days=[7])).status_code == 422
     assert (await patch(early_bird_days=[])).status_code == 422
