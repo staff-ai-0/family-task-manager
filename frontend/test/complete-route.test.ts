@@ -44,16 +44,16 @@ describe("POST /api/assignments/complete — JSON mode", () => {
         expect(body.message).toContain("obligatorias");
     });
 
-    it("maps a 409 chore_expired to the open-to-the-family copy, not a retry hint", async () => {
+    it("maps a 409 chore_expired to the day-is-over copy, not a retry hint", async () => {
         vi.stubGlobal("fetch", backend(409, { error: "conflict", code: "chore_expired", message: "chore_expired", status_code: 409 }));
         const res = await call(req({ assignment_id: "a1" }));
         expect(res.status).toBe(409);
         const body = await res.json();
         expect(body.ok).toBe(false);
-        expect(body.message).toBe("Esta tarea ya quedó libre para la familia");
+        expect(body.message).toBe("El día de esta tarea ya terminó. Si la hiciste, pide a tus papás que la marquen.");
         expect(body.message).not.toMatch(/intenta/i);
         const en = await (await call(req({ assignment_id: "a1" }), cookies({ access_token: "t", lang: "en" }))).json();
-        expect(en.message).toBe("This chore is open to the family now");
+        expect(en.message).toBe("This chore's day is over. If you did it, ask a parent to mark it.");
     });
 
     it("rejects a missing assignment id with 400", async () => {
@@ -89,8 +89,8 @@ describe("POST /api/assignments/complete — form mode (unchanged)", () => {
 
 describe("completeErrorMessage", () => {
     it("chore_expired code wins over the generic 4xx copy", () => {
-        expect(completeErrorMessage(409, "", true, "chore_expired")).toBe("Esta tarea ya quedó libre para la familia");
-        expect(completeErrorMessage(409, "", false, "chore_expired")).toBe("This chore is open to the family now");
+        expect(completeErrorMessage(409, "", true, "chore_expired")).toBe("El día de esta tarea ya terminó. Si la hiciste, pide a tus papás que la marquen.");
+        expect(completeErrorMessage(409, "", false, "chore_expired")).toBe("This chore's day is over. If you did it, ask a parent to mark it.");
     });
     it("picks a side of bilingual backend copy", () => {
         expect(completeErrorMessage(400, "Hola / Hello", true)).toBe("Hola");

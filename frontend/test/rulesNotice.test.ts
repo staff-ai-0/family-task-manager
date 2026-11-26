@@ -15,8 +15,7 @@ import {
 const rules = {
     version: 3,
     deadline: "10:00",
-    cutoff: "21:00",
-    grab_end: "23:00",
+    day_end: "23:59",
     alarm_1: "09:00",
     alarm_2: "09:45",
     streak_cents: 45000,
@@ -32,41 +31,41 @@ describe("rulesLines", () => {
     it("pins every rule line (ES)", () => {
         const l = rulesLines(rules, "es");
         expect(l).toContain("Hora madrugadora: termina tus tareas antes de las 10:00.");
-        expect(l).toContain("Hora de corte: a las 21:00 tus tareas abiertas quedan para tomar y no cuentan como hechas.");
-        expect(l).toContain("Para tomar: hasta las 23:00, cualquier miembro de la familia puede tomar una tarea que quedó abierta.");
+        expect(l[1]).toBe("Fin del día: tienes hasta las 23:59 para marcar tus tareas como hechas; después cuentan como no hechas.");
+        expect(l.join("\n")).not.toMatch(/Hora de corte|para tomar/i);
         expect(l).toContain("Pago semanal: con menos de 55 % de las tareas de la semana, sin pago base; de 55 a 99 %, cada tarea completada paga.");
         expect(l).toContain("Bono semanal: con 100 % terminado, el bono depende de cuántas se hicieron antes de las 10:00. 70 % o más temprano: +3 %. 85 % o más temprano: +8 %.");
         expect(l).toContain("Bono por tarea (adolescentes): +25 % de puntos extra en una tarea completada antes de las 10:00.");
         expect(l).toContain("Recordatorios: los adolescentes reciben un aviso a las 09:00 y otro a las 09:45.");
         expect(l).toContain("Premio de racha (adolescentes): $450 MXN por cada 3.ª semana madrugadora seguida.");
-        expect(l).toHaveLength(8);
+        expect(l).toHaveLength(7);
     });
     it("pins every rule line (EN)", () => {
         const l = rulesLines(rules, "en");
         expect(l).toContain("Early deadline: finish your chores before 10:00.");
-        expect(l).toContain("Evening cutoff: at 21:00 your open chores go up for grabs and do not count as done.");
-        expect(l).toContain("Up for grabs: until 23:00, any family member can take a chore that was left open.");
+        expect(l[1]).toBe("End of day: you have until 23:59 to mark your chores as done; after that they count as not done.");
+        expect(l.join("\n")).not.toMatch(/cutoff|up for grabs/i);
         expect(l).toContain("Weekly pay: under 55% of the week's chores done, no base pay; from 55% to 99%, each completed chore pays.");
         expect(l).toContain("Weekly bonus: at 100% done, the bonus depends on the share finished before 10:00. 70% or more early: +3%. 85% or more early: +8%.");
         expect(l).toContain("Per-chore bonus (teens): +25% extra points on a chore completed before 10:00.");
         expect(l).toContain("Reminders: teens get a nudge at 09:00 and again at 09:45.");
         expect(l).toContain("Streak prize (teens): $450 MXN for every 3rd consecutive early week.");
-        expect(l).toHaveLength(8);
+        expect(l).toHaveLength(7);
     });
     it("zero per-chore bonus or zero streak prize: the line is left out (ES + EN)", () => {
         for (const lang of ["es", "en"] as const) {
             const noBonus = rulesLines({ ...rules, chore_bonus_pct: 0 }, lang);
-            expect(noBonus).toHaveLength(7);
+            expect(noBonus).toHaveLength(6);
             expect(noBonus.join("\n")).not.toMatch(/Bono por tarea|Per-chore bonus|\+0\s?%/);
             expect(noBonus.join("\n")).toMatch(/Premio de racha|Streak prize/);
 
             const noStreak = rulesLines({ ...rules, streak_cents: 0 }, lang);
-            expect(noStreak).toHaveLength(7);
+            expect(noStreak).toHaveLength(6);
             expect(noStreak.join("\n")).not.toMatch(/Premio de racha|Streak prize|\$0 MXN/);
             expect(noStreak.join("\n")).toMatch(/Bono por tarea|Per-chore bonus/);
 
             const neither = rulesLines({ ...rules, chore_bonus_pct: 0, streak_cents: 0 }, lang);
-            expect(neither).toHaveLength(6);
+            expect(neither).toHaveLength(5);
             expect(neither.join("\n")).not.toContain("undefined");
         }
     });
@@ -80,7 +79,7 @@ describe("rulesLines", () => {
         for (const bt of [[], undefined as any]) {
             for (const lang of ["es", "en"] as const) {
                 const l = rulesLines({ ...rules, bonus_tiers: bt }, lang);
-                expect(l).toHaveLength(7);
+                expect(l).toHaveLength(6);
                 expect(l.join("\n")).not.toMatch(/\.\s*\./);
                 expect(l.join("\n")).not.toMatch(/Weekly bonus|Bono semanal/);
             }

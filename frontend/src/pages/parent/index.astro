@@ -2,7 +2,6 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import ParentHub from "../../components/home/ParentHub.astro";
 import DeliverStrip from "../../components/home/DeliverStrip.astro";
-import GrabsCard from "../../components/home/GrabsCard.astro";
 import RulesStatusCard from "../../components/parent/RulesStatusCard.astro";
 import ShowAndTellCard from "../../components/parent/ShowAndTellCard.astro";
 import { apiFetch } from "../../lib/api";
@@ -44,7 +43,7 @@ const budgetMonth = now.getMonth() + 1;
 const [
     familyRes, progressRes, cupRes, oversightRes, bankFamilyRes, payoutRes,
     taskPendingRes, gigPendingRes, redemptionRes, onboardingRes,
-    monthRes, draftsRes, deliveriesRes, grabsRes,
+    monthRes, draftsRes, deliveriesRes,
 ] = await Promise.all([
     apiFetch<any>("/api/families/me", { token }),
     apiFetch<any>("/api/task-assignments/progress", { token }),
@@ -64,8 +63,6 @@ const [
         : Promise.resolve({ data: null }),
     // UX-D4b: surprises the kids revealed that nobody has handed over yet.
     apiFetch<any[]>("/api/progress/mystery/deliveries", { token }),
-    // Chore rules v2: chores open to the whole family after the evening cutoff.
-    apiFetch<any[]>("/api/early-bird/grabs", { token }),
 ]);
 const family = familyRes.data;
 const deliveries: any[] = deliveriesRes.data ?? [];
@@ -271,7 +268,6 @@ const hello = firstName(user.name);
     )}
 
     <DeliverStrip items={deliveries} lang={lang} />
-    <GrabsCard rows={grabsRes.data ?? []} lang={lang} />
     <RulesStatusCard lang={lang} />
     <ShowAndTellCard lang={lang} />
 

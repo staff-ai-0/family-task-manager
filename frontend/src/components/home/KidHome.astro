@@ -9,7 +9,6 @@
 import TaskDeck from "../deck/TaskDeck.astro";
 import QuestCard from "./QuestCard.astro";
 import EarlyBirdCard from "./EarlyBirdCard.astro";
-import UpForGrabs from "./UpForGrabs.astro";
 import CheckinCard from "./CheckinCard.astro";
 import MysteryBoxCard from "./MysteryBoxCard.astro";
 import EnablePushButton from "../EnablePushButton.astro";
@@ -85,8 +84,6 @@ const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString(es ?
     {mystery && <MysteryBoxCard view={mystery} lang={lang} starMode={starMode} />}
 
     {earlyBird?.applies && <EarlyBirdCard view={earlyBird} lang={lang} />}
-
-    {earlyBird && earlyBird.grabs.length > 0 && <UpForGrabs grabs={earlyBird.grabs} takeBlock={earlyBird.takeBlock} lang={lang} />}
 
     {quest && <QuestCard quest={quest} lang={lang} starMode={starMode} />}
 

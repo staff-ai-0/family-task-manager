@@ -74,7 +74,7 @@ const [{ data: paycheck }, { data: bankGoal }, { data: rewardGoal }, { data: off
         user.role === "teen" ? apiFetch<any>("/api/jarvis/checkin", { token }) : none,
         // UX-D4b. apiFetch never throws; null → no card.
         apiFetch<any>("/api/progress/mystery", { token }),
-        // Early Bird. apiFetch never throws; null → no card, no grabs.
+        // Early Bird. apiFetch never throws; null → no card.
         apiFetch<any>("/api/early-bird/me", { token }),
     ]);
 
