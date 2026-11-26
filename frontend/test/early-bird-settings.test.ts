@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildPayload, validateRulesForm, centsToPesos, daysFromFamily, daysToPayload, pesosToCents, teenTodayLabel } from "../src/lib/earlyBirdSettings";
+import { buildPayload, ladderExplainer, validateRulesForm, centsToPesos, daysFromFamily, daysToPayload, pesosToCents, teenTodayLabel } from "../src/lib/earlyBirdSettings";
 
-const base = { enabled: true, deadline: "11:00", days: [0, 1, 2, 3, 4, 5, 6], bonusPct: 20, streakPesos: 380, cutoff: "20:30", grabEnd: "22:30", alarm1: "15:00", alarm2: "19:00" };
+const base = { enabled: true, deadline: "11:00", days: [0, 1, 2, 3, 4, 5, 6], bonusPct: 20, streakPesos: 380, alarm1: "15:00", alarm2: "19:00" };
 
 describe("early bird settings", () => {
     it("all seven days sends null, a subset sends the sorted list", () => {
@@ -17,7 +17,10 @@ describe("early bird settings", () => {
     });
     it("builds the payload", () => {
         const r = buildPayload(base);
-        expect(r).toEqual({ ok: true, body: { early_bird_enabled: true, early_bird_deadline: "11:00", early_bird_days: null, early_bird_bonus_pct: 20, early_bird_streak_cents: 38000, chore_cutoff: "20:30", grab_window_end: "22:30", teen_alarm_1: "15:00", teen_alarm_2: "19:00" } });
+        expect(r).toEqual({ ok: true, body: { early_bird_enabled: true, early_bird_deadline: "11:00", early_bird_days: null, early_bird_bonus_pct: 20, early_bird_streak_cents: 38000, teen_alarm_1: "15:00", teen_alarm_2: "19:00" } });
+        // The evening cutoff and the grab window are no longer settings.
+        expect(Object.keys((r as any).body)).not.toEqual(expect.arrayContaining(["chore_cutoff"]));
+        expect((r as any).body).not.toHaveProperty("grab_window_end");
     });
     it("rejects invalid fields", () => {
         expect(buildPayload({ ...base, deadline: "06:55" })).toMatchObject({ ok: false, field: "deadline" });
@@ -30,44 +33,43 @@ describe("early bird settings", () => {
 });
 
 describe("validateRulesForm", () => {
-    const v = { deadline: "11:00", cutoff: "20:30", grabEnd: "22:30", alarm1: "15:00", alarm2: "19:00" };
+    const v = { deadline: "11:00", alarm1: "15:00", alarm2: "19:00" };
     it("accepts the defaults", () => {
         expect(validateRulesForm(v, "es")).toBeNull();
     });
-    it("rejects a cutoff at or before the deadline", () => {
-        expect(validateRulesForm({ ...v, deadline: "18:00", cutoff: "18:00" }, "en")).toMatchObject({ field: "cutoff" });
-        expect(validateRulesForm({ ...v, deadline: "19:00", cutoff: "17:30", alarm1: "15:00", alarm2: "17:00" }, "es")).toMatchObject({ field: "cutoff" });
-    });
-    it("rejects a cutoff outside 17:00-23:00 or off the 5-minute step", () => {
-        expect(validateRulesForm({ ...v, cutoff: "16:55" }, "en")).toMatchObject({ field: "cutoff" });
-        expect(validateRulesForm({ ...v, cutoff: "23:05", grabEnd: "23:30" }, "en")).toMatchObject({ field: "cutoff" });
-        expect(validateRulesForm({ ...v, cutoff: "20:32" }, "en")).toMatchObject({ field: "cutoff" });
-        expect(validateRulesForm({ ...v, cutoff: "" }, "en")).toMatchObject({ field: "cutoff" });
-    });
-    it("rejects a grab end at/before the cutoff or after 23:30", () => {
-        expect(validateRulesForm({ ...v, grabEnd: "20:30" }, "en")).toMatchObject({ field: "grabEnd" });
-        expect(validateRulesForm({ ...v, grabEnd: "23:35" }, "en")).toMatchObject({ field: "grabEnd" });
-        expect(validateRulesForm({ ...v, grabEnd: "23:30" }, "en")).toBeNull();
+    it("rejects a deadline outside 07:00-22:00 or off the 5-minute step", () => {
+        expect(validateRulesForm({ ...v, deadline: "06:55" }, "en")).toMatchObject({ field: "deadline" });
+        expect(validateRulesForm({ ...v, deadline: "22:05" }, "en")).toMatchObject({ field: "deadline" });
+        expect(validateRulesForm({ ...v, deadline: "11:03" }, "en")).toMatchObject({ field: "deadline" });
+        // 21:00 was refused while it had to be before the 20:30 cutoff.
+        expect(validateRulesForm({ ...v, deadline: "21:00" }, "en")).toBeNull();
     });
     it("rejects unordered or out-of-range alarms", () => {
         expect(validateRulesForm({ ...v, alarm1: "19:00", alarm2: "15:00" }, "en")).toMatchObject({ field: "alarms" });
         expect(validateRulesForm({ ...v, alarm1: "15:00", alarm2: "15:00" }, "en")).toMatchObject({ field: "alarms" });
         expect(validateRulesForm({ ...v, alarm1: "05:55" }, "en")).toMatchObject({ field: "alarms" });
-        expect(validateRulesForm({ ...v, alarm2: "21:00" }, "en")).toMatchObject({ field: "alarms" });
-        // At the cutoff is too late: alarms must be strictly before it.
-        expect(validateRulesForm({ ...v, alarm2: "20:30" }, "en")).toMatchObject({ field: "alarms" });
-        expect(validateRulesForm({ ...v, alarm2: "20:25" }, "en")).toBeNull();
+        expect(validateRulesForm({ ...v, alarm2: "23:05" }, "en")).toMatchObject({ field: "alarms" });
         expect(validateRulesForm({ ...v, alarm2: "19:02" }, "en")).toMatchObject({ field: "alarms" });
     });
-    it("the alarm message says before the cutoff, in both languages", () => {
-        expect(validateRulesForm({ ...v, alarm2: "20:30" }, "es")?.message).toContain("antes de la hora de corte");
-        expect(validateRulesForm({ ...v, alarm2: "20:30" }, "en")?.message).toContain("before the cutoff");
+    it("accepts evening alarms: the day ends at midnight, not at a cutoff", () => {
+        expect(validateRulesForm({ ...v, alarm2: "20:30" }, "en")).toBeNull();
+        expect(validateRulesForm({ ...v, alarm1: "21:00", alarm2: "23:00" }, "es")).toBeNull();
     });
-    it("messages exist in both languages and differ", () => {
-        const es = validateRulesForm({ ...v, cutoff: "10:00" }, "es")!.message;
-        const en = validateRulesForm({ ...v, cutoff: "10:00" }, "en")!.message;
-        expect(es).not.toBe(en);
-        expect(es.length).toBeGreaterThan(0);
+    it("the alarm message gives the range, in both languages", () => {
+        expect(validateRulesForm({ ...v, alarm2: "23:05" }, "es")?.message).toBe(
+            "Las alarmas van de 06:00 a 23:00, en pasos de 5 minutos, la primera antes que la segunda.");
+        expect(validateRulesForm({ ...v, alarm2: "23:05" }, "en")?.message).toBe(
+            "Alarms run from 06:00 to 23:00 in 5-minute steps, the first before the second.");
+    });
+});
+
+describe("ladderExplainer", () => {
+    it("says open chores count as not done after midnight, and nothing about grabs", () => {
+        const es = ladderExplainer("11:00", "es").join(" ");
+        const en = ladderExplainer("11:00", "en").join(" ");
+        expect(es).toContain("Las tareas que sigan abiertas a la medianoche no cuentan como hechas.");
+        expect(en).toContain("Chores still open at midnight do not count as done.");
+        expect(es + en).not.toMatch(/para tomar|hora de corte|up for grabs|cutoff/i);
     });
 });
 

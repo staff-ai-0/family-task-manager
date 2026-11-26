@@ -1,4 +1,5 @@
-"""Early Bird: 10:00/10:30 reminders and the up-for-grabs pushes."""
+"""Early Bird sweep: the 10:00/10:30 deadline reminders, teen alarms and
+settlement. Nothing is sent in the evening (up for grabs was removed)."""
 from datetime import date, datetime, time, timedelta, timezone
 from unittest.mock import patch
 from uuid import uuid4
@@ -88,7 +89,8 @@ async def ctx(db_session, test_family, test_teen_user):
 async def test_r1_sent_at_1000_local(ctx):
     db, fam, teen, tpl, a, day = ctx
     res = await EarlyBirdService.run_sweep(db, now=_at(day, 10, 0))
-    assert (res["reminders"], res["grabs"], res["paid"]) == (1, 0, 0)  # settled: neutral past weeks
+    assert set(res) == {"reminders", "alarms", "settled", "paid"}
+    assert (res["reminders"], res["paid"]) == (1, 0)  # settled: neutral past weeks
     rows = await _rows(db, teen, "deadline_soon")
     assert len(rows) == 1
     assert rows[0].expires_at.astimezone(MX) == datetime.combine(day, time(11, 0), tzinfo=MX)
@@ -155,37 +157,6 @@ async def test_child_and_exempt_ignored(ctx):
     assert await _rows(db, teen, "deadline_soon") == []
 
 
-async def test_grabs_pushes_at_cutoff(ctx):
-    db, fam, teen, tpl, a, day = ctx
-    sib = await _user(db, fam, "Sibling")
-    res = await EarlyBirdService.run_sweep(db, now=_at(day, 20, 30))
-    assert res["grabs"] == 2
-    owner_rows = await _rows(db, teen, "up_for_grabs")
-    sib_rows = await _rows(db, sib, "up_for_grabs")
-    assert len(owner_rows) == 1 and ("Se acabó" in owner_rows[0].title or "Time's up" in owner_rows[0].title)
-    assert "familia" in owner_rows[0].body or "family" in owner_rows[0].body
-    assert len(sib_rows) == 1
-    assert "libre" in sib_rows[0].title or "up for grabs" in sib_rows[0].title
-    # The push expires when the grab window closes (22:30), not at midnight.
-    for r in (owner_rows[0], sib_rows[0]):
-        assert r.expires_at.astimezone(MX) == datetime.combine(day, time(22, 30), tzinfo=MX)
-    await _stamp(db, _at(day, 20, 30))
-    assert (await EarlyBirdService.run_sweep(db, now=_at(day, 20, 35)))["grabs"] == 0
-    assert (await EarlyBirdService.run_sweep(db, now=_at(day, 21, 5)))["grabs"] == 0
-    assert len(await _rows(db, sib, "up_for_grabs")) == 1
-
-
-async def test_grabs_respects_allowed_roles(db_session, test_family, test_teen_user):
-    await _setup(db_session, test_family)
-    day = _today()
-    tpl = await _tpl(db_session, test_family, allowed_roles=["teen"])
-    await _assign(db_session, test_teen_user, tpl, day)
-    kid = await _user(db_session, test_family, "Kiddo", UserRole.CHILD)
-    await EarlyBirdService.run_sweep(db_session, now=_at(day, 20, 30))
-    assert await _rows(db_session, kid, "up_for_grabs") == []
-    assert len(await _rows(db_session, test_teen_user, "up_for_grabs")) == 1
-
-
 async def test_disabled_or_inactive_day_noop(ctx):
     db, fam, teen, tpl, a, day = ctx
     fam.early_bird_days = [(day.weekday() + 1) % 7]
@@ -226,13 +197,30 @@ async def test_one_family_failure_isolated(ctx):
     assert total == 1
 
 
+async def test_sweep_sends_nothing_at_the_old_cutoff(ctx):
+    """20:30 used to release open chores to the family and push everyone."""
+    db, fam, teen, tpl, a, day = ctx
+    sib = await _user(db, fam, "Sibling")
+    for hh, mm in ((20, 30), (20, 35), (21, 5)):
+        res = await EarlyBirdService.run_sweep(db, now=_at(day, hh, mm))
+        assert "grabs" not in res
+    assert await _rows(db, teen, "up_for_grabs") == []
+    assert await _rows(db, sib, "up_for_grabs") == []
+
+
+def test_no_release_notification_templates_remain():
+    """Nothing can create an up-for-grabs or chore-taken notice any more."""
+    from app.services.notification_service import _COPY as C
+    assert not [k for k in C if k.startswith("grabs_") or k == "chore_taken"]
+
+
 _GRAB_WORDS = ("libre", "hermanos", "grabs", "tom")
 
 
 def test_deadline_reminders_promise_the_bonus_not_grabs():
-    """R1/R2 fire before the 11:00 early deadline, but chores only open to the
-    family at the EVENING cutoff — so the reminder is about the early bonus and
-    must not threaten a grab at {deadline}."""
+    """R1/R2 fire before the 11:00 early deadline: the reminder is about the
+    early bonus. A chore is never released to the family, so it must not
+    threaten that anyone will take it."""
     from app.services.notification_service import _COPY as C
     for key in ("deadline_r1", "deadline_r1_one", "deadline_r2", "deadline_r2_one"):
         for lang, bonus in (("es", "bono madrugador"), ("en", "early bird bonus")):
@@ -240,20 +228,6 @@ def test_deadline_reminders_promise_the_bonus_not_grabs():
             assert "{deadline}" in body and bonus in body, (key, lang, body)
             assert not any(w in body.lower() for w in _GRAB_WORDS), (key, lang, body)
             assert ("{n}" in body) == (not key.endswith("_one")), (key, lang, body)
-
-
-def test_owner_grabs_push_has_no_call_to_action():
-    """At the cutoff the owner can no longer complete (409 chore_expired), so
-    the push states the fact and never says "do it before someone takes it"."""
-    from app.services.notification_service import _COPY as C
-    for key in ("grabs_owner", "grabs_owner_one"):
-        es, en = C[key]["body"]["es"], C[key]["body"]["en"]
-        assert "familia" in es and "family" in en, key
-        assert ("{n}" in es and "{n}" in en) == (key == "grabs_owner"), key
-        for phrase in ("antes de que", "hazla", "hazlas"):
-            assert phrase not in es.lower(), (key, es)
-        for phrase in ("before someone", "do it", "do them"):
-            assert phrase not in en.lower(), (key, en)
 
 
 async def test_alarm_step_failure_still_settles_weeks(ctx):

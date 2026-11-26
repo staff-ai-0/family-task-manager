@@ -9,8 +9,8 @@ export type Lang = "es" | "en";
 export interface RulesValues {
     version?: number;
     deadline: string;
-    cutoff: string;
-    grab_end: string;
+    /** Last minute a chore can be reported on its day ("23:59"). */
+    day_end: string;
     alarm_1: string;
     alarm_2: string;
     streak_cents: number;
@@ -72,8 +72,7 @@ export function rulesLines(rules: RulesValues, lang: Lang): string[] {
         const ladder = tiers.map((t) => `${t.early_pct}% or more early: +${t.bonus_pct}%`).join(". ");
         return [
             `Early deadline: finish your chores before ${rules.deadline}.`,
-            `Evening cutoff: at ${rules.cutoff} your open chores go up for grabs and do not count as done.`,
-            `Up for grabs: until ${rules.grab_end}, any family member can take a chore that was left open.`,
+            `End of day: you have until ${rules.day_end} to mark your chores as done; after that they count as not done.`,
             `Weekly pay: under ${rules.floor_pct}% of the week's chores done, no base pay; from ${rules.floor_pct}% to 99%, each completed chore pays.`,
             ...(tiers.length
                 ? [`Weekly bonus: at 100% done, the bonus depends on the share finished before ${rules.deadline}. ${ladder}.`]
@@ -90,8 +89,7 @@ export function rulesLines(rules: RulesValues, lang: Lang): string[] {
     const ladder = tiers.map((t) => `${t.early_pct} % o más temprano: +${t.bonus_pct} %`).join(". ");
     return [
         `Hora madrugadora: termina tus tareas antes de las ${rules.deadline}.`,
-        `Hora de corte: a las ${rules.cutoff} tus tareas abiertas quedan para tomar y no cuentan como hechas.`,
-        `Para tomar: hasta las ${rules.grab_end}, cualquier miembro de la familia puede tomar una tarea que quedó abierta.`,
+        `Fin del día: tienes hasta las ${rules.day_end} para marcar tus tareas como hechas; después cuentan como no hechas.`,
         `Pago semanal: con menos de ${rules.floor_pct} % de las tareas de la semana, sin pago base; de ${rules.floor_pct} a 99 %, cada tarea completada paga.`,
         ...(tiers.length
             ? [`Bono semanal: con 100 % terminado, el bono depende de cuántas se hicieron antes de las ${rules.deadline}. ${ladder}.`]

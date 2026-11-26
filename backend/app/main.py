@@ -197,7 +197,7 @@ def _register_cron_jobs(scheduler: AsyncIOScheduler) -> None:
                 logger.exception("Show-and-tell nudge failed")
 
     async def _early_bird_sweep():
-        # Early Bird: deadline reminders (-60/-30 min) and up-for-grabs pushes.
+        # Early Bird: deadline reminders (-60/-30 min), teen alarms, settlement.
         # Every 5 min; idempotent per member per window (the notification row
         # is the send record), so a restart never double-sends.
         async with AsyncSessionLocal() as session:

@@ -4,10 +4,12 @@
  * the form (302 + flash) and JSON (deck) modes of /api/assignments/complete.
  */
 export function completeErrorMessage(status: number, detail: string, es: boolean, code = ""): string {
-    // Owner completed a chore after the evening cutoff: it is open to the
-    // family now. Not a retry hint — retrying can never succeed.
+    // The chore's due day is over (it could be reported until 23:59). Not a
+    // retry hint — retrying can never succeed; a parent can still mark it done.
     if (code === "chore_expired") {
-        return es ? "Esta tarea ya quedó libre para la familia" : "This chore is open to the family now";
+        return es
+            ? "El día de esta tarea ya terminó. Si la hiciste, pide a tus papás que la marquen."
+            : "This chore's day is over. If you did it, ask a parent to mark it.";
     }
     if (detail.includes(" / ")) {
         // Backend already ships bilingual "es / en" copy — pick a side.

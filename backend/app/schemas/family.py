@@ -104,9 +104,9 @@ class FamilyUpdate(BaseModel):
     early_bird_bonus_pct: Optional[int] = Field(None, ge=0, le=100)
     early_bird_week_pct: Optional[int] = Field(None, ge=0, le=50)
     early_bird_streak_cents: Optional[int] = Field(None, ge=0, le=1_000_000)
-    # Chore rules v2 (cross-field order is checked in FamilyService).
-    chore_cutoff: Optional[time] = None
-    grab_window_end: Optional[time] = None
+    # Teen alarms (their order is checked in FamilyService). The evening
+    # cutoff and the grab window are gone: a client that still sends
+    # chore_cutoff / grab_window_end is ignored (unknown fields are dropped).
     teen_alarm_1: Optional[time] = None
     teen_alarm_2: Optional[time] = None
     # Module registry: list of ENABLED togglable modules. None = leave as-is
@@ -117,16 +117,6 @@ class FamilyUpdate(BaseModel):
     @classmethod
     def _check_deadline(cls, v):
         return _parse_deadline(v)
-
-    @field_validator("chore_cutoff", mode="before")
-    @classmethod
-    def _check_cutoff(cls, v):
-        return _parse_clock(v, "chore_cutoff", time(17, 0), time(23, 0))
-
-    @field_validator("grab_window_end", mode="before")
-    @classmethod
-    def _check_grab_end(cls, v):
-        return _parse_clock(v, "grab_window_end", time(0, 0), time(23, 30))
 
     @field_validator("teen_alarm_1", "teen_alarm_2", mode="before")
     @classmethod
@@ -203,8 +193,6 @@ class FamilyResponse(EntityResponse):
     early_bird_bonus_pct: int = 20
     early_bird_week_pct: int = 5
     early_bird_streak_cents: int = 38000
-    chore_cutoff: time = time(20, 30)
-    grab_window_end: time = time(22, 30)
     teen_alarm_1: time = time(15, 0)
     teen_alarm_2: time = time(19, 0)
     rules_version: int = 1
@@ -212,10 +200,7 @@ class FamilyResponse(EntityResponse):
     enabled_modules: Optional[List[str]] = None
 
 
-    @field_serializer(
-        "early_bird_deadline", "chore_cutoff", "grab_window_end",
-        "teen_alarm_1", "teen_alarm_2",
-    )
+    @field_serializer("early_bird_deadline", "teen_alarm_1", "teen_alarm_2")
     def _ser_deadline(self, v: time) -> str:
         return v.strftime("%H:%M")
 

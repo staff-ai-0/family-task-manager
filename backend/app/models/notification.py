@@ -26,8 +26,10 @@ class NotificationType:
     # UX-D4a evening smart reminders (kids). The rows double as the send record.
     STREAK_AT_RISK = "streak_at_risk"
     QUEST_NUDGE = "quest_nudge"
+    # CHORE_TAKEN and UP_FOR_GRABS are no longer created ("up for grabs" was
+    # removed 2026-11-25); the types stay because stored rows carry them.
     CHORE_TAKEN = "chore_taken"
-    # Early Bird deadline reminders / up-for-grabs pushes (rows are the send record).
+    # Early Bird deadline reminders (rows are the send record).
     DEADLINE_SOON = "deadline_soon"
     UP_FOR_GRABS = "up_for_grabs"
     CHORE_ALARM = "chore_alarm"

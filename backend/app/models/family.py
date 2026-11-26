@@ -67,7 +67,10 @@ class Family(Base):
     # New families default to 38000; server_default stays 50000 on purpose so
     # existing rows are not rewritten (only the Python default changed).
     early_bird_streak_cents = Column(Integer, nullable=False, default=38000, server_default="50000")
-    # Chore rules v2: day cutoff, end of the up-for-grabs window, the two teen
+    # chore_cutoff and grab_window_end are RETIRED (2026-11-25): the evening
+    # release was removed, a chore's day now ends at midnight
+    # (early_bird_rules.day_times) and nothing reads these two columns. They
+    # stay in the table, like early_bird_week_pct. Still live: the two teen
     # alarms, and a counter bumped whenever a rule-defining setting changes.
     chore_cutoff = Column(Time, nullable=False, default=time(20, 30), server_default="20:30")
     grab_window_end = Column(Time, nullable=False, default=time(22, 30), server_default="22:30")

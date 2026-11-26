@@ -608,7 +608,7 @@ class BankService:
         """(base_cents, bonus_cents, bonus_pct, metrics) — a week's per-task
         ``amount`` run through the pay ladder, metrics from
         EarlyBirdService.week_metrics (THE source of the week's percentages).
-        The ladder only bites once the week is final (Sunday's cutoff): before
+        The ladder only bites once the week is final (Sunday is over): before
         that the amount stands, no bonus, and ``metrics`` is the in-progress
         meter (lets the UI say "at risk"). Early Bird off / week of enabling /
         no covered chores → neutral → the amount untouched. Pass ``cfg`` (an

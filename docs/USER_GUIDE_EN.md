@@ -466,10 +466,9 @@ graph TD
 A way to reward teens for getting their chores done in the morning, and to give the chore day a clear end. Turn it on in **Settings > Family > Early bird** (it is off by default).
 
 - **One "early" time**: the **early deadline** you pick (default 11:00, between 07:00 and 22:00), on the days you choose (default every day). It is the only time that counts as early: for the extra points per chore, for the weekly bonus and for the 3-week prize. Your teens get a reminder 1 hour and 30 minutes before it, as long as they still have chores open.
-- **Evening cutoff**: a chore stays its owner's until the **evening cutoff** (default 8:30 pm). After that the owner can't finish it any more, and it does not count as done.
-- **Up for grabs**: from the cutoff until the end of **"up for grabs"** (default 10:30 pm), that day's chores still open are open to any family member, kids and parents alike. Whoever takes one earns its points; the one who left it loses them (it shows as "Taken"). When the window closes, a chore nobody took stays missed.
-- **Teen alarms**: two reminders a day (default 3 pm and 7 pm, always before the cutoff) to teens who still have chores pending that day.
-- **Weekly pay ladder** for teens (on the weekly chore paycheck, every mode except a flat allowance), counting the week's chores (Monday to Sunday) done by the cutoff:
+- **End of day**: a chore is its owner's all day and is never released to anyone else. They can mark it done until **11:59 pm**. After midnight they can't finish it any more and it counts as not done; you can still record it with "Mark done".
+- **Teen alarms**: two reminders a day (default 3 pm and 7 pm, between 6 am and 11 pm) to teens who still have chores pending that day.
+- **Weekly pay ladder** for teens (on the weekly chore paycheck, every mode except a flat allowance), counting the week's chores (Monday to Sunday) done on their day:
   - **Under 60%**: no base pay that week.
   - **60-99%**: each completed task pays its own value.
   - **100%**: every task pays, **plus** a bonus by how many were done before the early deadline: 80% or more early +5%, 90% or more +10%, 100% +15%. Under 80% early, no bonus.
@@ -478,8 +477,8 @@ A way to reward teens for getting their chores done in the morning, and to give 
 - **Two more rewards**, each adjustable (or set to 0 to turn off):
   1. **More points per early chore**: +20% of the chore's points when it is done before the early deadline.
   2. **Three weeks in a row**: every 3rd consecutive early week (every covered day done before the early deadline) pays a prize, $380 MXN by default for new families.
-- **Evening chores**: tick **"Evening chore — no deadline"** on a task template (like "dinner dishes") and it is left out of the deadline, the cutoff and the ladder. Bonus tasks are never covered.
-- **Parent "mark done"**: a chore you mark done for a kid counts as done for the week (even after the cutoff), but never as early.
+- **Evening chores**: tick **"Evening chore — no deadline"** on a task template (like "dinner dishes") and it is left out of the deadline, the end of day and the ladder. Bonus tasks are never covered.
+- **Parent "mark done"**: a chore you mark done for a kid counts as done for the week (even after its day is over), but never as early.
 - A partial or missed grade counts as not done for the ladder and breaks an early day; a chore waiting for your review shows as pending until you grade it.
 
 **Rules for everyone.** When the rules change, everyone is asked again: each member gets a notice and a sheet showing the rules in your family's own numbers, with a checkbox to accept them. **Send rules to those pending** on the parent home reminds everyone who hasn't accepted yet (people who already accepted are not bothered). The per-chore bonus and the streak prize are marked as teens-only, because only teens earn them. Each person accepts for themselves, and the parent home shows who has accepted (the card appears while Early Bird is on). It is a family agreement, not a lock: if someone taps **Later**, the app keeps working and the sheet comes back on their next visit.

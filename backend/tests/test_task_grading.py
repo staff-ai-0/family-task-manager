@@ -390,17 +390,17 @@ async def _parent_marked_chore(db_session, family, child):
 
 
 def _late_redo_not_counted(a):
-    """A redo completed after the 20:30 cutoff must not inherit the exemption."""
-    from datetime import datetime, time
+    """A redo completed after its due day ended must not inherit the exemption."""
+    from datetime import datetime, time, timedelta
     from zoneinfo import ZoneInfo
     from app.services.early_bird_rules import CoveredRow, EarlyBirdConfig, completed_in_time
 
     tz = ZoneInfo("America/Mexico_City")
     cfg = EarlyBirdConfig(
         enabled=True, enabled_at=None, deadline=time(11), days=None, bonus_pct=0,
-        week_pct=0, streak_cents=0, tz=tz, cutoff=time(20, 30), grab_end=time(22, 30), alarm_1=time(15, 0), alarm_2=time(19, 0),
+        week_pct=0, streak_cents=0, tz=tz, alarm_1=time(15, 0), alarm_2=time(19, 0),
     )
-    late = datetime.combine(a.assigned_date, time(23, 0), tzinfo=tz)
+    late = datetime.combine(a.assigned_date + timedelta(days=1), time(8, 0), tzinfo=tz)
     row = CoveredRow(a.id, a.assigned_date, AssignmentStatus.COMPLETED, ApprovalStatus.APPROVED,
                      None, late, parent_marked=bool(a.marked_done_by_parent))
     assert not completed_in_time(row, cfg)

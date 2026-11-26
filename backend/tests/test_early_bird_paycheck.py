@@ -196,23 +196,25 @@ async def test_ineligible_enable_week_no_bonus(ctx):
 
 
 @pytest.mark.asyncio
-async def test_current_week_bonus_counts_from_sunday_cutoff(ctx):
-    """The pay week is final at Sunday's cutoff (20:30), not its 11:00 deadline:
-    until then a chore can still be completed, so no bonus (and no floor)."""
+async def test_current_week_bonus_counts_once_sunday_is_over(ctx):
+    """The pay week is final when Sunday ends (Monday 00:00), not at its 11:00
+    deadline nor at the old 20:30 cutoff: until midnight a chore can still be
+    reported, so no bonus (and no floor)."""
     db, fam, kid, _ = ctx
     monday = _this_monday()
     await _four_early(db, fam, kid, monday)
     sunday = monday + timedelta(days=6)
     acct = await BankService.ensure_account(db, kid)
 
-    async def bonus_at(hh, mm):
+    async def bonus_at(day, hh, mm):
         p = await BankService._paycheck_projection(
-            db, acct, fam.id, monday, now=datetime.combine(sunday, time(hh, mm), tzinfo=MX))
+            db, acct, fam.id, monday, now=datetime.combine(day, time(hh, mm), tzinfo=MX))
         return p["early_bird_bonus_cents"]
 
-    assert await bonus_at(11, 30) == 0
-    assert await bonus_at(20, 29) == 0
-    assert await bonus_at(20, 30) == 600
+    assert await bonus_at(sunday, 11, 30) == 0
+    assert await bonus_at(sunday, 20, 30) == 0
+    assert await bonus_at(sunday, 23, 59) == 0
+    assert await bonus_at(sunday + timedelta(days=1), 0, 0) == 600
 
 
 @pytest.mark.asyncio

@@ -14,8 +14,7 @@ class BonusTier(BaseModel):
 class RulesSnapshot(BaseModel):
     version: int
     deadline: str
-    cutoff: str
-    grab_end: str
+    day_end: str
     alarm_1: str
     alarm_2: str
     streak_cents: int

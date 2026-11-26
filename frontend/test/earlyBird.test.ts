@@ -1,7 +1,8 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { countdownLabel, earlyBirdCopy, earlyBirdView, grabItems, ladderMessage, payoutWeekNotes, runProgress, takeBlockHint, takeErrorMessage, takeErrorReason, paycheckBonusLine } from "../src/lib/earlyBird";
+import { countdownLabel, earlyBirdCopy, earlyBirdView, ladderMessage, payoutWeekNotes, runProgress, paycheckBonusLine } from "../src/lib/earlyBird";
 
 const d = (s: string) => new Date(s);
 
@@ -9,7 +10,8 @@ const me = (over: Record<string, unknown> = {}) => ({
     enabled: true,
     applies: true,
     deadline: "11:00",
-    cutoff_at: "2026-11-09T20:30:00-06:00",
+    // The end of the day: the next family-local midnight.
+    cutoff_at: "2026-11-10T00:00:00-06:00",
     deadline_at: "2026-11-09T11:00:00-06:00",
     today: "open",
     week: [
@@ -28,8 +30,6 @@ const me = (over: Record<string, unknown> = {}) => ({
     week_ladder: { completed_pct: 0, early_pct: 0, tier: "neutral", bonus_pct: 0, final: false },
     bonus_pct: 20,
     open_today: 1,
-    grabs: [],
-    take_block: null,
     ...over,
 });
 
@@ -46,9 +46,12 @@ describe("countdownLabel", () => {
 });
 
 describe("earlyBirdView", () => {
-    it("null when it does not apply and nothing to grab", () => {
+    it("null whenever it does not apply (there is nothing else to show a child)", () => {
         expect(earlyBirdView(me({ applies: false }), "es", d("2026-11-09T09:00:00-06:00"))).toBeNull();
         expect(earlyBirdView(null, "es", d("2026-11-09T09:00:00-06:00"))).toBeNull();
+        // A payload from before the removal, still carrying grabs, shows nothing.
+        const stale = me({ applies: false, grabs: [{ assignment_id: "a", title: "Dishes", points: 10, owner_name: "Sam" }] });
+        expect(earlyBirdView(stale, "es", d("2026-11-09T21:00:00-06:00"))).toBeNull();
     });
     it("on_track before the 11:00 deadline, counting to the deadline", () => {
         const v = earlyBirdView(me(), "es", d("2026-11-09T09:00:00-06:00"))!;
@@ -58,29 +61,38 @@ describe("earlyBirdView", () => {
         expect(v.countdown).toBe("2 h 00 min");
         expect(v.targetAt).toBe(d("2026-11-09T11:00:00-06:00").toISOString());
     });
-    it("before_cutoff between the deadline and the evening cutoff, counting to the cutoff", () => {
+    it("past the early deadline the chores stay open until midnight, counting to it", () => {
         const v = earlyBirdView(me(), "en", d("2026-11-09T19:30:00-06:00"))!;
         expect(v.state).toBe("before_cutoff");
-        expect(v.countdown).toBe("1 h 00 min");
-        expect(v.headline).toContain("cutoff");
-        expect(v.targetAt).toBe(d("2026-11-09T20:30:00-06:00").toISOString());
+        expect(v.countdown).toBe("4 h 30 min");
+        expect(v.headline).toBe("Today's chores stay open until midnight");
+        expect(v.targetAt).toBe(d("2026-11-10T00:00:00-06:00").toISOString());
+        expect(earlyBirdView(me(), "es", d("2026-11-09T19:30:00-06:00"))!.headline).toBe("Tus tareas de hoy siguen abiertas hasta la medianoche");
     });
-    it("missed with open chores still counts down to the cutoff", () => {
+    it("21:00 is no longer late: nothing is released to the family", () => {
+        for (const now of ["2026-11-09T20:30:00-06:00", "2026-11-09T21:00:00-06:00", "2026-11-09T23:59:00-06:00"]) {
+            const v = earlyBirdView(me(), "en", d(now))!;
+            expect(v.state).toBe("before_cutoff");
+            expect(v.headline.toLowerCase()).not.toContain("family");
+        }
+        expect(earlyBirdView(me(), "en", d("2026-11-09T21:00:00-06:00"))!.countdown).toBe("3 h 00 min");
+    });
+    it("a clock already past the day's end shows no countdown and still no 'late'", () => {
+        const v = earlyBirdView(me(), "es", d("2026-11-10T00:05:00-06:00"))!;
+        expect(v.state).toBe("before_cutoff");
+        expect(v.countdown).toBe("");
+        expect(v.targetAt).toBe("");
+    });
+    it("missed with open chores still counts down to the end of the day", () => {
         const v = earlyBirdView(me({ today: "missed", open_today: 1 }), "en", d("2026-11-09T19:30:00-06:00"))!;
         expect(v.state).toBe("before_cutoff");
-        expect(v.countdown).toBe("1 h 00 min");
+        expect(v.countdown).toBe("4 h 30 min");
     });
     it("missed with nothing open is plain missed, no countdown", () => {
         const v = earlyBirdView(me({ today: "missed", open_today: 0 }), "en", d("2026-11-09T19:30:00-06:00"))!;
         expect(v.state).toBe("missed");
         expect(v.countdown).toBe("");
         expect(v.targetAt).toBe("");
-    });
-    it("late after the cutoff: chores are open to the family", () => {
-        const v = earlyBirdView(me(), "en", d("2026-11-09T21:00:00-06:00"))!;
-        expect(v.state).toBe("late");
-        expect(v.countdown).toBe("");
-        expect(v.headline.toLowerCase()).toContain("family");
     });
     it("carries the weekly ladder message", () => {
         const v = earlyBirdView(me({ week_ladder: { completed_pct: 52, early_pct: 0, tier: "no_pay", bonus_pct: 0, final: false } }), "es", d("2026-11-09T09:00:00-06:00"))!;
@@ -95,15 +107,6 @@ describe("earlyBirdView", () => {
         const v = earlyBirdView(me({ today: "early" }), "en", d("2026-11-09T09:00:00-06:00"))!;
         expect(v.state).toBe("early");
     });
-    it("grabs only (child) yields a view without a card", () => {
-        const v = earlyBirdView(
-            me({ applies: false, grabs: [{ assignment_id: "a", title: "Dishes", points: 10, owner_name: "Sam" }] }),
-            "es",
-            d("2026-11-09T09:00:00-06:00"),
-        )!;
-        expect(v.applies).toBe(false);
-        expect(v.grabs).toHaveLength(1);
-    });
     it("run target comes from the API, not a frontend copy", () => {
         const v = earlyBirdView(me({ run_weeks: 5, streak_weeks: 4 }), "es", d("2026-11-09T09:00:00-06:00"))!;
         expect(v.runText).toBe("1/4");
@@ -114,28 +117,6 @@ describe("earlyBirdView", () => {
         expect(t(3)).toBe("0/3");
         expect(t(4)).toBe("1/3");
         expect(t(5)).toBe("2/3");
-    });
-});
-
-describe("takeErrorMessage", () => {
-    // Every reason key EarlyBirdService.take / can_take still raises.
-    const keys = ["grab_window_closed", "not_eligible", "own_chore", "already_taken", "role_not_allowed", "not_grabbable"];
-    it("every new reason key has distinct non-empty copy in ES and EN", () => {
-        for (const lang of ["es", "en"] as const) {
-            const msgs = keys.map((k) => takeErrorMessage(k, lang));
-            expect(new Set(msgs).size).toBe(keys.length);
-            const generic = takeErrorMessage("zzz", lang);
-            msgs.forEach((m) => { expect(m.length).toBeGreaterThan(0); expect(m).not.toBe(generic); });
-        }
-    });
-    it("words the role and not-grabbable refusals", () => {
-        expect(takeErrorMessage("role_not_allowed", "es")).toBe("Tu perfil no puede tomar esta tarea");
-        expect(takeErrorMessage("role_not_allowed", "en")).toBe("Your profile can't take this chore");
-        expect(takeErrorMessage("not_grabbable", "es")).toBe("Esta tarea ya no se puede tomar");
-        expect(takeErrorMessage("not_grabbable", "en")).toBe("This chore can't be taken anymore");
-    });
-    it("dead reasons fall back to the generic message", () => {
-        for (const k of ["not_kid", "finish_yours_first"]) expect(takeErrorMessage(k, "en")).toBe(takeErrorMessage("zzz", "en"));
     });
 });
 
@@ -152,28 +133,6 @@ describe("paycheckBonusLine", () => {
 describe("copy", () => {
     it("has both languages", () => {
         expect(earlyBirdCopy("es").title).not.toBe(earlyBirdCopy("en").title);
-    });
-});
-
-describe("takeBlockHint", () => {
-    it("explains a caller-level block so the Take buttons can be disabled up front", () => {
-        expect(takeBlockHint("not_eligible", "es")).toBeTruthy();
-        expect(takeBlockHint("not_eligible", "en")).toBe(takeErrorMessage("not_eligible", "en"));
-    });
-    it("is null when nothing blocks the caller", () => {
-        expect(takeBlockHint(null, "es")).toBeNull();
-        expect(takeBlockHint("", "en")).toBeNull();
-    });
-});
-
-describe("takeErrorReason", () => {
-    it("reads the reason key from the API error body", () => {
-        expect(takeErrorReason({ error: "conflict", message: "already_taken", status_code: 409 })).toBe("already_taken");
-        expect(takeErrorReason({ detail: "kids_only" })).toBe("kids_only");
-    });
-    it("is empty for anything else", () => {
-        expect(takeErrorReason(null)).toBe("");
-        expect(takeErrorReason({ detail: [{ msg: "x" }] })).toBe("");
     });
 });
 
@@ -203,22 +162,6 @@ describe("payoutWeekNotes", () => {
         expect(payoutWeekNotes({ ladder_tier: "bonus", ladder_final: false, is_current_week: true }, "es")).toEqual([]);
         expect(payoutWeekNotes({ ladder_tier: "bonus", ladder_final: true, is_current_week: false }, "es")).toEqual([]);
         expect(payoutWeekNotes({}, "es")).toEqual([]);
-    });
-});
-
-describe("grabItems", () => {
-    it("maps API rows, preferring the Spanish title in es and honouring can_take", () => {
-        const rows = [
-            { assignment_id: "a", title: "Dishes", title_es: "Trastes", points: 10, owner_name: "Sam", can_take: true },
-            { assignment_id: "b", title: "Trash", title_es: null, points: 5, owner_name: "Lu", can_take: false },
-        ];
-        const es = grabItems(rows, "es");
-        expect(es.map((g) => g.title)).toEqual(["Trastes", "Trash"]);
-        expect(es.map((g) => g.canTake)).toEqual([true, false]);
-        expect(grabItems(rows, "en")[0].title).toBe("Dishes");
-    });
-    it("is empty for a non-list", () => {
-        expect(grabItems(null, "es")).toEqual([]);
     });
 });
 
@@ -270,19 +213,28 @@ describe("ladderMessage", () => {
     });
 });
 
-describe("GrabsCard take confirmation", () => {
-    const src = readFileSync(fileURLToPath(new URL("../src/components/home/GrabsCard.astro", import.meta.url)), "utf8");
-    it("asks through confirmSheet before the take request (a take is irreversible)", () => {
-        expect(src).toMatch(/import \{[^}]*\bconfirmSheet\b[^}]*\} from "\.\.\/\.\.\/lib\/dialogs"/);
-        const ask = src.indexOf("await confirmSheet(");
-        const post = src.indexOf("fetch(`/api/early-bird/grabs/");
-        expect(ask).toBeGreaterThan(-1);
-        expect(post).toBeGreaterThan(ask);
+describe("up for grabs is gone", () => {
+    const SRC = fileURLToPath(new URL("../src", import.meta.url));
+    const files = (dir: string): string[] =>
+        readdirSync(dir).flatMap((name) => {
+            const path = join(dir, name);
+            return statSync(path).isDirectory() ? files(path) : [path];
+        });
+    it("no page or component calls the removed endpoints", () => {
+        const hits = files(SRC).filter((f) => /\.(astro|ts)$/.test(f) && readFileSync(f, "utf8").includes("early-bird/grabs"));
+        expect(hits).toEqual([]);
     });
-    it("has the confirm copy in both languages", () => {
-        expect(earlyBirdCopy("es").takeConfirmTitle).toBe("¿Tomar esta tarea?");
-        expect(earlyBirdCopy("es").takeConfirmBody).toBe("Quedará a tu nombre y no se puede deshacer.");
-        expect(earlyBirdCopy("en").takeConfirmTitle).toBe("Take this chore?");
-        expect(earlyBirdCopy("en").takeConfirmBody).toBe("It will be yours and it can't be undone.");
+    it("the two cards no longer exist", () => {
+        expect(existsSync(join(SRC, "components/home/UpForGrabs.astro"))).toBe(false);
+        expect(existsSync(join(SRC, "components/home/GrabsCard.astro"))).toBe(false);
+    });
+    it("the copy and the view carry nothing about taking chores", () => {
+        for (const lang of ["es", "en"] as const) {
+            const keys = Object.keys(earlyBirdCopy(lang));
+            expect(keys.filter((k) => /grab|take|headlineLate/i.test(k))).toEqual([]);
+        }
+        const v = earlyBirdView(me(), "es", d("2026-11-09T09:00:00-06:00"))!;
+        expect(v).not.toHaveProperty("grabs");
+        expect(v).not.toHaveProperty("takeBlock");
     });
 });

@@ -23,7 +23,7 @@ def cfg(enabled=True, enabled_at=datetime(2026, 10, 1, tzinfo=MX)):
     return EarlyBirdConfig(
         enabled=enabled, enabled_at=enabled_at, deadline=time(11, 0), days=None,
         bonus_pct=20, week_pct=5, streak_cents=5000, tz=MX,
-        cutoff=time(20, 30), grab_end=time(22, 30), alarm_1=time(15, 0), alarm_2=time(19, 0),
+        alarm_1=time(15, 0), alarm_2=time(19, 0),
     )
 
 
@@ -40,12 +40,12 @@ def open_row(day, status=AS.PENDING):
     return CoveredRow(uuid4(), day, status, AP.NONE, None, None)
 
 
-AFTER = at(SUN, 21)  # past Sunday's cutoff
+AFTER = at(SUN + timedelta(days=1), 0, 30)  # past Sunday's end (Monday 00:30)
 
 
 def rows_for(n_early, n_late, n_open=0, n_taken=0):
     rows = [done(MON, 9) for _ in range(n_early)]
-    rows += [done(MON, 15) for _ in range(n_late)]  # after deadline, before cutoff
+    rows += [done(MON, 15) for _ in range(n_late)]  # after the deadline, same day
     rows += [open_row(MON) for _ in range(n_open)]
     rows += [CoveredRow(uuid4(), MON, AS.TAKEN, AP.NONE, None, None) for _ in range(n_taken)]
     return rows
@@ -81,12 +81,22 @@ def test_no_rows_is_neutral():
     assert EarlyBirdService._metrics_from_rows(cfg(), [], MON, AFTER).tier == "neutral"
 
 
-def test_final_flips_at_sunday_cutoff_not_deadline():
+def test_final_flips_at_sunday_midnight():
+    """Sunday evening the kid can still report a chore, so the week is not
+    final until the day is over: Monday 00:00 family-local."""
     rows = rows_for(10, 0)
     c = cfg()
     assert not EarlyBirdService._metrics_from_rows(c, rows, MON, at(SUN, 11, 30)).final
-    assert not EarlyBirdService._metrics_from_rows(c, rows, MON, at(SUN, 20, 29)).final
-    assert EarlyBirdService._metrics_from_rows(c, rows, MON, at(SUN, 20, 30)).final
+    assert not EarlyBirdService._metrics_from_rows(c, rows, MON, at(SUN, 21, 0)).final
+    assert not EarlyBirdService._metrics_from_rows(c, rows, MON, at(SUN, 23, 59)).final
+    assert EarlyBirdService._metrics_from_rows(c, rows, MON, at(SUN + timedelta(days=1), 0, 0)).final
+
+
+def test_evening_completion_counts_as_completed():
+    """Done at 21:00 on its day: completed (not early) — it was a miss while
+    the day ended at 20:30."""
+    r = EarlyBirdService._metrics_from_rows(cfg(), [done(MON, 9), done(MON, 21)], MON, AFTER)
+    assert (r.total, r.completed, r.early) == (2, 2, 1)
 
 
 def test_taken_counts_in_total_not_completed():
@@ -104,7 +114,7 @@ def test_pending_review_counts_only_after_grace():
 
 def test_unreviewed_work_keeps_the_week_provisional_until_grace():
     """R5: completed work still awaiting the parent's review keeps a week
-    non-final past Sunday's cutoff — the ladder must not floor or bonus it on a
+    non-final past Sunday's end — the ladder must not floor or bonus it on a
     count that will move. Once the grace passes the week is final and the row
     counts (existing grace rule)."""
     rows = rows_for(9, 0) + [done(MON, 9, approval=AP.PENDING)]
@@ -120,7 +130,7 @@ def test_unreviewed_work_keeps_the_week_provisional_until_grace():
 
 def test_only_review_pending_blocks_final():
     """An open (status PENDING) or rejected row is not 'awaiting review': the
-    week is final at the cutoff as before."""
+    week is final once Sunday is over, as before."""
     c = cfg()
     open_rows = rows_for(9, 0, n_open=1)
     assert EarlyBirdService._metrics_from_rows(c, open_rows, MON, AFTER).final is True

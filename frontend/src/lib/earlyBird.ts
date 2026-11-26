@@ -6,9 +6,10 @@
 export type Lang = "es" | "en";
 
 export type DayState = "early" | "pending" | "open" | "missed" | "neutral" | "future";
-/** on_track = before the early deadline; before_cutoff = past it but the
- * chore is still the kid's until the evening cutoff; late = past the cutoff. */
-export type CardState = "early" | "on_track" | "before_cutoff" | "late" | "missed" | "idle";
+/** on_track = before the early deadline; before_cutoff = past it, the chores
+ * are still the kid's to report until the day ends (midnight). There is no
+ * "late": a chore is never released to the family. */
+export type CardState = "early" | "on_track" | "before_cutoff" | "missed" | "idle";
 
 export type LadderTier = "neutral" | "no_pay" | "per_task" | "bonus";
 export interface WeekLadder {
@@ -17,15 +18,6 @@ export interface WeekLadder {
     tier: LadderTier | string;
     bonus_pct: number;
     final: boolean;
-}
-
-export interface GrabItem {
-    id: string;
-    title: string;
-    points: number;
-    ownerName: string;
-    /** False when the caller cannot take it (parents' list; kids' /me rows are always takeable). */
-    canTake: boolean;
 }
 
 export interface DotView {
@@ -50,76 +42,38 @@ export interface EarlyBirdView {
     ladderText: string;
     /** Paycheck bonus % already earned this week (0 / 5 / 10 / 15). */
     paycheckBonusPct: number;
-    /** ISO instant the countdown runs to (deadline, then cutoff); "" when none. */
+    /** ISO instant the countdown runs to (deadline, then the end of the day); "" when none. */
     targetAt: string;
-    grabs: GrabItem[];
-    takeBlock: string | null;
 }
 
 const COPY = {
     es: {
         title: "Madrugador",
         headlineOnTrack: (d: string) => `Termina antes de las ${d} y gana extra`,
-        headlineBeforeCutoff: "Tus tareas siguen siendo tuyas hasta la hora de corte; después quedan libres para la familia",
+        headlineBeforeCutoff: "Tus tareas de hoy siguen abiertas hasta la medianoche",
         headlineEarly: "¡Hoy fuiste madrugador!",
-        headlineLate: "Tus tareas abiertas ya quedaron libres para la familia",
         headlineMissed: "Hoy no se pudo madrugar",
         headlineIdle: "Sin tareas madrugadoras hoy",
         left: (c: string) => `Faltan ${c}`,
         run: "Racha de madrugador",
         bonus: (cents: string) => `${cents} de bono`,
-        grabsTitle: "Para tomar",
-        grabsHint: "Tareas de otros que puedes tomar",
-        grabsHintParent: "Tareas que quedaron libres para la familia. Quien las toma gana los puntos",
-        take: "Tomar",
-        from: (name: string) => `de ${name}`,
-        taken: "¡Tarea tomada!",
-        takeFailed: "No se pudo tomar la tarea",
-        takeConfirmTitle: "¿Tomar esta tarea?",
-        takeConfirmBody: "Quedará a tu nombre y no se puede deshacer.",
         dayGlyph: { early: "✓", pending: "…", open: "○", missed: "✗", neutral: "–", future: "·" },
         dayLabel: { early: "Madrugaste", pending: "En revisión", open: "Hoy", missed: "Sin madrugar", neutral: "Sin tareas", future: "Pendiente" },
         paycheck: (pct: number) => `incl. +${pct}% madrugador`,
-        errors: {
-            already_taken: "Otra persona ya tomó esta tarea",
-            grab_window_closed: "Ya no es horario para tomar tareas",
-            not_eligible: "Ahora no puedes tomar esta tarea",
-            own_chore: "Esta tarea ya es tuya",
-            role_not_allowed: "Tu perfil no puede tomar esta tarea",
-            not_grabbable: "Esta tarea ya no se puede tomar",
-        } as Record<string, string>,
     },
     en: {
         title: "Early bird",
         headlineOnTrack: (d: string) => `Finish before ${d} and earn extra`,
-        headlineBeforeCutoff: "Your chores stay yours until the evening cutoff, then they open to the family",
+        headlineBeforeCutoff: "Today's chores stay open until midnight",
         headlineEarly: "You were an early bird today!",
-        headlineLate: "Your open chores are open to the family now",
         headlineMissed: "No early bird today",
         headlineIdle: "No early chores today",
         left: (c: string) => `${c} left`,
         run: "Early bird run",
         bonus: (cents: string) => `${cents} bonus`,
-        grabsTitle: "Up for grabs",
-        grabsHint: "Other people's chores you can take",
-        grabsHintParent: "Chores that are open to the family. Whoever takes one earns the points",
-        take: "Take",
-        from: (name: string) => `from ${name}`,
-        taken: "Chore taken!",
-        takeFailed: "Couldn't take the chore",
-        takeConfirmTitle: "Take this chore?",
-        takeConfirmBody: "It will be yours and it can't be undone.",
         dayGlyph: { early: "✓", pending: "…", open: "○", missed: "✗", neutral: "–", future: "·" },
         dayLabel: { early: "Early", pending: "In review", open: "Today", missed: "Missed", neutral: "No chores", future: "Upcoming" },
         paycheck: (pct: number) => `incl. +${pct}% early bird`,
-        errors: {
-            already_taken: "Someone else already took this chore",
-            grab_window_closed: "It's not time to take chores right now",
-            not_eligible: "You can't take this chore right now",
-            own_chore: "This chore is already yours",
-            role_not_allowed: "Your profile can't take this chore",
-            not_grabbable: "This chore can't be taken anymore",
-        } as Record<string, string>,
     },
 } as const;
 
@@ -135,18 +89,6 @@ export function countdownLabel(target: Date, now: Date): string {
     return `${h} h ${String(mins % 60).padStart(2, "0")} min`;
 }
 
-export function takeErrorMessage(detail: string, lang: Lang): string {
-    const c = earlyBirdCopy(lang);
-    return c.errors[detail] ?? c.takeFailed;
-}
-
-/** The reason key of a failed take: the API's error body carries it in
- * "message" (FamilyAppException handlers) or "detail" (FastAPI). */
-export function takeErrorReason(body: any): string {
-    const reason = body?.message ?? body?.detail;
-    return typeof reason === "string" ? reason : "";
-}
-
 /** Progress toward the next streak payout: run_weeks modulo the API's
  * streak_weeks (the backend STREAK_WEEKS — never a copy here). Works on the
  * kid's /me payload and on a /family teen row alike. */
@@ -156,31 +98,12 @@ export function runProgress(src: any): { done: number; target: number } {
     return { done: Math.max(0, Math.trunc(Number(src?.run_weeks) || 0)) % target, target };
 }
 
-/** Why the caller can take none of the grabs (`take_block` from the API), or
- * null. Lets the list disable its Take buttons instead of failing on tap. */
-export function takeBlockHint(block: string | null | undefined, lang: Lang): string | null {
-    if (!block) return null;
-    return takeErrorMessage(block, lang);
-}
-
 /** "incl. +5% early bird" when the projected paycheck carries a bonus. */
 export function paycheckBonusLine(bonusCents: unknown, pct: unknown, lang: Lang): string | null {
     const cents = Number(bonusCents) || 0;
     const p = Math.round(Number(pct) || 0);
     if (cents <= 0 || p <= 0) return null;
     return earlyBirdCopy(lang).paycheck(p);
-}
-
-/** Rows of /api/early-bird/grabs (or the `grabs` of /me) as list items. */
-export function grabItems(rows: unknown, lang: Lang): GrabItem[] {
-    if (!Array.isArray(rows)) return [];
-    return rows.map((g: any) => ({
-        id: String(g.assignment_id),
-        title: String((lang === "es" && g.title_es) || g.title || ""),
-        points: Math.max(0, Math.trunc(Number(g.points) || 0)),
-        ownerName: String(g.owner_name ?? ""),
-        canTake: g.can_take !== false,
-    }));
 }
 
 /** Reason lines under an outstanding-week row on /parent/payouts, from the
@@ -252,9 +175,9 @@ const money = (cents: number, lang: Lang) =>
     `$${Math.round(cents / 100).toLocaleString(lang === "es" ? "es-MX" : "en-US")}`;
 
 export function earlyBirdView(me: any, lang: Lang, now: Date): EarlyBirdView | null {
-    const grabsRaw: any[] = Array.isArray(me?.grabs) ? me.grabs : [];
+    // Teens only: for everyone else there is nothing to show.
     const applies = me?.applies === true;
-    if (!applies && grabsRaw.length === 0) return null;
+    if (!applies) return null;
 
     const c = earlyBirdCopy(lang);
     const cutoff = parse(me?.cutoff_at);
@@ -267,9 +190,8 @@ export function earlyBirdView(me: any, lang: Lang, now: Date): EarlyBirdView | n
     else if (today === "open" || today === "missed") {
         const openCount = Math.max(0, Math.trunc(Number(me?.open_today) || 0));
         if (openCount > 0) {
-            if (deadline && now.getTime() < deadline.getTime()) state = "on_track";
-            else if (cutoff && now.getTime() < cutoff.getTime()) state = "before_cutoff";
-            else state = "late";
+            // Past the early deadline the chores are still the kid's all day.
+            state = deadline && now.getTime() < deadline.getTime() ? "on_track" : "before_cutoff";
         }
         // Nothing left open: a "missed" day just was not early (state stays "missed").
     }
@@ -278,12 +200,12 @@ export function earlyBirdView(me: any, lang: Lang, now: Date): EarlyBirdView | n
         early: c.headlineEarly,
         on_track: c.headlineOnTrack(String(me?.deadline ?? "11:00")),
         before_cutoff: c.headlineBeforeCutoff,
-        late: c.headlineLate,
         missed: c.headlineMissed,
         idle: c.headlineIdle,
     }[state];
 
-    const target = state === "on_track" ? deadline : state === "before_cutoff" ? cutoff : null;
+    const dayEnd = cutoff && now.getTime() < cutoff.getTime() ? cutoff : null;
+    const target = state === "on_track" ? deadline : state === "before_cutoff" ? dayEnd : null;
     const countdown = target ? countdownLabel(target, now) : "";
 
     const dots: DotView[] = (Array.isArray(me?.week) ? me.week : []).map((w: any) => {
@@ -308,7 +230,5 @@ export function earlyBirdView(me: any, lang: Lang, now: Date): EarlyBirdView | n
         ladderText: ladderMessage(me?.week_ladder, lang, String(me?.deadline ?? "")),
         paycheckBonusPct: Math.max(0, Math.trunc(Number(me?.week_ladder?.bonus_pct) || 0)),
         targetAt: target ? target.toISOString() : "",
-        grabs: grabItems(grabsRaw, lang),
-        takeBlock: me?.take_block ? String(me.take_block) : null,
     };
 }

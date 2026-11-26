@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from app.models.task_assignment import ApprovalStatus as AP, AssignmentStatus as AS
 from app.services.early_bird_rules import (
-    GRABS_PUSH_WINDOW, PENDING_GRACE_DAYS, R1_BEFORE, R2_BEFORE, SETTLE_LOOKBACK_WEEKS,
+    PENDING_GRACE_DAYS, R1_BEFORE, R2_BEFORE, SETTLE_LOOKBACK_WEEKS,
     STREAK_WEEKS, CoveredRow, EarlyBirdConfig, chore_state, day_result, day_times,
     early_bonus_points, is_active_day, next_run, pays_streak, reminder_stage,
     week_eligible, week_ladder, week_result,
@@ -20,7 +20,7 @@ SAT = date(2026, 11, 7)   # Saturday
 def cfg(**kw):
     base = dict(enabled=True, enabled_at=datetime(2026, 10, 1, tzinfo=MX), deadline=time(11, 0),
                 days=None, bonus_pct=20, week_pct=5, streak_cents=5000, tz=MX,
-                cutoff=time(20, 30), grab_end=time(22, 30), alarm_1=time(15, 0), alarm_2=time(19, 0))
+                alarm_1=time(15, 0), alarm_2=time(19, 0))
     base.update(kw)
     return EarlyBirdConfig(**base)
 
@@ -37,7 +37,6 @@ def test_constants():
     assert STREAK_WEEKS == 3
     assert R1_BEFORE == timedelta(minutes=60)
     assert R2_BEFORE == timedelta(minutes=30)
-    assert GRABS_PUSH_WINDOW == timedelta(minutes=60)
     assert SETTLE_LOOKBACK_WEEKS == 3
     assert PENDING_GRACE_DAYS == 7
 
@@ -47,7 +46,7 @@ def test_from_family():
                           early_bird_deadline=time(11), early_bird_days=[0, 2],
                           early_bird_bonus_pct=20, early_bird_week_pct=5,
                           early_bird_streak_cents=100, timezone="America/Mexico_City",
-                          chore_cutoff=time(20, 30), grab_window_end=time(22, 30), teen_alarm_1=time(15, 0), teen_alarm_2=time(19, 0))
+                          teen_alarm_1=time(15, 0), teen_alarm_2=time(19, 0))
     c = EarlyBirdConfig.from_family(fam)
     assert c.days == frozenset({0, 2}) and c.tz == MX and c.enabled_at is None
     fam.early_bird_days = None
@@ -174,12 +173,12 @@ def test_reminder_stage():
     assert reminder_stage(t.r2 - timedelta(seconds=1), t) == "r1"
     assert reminder_stage(t.r2, t) == "r2"
     assert reminder_stage(t.deadline - timedelta(seconds=1), t) == "r2"
-    # the grabs push fires at the cutoff (20:30), not at the 11:00 deadline
+    # only the two deadline reminders exist: nothing fires in the evening or
+    # at the day's end (the up-for-grabs push is gone)
     assert reminder_stage(t.deadline, t) is None
+    assert reminder_stage(at(20, 30), t) is None
     assert reminder_stage(t.cutoff - timedelta(seconds=1), t) is None
-    assert reminder_stage(t.cutoff, t) == "grabs"
-    assert reminder_stage(t.cutoff + GRABS_PUSH_WINDOW - timedelta(seconds=1), t) == "grabs"
-    assert reminder_stage(t.cutoff + GRABS_PUSH_WINDOW, t) is None
+    assert reminder_stage(t.cutoff, t) is None
 
 
 def test_ladder_percentages_floor_like_the_ladder():
@@ -223,7 +222,7 @@ def test_from_family_reads_past_periods():
                           early_bird_deadline=time(11), early_bird_days=None,
                           early_bird_bonus_pct=20, early_bird_week_pct=5,
                           early_bird_streak_cents=100, timezone="America/Mexico_City",
-                          chore_cutoff=time(20, 30), grab_window_end=time(22, 30), teen_alarm_1=time(15, 0), teen_alarm_2=time(19, 0),
+                          teen_alarm_1=time(15, 0), teen_alarm_2=time(19, 0),
                           early_bird_past_periods=[["2026-10-01T00:00:00+00:00",
                                                     "2026-10-20T12:00:00+00:00"]])
     c = EarlyBirdConfig.from_family(fam)

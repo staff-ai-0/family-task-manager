@@ -242,8 +242,8 @@ const PC = profileCopy(lang);
         <h2 class="text-sm font-bold text-brand-ink">🐦 {lang === "es" ? "Madrugador" : "Early bird"}</h2>
         <p class="text-xs text-brand-ink-soft">
             {lang === "es"
-                ? "\"Madrugador\" significa una sola hora: la hora madrugadora que defines abajo. Terminar antes de esa hora da puntos extra y cuenta para el bono semanal. Las tareas siguen siendo del hijo hasta la hora de corte de la tarde (por defecto 20:30); después quedan libres para toda la familia (también para los padres) hasta el fin de \"para tomar\", y quien las toma gana los puntos. Las tareas marcadas como \"tarea de la tarde\" no cuentan."
-                : "\"Early\" means exactly one time: the early deadline you set below. Finishing before it earns extra points and counts toward the weekly bonus. Chores stay the kid's until the evening cutoff (20:30 by default); after that they're open to the whole family (parents too) until the end of \"up for grabs\", and whoever takes one earns its points. Chores marked \"evening chore\" are exempt."}
+                ? "\"Madrugador\" significa una sola hora: la hora madrugadora que defines abajo. Terminar antes de esa hora da puntos extra y cuenta para el bono semanal. Cada tarea es de quien la tiene todo el día: puede marcarla hasta las 23:59 y nunca se libera a otra persona. Después de la medianoche cuenta como no hecha (un papá o mamá aún puede marcarla). Las tareas marcadas como \"tarea de la tarde\" no cuentan."
+                : "\"Early\" means exactly one time: the early deadline you set below. Finishing before it earns extra points and counts toward the weekly bonus. Each chore is its owner's all day: they can mark it until 23:59 and it is never released to anyone else. After midnight it counts as not done (a parent can still mark it). Chores marked \"evening chore\" are exempt."}
         </p>
         <ol class="list-decimal space-y-0.5 pl-5 text-xs text-brand-ink-soft" data-eb-ladder>
             {ladderExplainer(family?.early_bird_deadline ?? "11:00", lang).map((line) => <li>{line}</li>)}
@@ -278,16 +278,6 @@ const PC = profileCopy(lang);
                 <label for="eb-streak" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Premio cada 3ª semana seguida (pesos)" : "Prize every 3rd week in a row (pesos)"}</label>
                 <input type="number" id="eb-streak" inputmode="numeric" min="0" max="10000" step="1" value={centsToPesos(family?.early_bird_streak_cents ?? 38000)}
                        class="w-28 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
-            </div>
-            <div>
-                <label for="eb-cutoff" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Hora de corte de la tarde" : "Evening cutoff"}</label>
-                <input type="time" id="eb-cutoff" step="300" min="17:00" max="23:00" value={family?.chore_cutoff ?? "20:30"}
-                       class="w-32 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
-            </div>
-            <div>
-                <label for="eb-grab-end" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Fin de \"para tomar\"" : "End of \"up for grabs\""}</label>
-                <input type="time" id="eb-grab-end" step="300" min="17:05" max="23:30" value={family?.grab_window_end ?? "22:30"}
-                       class="w-32 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky" />
             </div>
             <div>
                 <label for="eb-alarm1" class="block text-sm font-semibold text-brand-ink mb-1">{lang === "es" ? "Alarma 1 (adolescentes)" : "Teen alarm 1"}</label>
@@ -873,8 +863,6 @@ const PC = profileCopy(lang);
             days: chips.filter((c) => c.getAttribute("aria-pressed") === "true").map((c) => Number(c.dataset.day)),
             bonusPct: val("eb-bonus") === "" ? NaN : Number(val("eb-bonus")),
             streakPesos: val("eb-streak") === "" ? NaN : Number(val("eb-streak")),
-            cutoff: val("eb-cutoff"),
-            grabEnd: val("eb-grab-end"),
             alarm1: val("eb-alarm1"),
             alarm2: val("eb-alarm2"),
         }, section.dataset.lang === "en" ? "en" : "es");
