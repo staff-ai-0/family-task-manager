@@ -14,7 +14,10 @@ WorkingDirectory=/home/jc/family-task-manager
 # Boot race (2026-11-15): cloudflared dies if the host resolver is not up yet, and nothing
 # retried it -> 530 on both hostnames. Wait (max ~2 min, never fatal) for DNS first, then
 # let ensure-tunnel-onprem.sh start the tunnel again if it exited.
-ExecStartPre=/bin/sh -c 'for i in $(seq 60); do getent hosts argotunnel.com >/dev/null 2>&1 && exit 0; sleep 2; done; exit 0'
+# The probe must be a name with address records: region1.v2.argotunnel.com is an edge host
+# cloudflared dials. The bare apex argotunnel.com has none, so `getent hosts` on it never
+# succeeds and every boot waited the whole 2 min (seen on the 2026-11-25 reboot).
+ExecStartPre=/bin/sh -c 'for i in $(seq 60); do getent hosts region1.v2.argotunnel.com >/dev/null 2>&1 && exit 0; sleep 2; done; exit 0'
 ExecStart=/usr/bin/podman compose -p family-task-manager --env-file .env -f docker-compose.onprem.yml up -d
 ExecStartPost=/home/jc/family-task-manager/scripts/ensure-tunnel-onprem.sh
 ExecStop=/usr/bin/podman compose -p family-task-manager --env-file .env -f docker-compose.onprem.yml down
