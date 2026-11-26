@@ -362,6 +362,13 @@ The unit now waits for DNS (`ExecStartPre`, max ~2 min, never fatal) and runs
 `scripts/ensure-tunnel-onprem.sh` (`ExecStartPost`), which starts the tunnel again until
 it is healthy (default 10 min, never fails the unit).
 
+Verified on a real unclean reboot on 2026-11-25: both hostnames answered 200 about
+3.5 minutes after boot with nobody at the keyboard. That boot also showed the wait was
+blind: it probed `argotunnel.com`, a name with no A/AAAA record, so `getent hosts` could
+never succeed and `compose up` always started a full 2 minutes late. The probe is now
+`region1.v2.argotunnel.com` (an edge host cloudflared dials), so the wait ends as soon as
+the resolver answers. A unit change needs the re-install below to take effect.
+
 The script ships with the next `deploy-onprem.sh`. The unit file lives outside the repo
 checkout, so re-install it once on 10.1.0.91 (as jc, no sudo):
 
